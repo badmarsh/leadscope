@@ -74,7 +74,8 @@ def extract_image_urls(markdown: str, evaluator_type: str = "content_relevance")
     ignore_patterns = [
         "bat.bing.com", "google-analytics.com", "facebook.com", "twitter.com", "instagram.com", 
         "x.com", "linkedin.com", "youtube.com", "tiktok.com", "pinterest.com",
-        "pixel", "tracker", ".svg", "logo", "icon", "spinner", "loader", "social"
+        "pixel", "tracker", ".svg", "logo", "icon", "spinner", "loader", "social",
+        "badge", "trust", "support", "shipping", "payment", "secure", "guarantee", "return"
     ]
 
     for u in urls:
