@@ -90,8 +90,18 @@ def extract_image_urls(markdown: str, evaluator_type: str = "content_relevance")
         score = 0
         
         # Penalize layout/generic images heavily
-        if any(w in u for w in ["banner", "hero", "footer", "header", "bg", "background", "menu"]):
+        if any(w in u for w in ["banner", "hero", "footer", "header", "bg", "background", "menu", "avatar", "profile"]):
             score -= 50
+            
+        # Slight penalty for PNGs (often icons) and boost for photography formats
+        if ".png" in u:
+            score -= 10
+        elif any(ext in u for ext in [".jpg", ".jpeg", ".webp"]):
+            score += 10
+            
+        # E-commerce platforms usually store product images in specific media folders
+        if any(w in u for w in ["upload", "media", "cdn.shopify.com/s/files", "gallery", "large", "zoom", "thumb"]):
+            score += 30
             
         if evaluator_type == "image_quality":
             # Boutique: prioritize shoes, products, shop, items
