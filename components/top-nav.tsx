@@ -1,8 +1,9 @@
 "use client"
 
-import { LogOut, Moon, Radar, Settings, Sun, Database } from "lucide-react"
+import { LogOut, Moon, Radar, Settings, Sun, Database, HelpCircle, Webhook, Languages } from "lucide-react"
 import { campaigns, type CampaignId } from "@/lib/leads-data"
 import { cn } from "@/lib/utils"
+import { useTranslation, type Locale } from "@/lib/i18n"
 
 interface TopNavProps {
   activeCampaign: CampaignId
@@ -12,6 +13,8 @@ interface TopNavProps {
   onLogout: () => void
   onSettingsOpen: () => void
   onKbOpen?: () => void
+  onHelpOpen?: () => void
+  onN8nOpen?: () => void
 }
 
 export function TopNav({
@@ -22,7 +25,15 @@ export function TopNav({
   onLogout,
   onSettingsOpen,
   onKbOpen,
+  onHelpOpen,
+  onN8nOpen,
 }: TopNavProps) {
+  const { t, locale, setLocale } = useTranslation()
+
+  const toggleLanguage = () => {
+    setLocale(locale === "en" ? "sk" : "en")
+  }
+
   return (
     <header className="sticky top-0 z-30 border-b border-border bg-background/90 backdrop-blur">
       <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3 lg:px-6">
@@ -32,7 +43,7 @@ export function TopNav({
               <Radar className="size-4" aria-hidden="true" />
             </div>
             <span className="hidden text-sm font-semibold tracking-tight text-foreground sm:block">
-              Leadscope
+              {t("nav.title")}
             </span>
           </div>
 
@@ -70,6 +81,15 @@ export function TopNav({
         </div>
 
         <div className="flex shrink-0 items-center gap-1">
+          <button
+            onClick={toggleLanguage}
+            title={`Switch to ${locale === "en" ? "Slovak" : "English"}`}
+            className="flex h-8 items-center justify-center gap-1 rounded-md px-2 text-xs font-semibold text-muted-foreground transition-colors hover:bg-accent hover:text-foreground uppercase"
+          >
+            <Languages className="size-4" />
+            {locale}
+          </button>
+          
           {onKbOpen && (
             <button
               onClick={onKbOpen}
@@ -77,6 +97,24 @@ export function TopNav({
               className="flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
             >
               <Database className="size-4" />
+            </button>
+          )}
+          {onN8nOpen && (
+            <button
+              onClick={onN8nOpen}
+              aria-label={t("nav.n8n")}
+              className="flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            >
+              <Webhook className="size-4" />
+            </button>
+          )}
+          {onHelpOpen && (
+            <button
+              onClick={onHelpOpen}
+              aria-label="Help & Documentation"
+              className="flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            >
+              <HelpCircle className="size-4" />
             </button>
           )}
           <button

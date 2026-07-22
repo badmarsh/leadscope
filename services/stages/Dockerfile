@@ -6,11 +6,14 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy service source
-COPY . .
-
 # Run as non-root user
 RUN adduser --disabled-password --gecos "" appuser
+
+# Copy service source
+COPY --chown=appuser:appuser . .
+
+RUN chown -R appuser:appuser /app
+
 USER appuser
 
 EXPOSE 8002

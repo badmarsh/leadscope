@@ -38,6 +38,57 @@ class TestPipelineIntegration(unittest.TestCase):
         except requests.exceptions.RequestException as e:
             self.skipTest(f"Dashboard offline on {DASHBOARD_URL}: {e}")
 
+    def test_evaluator_score_trigger_requires_no_auth(self):
+        try:
+            response = requests.post(f"{EVALUATOR_URL}/score/trigger?background=true", timeout=5)
+            self.assertEqual(response.status_code, 200)
+            self.assertTrue(response.json().get("ok"))
+        except requests.exceptions.RequestException as e:
+            self.skipTest(f"Evaluator service offline on {EVALUATOR_URL}: {e}")
+
+    def test_stages_health_includes_service_name(self):
+        try:
+            response = requests.get(f"{STAGES_URL}/health", timeout=5)
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.json().get("service"), "stages")
+        except requests.exceptions.RequestException as e:
+            self.skipTest(f"Stages service offline on {STAGES_URL}: {e}")
+
+    def test_evaluator_health_includes_service_name(self):
+        try:
+            response = requests.get(f"{EVALUATOR_URL}/health", timeout=5)
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.json().get("service"), "evaluator")
+        except requests.exceptions.RequestException as e:
+            self.skipTest(f"Evaluator service offline on {EVALUATOR_URL}: {e}")
+
+    def test_dashboard_login_rejects_wrong_password(self):
+        try:
+            response = requests.post(f"{DASHBOARD_URL}/api/login", json={"password": "definitely_wrong_password_xyz123"}, timeout=5)
+            self.assertEqual(response.status_code, 401)
+        except requests.exceptions.RequestException as e:
+            self.skipTest(f"Dashboard service offline on {DASHBOARD_URL}: {e}")
+
+    def test_dashboard_login_requires_password_field(self):
+        try:
+            response = requests.post(f"{DASHBOARD_URL}/api/login", json={}, timeout=5)
+            self.assertEqual(response.status_code, 400)
+        except requests.exceptions.RequestException as e:
+            self.skipTest(f"Dashboard service offline on {DASHBOARD_URL}: {e}")
+
+    def test_stages_stage1_rejects_invalid_campaign(self):
+        try:
+            response = requests.post(f"{STAGES_URL}/stage1/run", json={"campaign_id": 999999}, timeout=5)
+            self.assertIn(response.status_code, [400, 500])
+        except requests.exceptions.RequestException as e:
+            self.skipTest(f"Stages service offline on {STAGES_URL}: {e}")
+
+    def test_evaluator_score_invalid_candidate(self):
+        try:
+            response = requests.post(f"{EVALUATOR_URL}/score/999999", timeout=5)
+            self.assertIn(response.status_code, [400, 500])
+        except requests.exceptions.RequestException as e:
+            self.skipTest(f"Evaluator service offline on {EVALUATOR_URL}: {e}")
 
 if __name__ == "__main__":
     unittest.main()

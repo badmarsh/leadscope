@@ -6,42 +6,46 @@ import type { Lead } from "@/lib/leads-data"
 import { formatDate, scoreColorClasses, statusBadgeClasses, statusLabels } from "@/lib/status"
 import { cn } from "@/lib/utils"
 
+import { useTranslation } from "@/lib/i18n"
+
 type SortKey = "company" | "domain" | "score" | "status" | "dateFound"
 type SortDir = "asc" | "desc"
 type ViewFilter = "pending" | "reviewed" | "enrichment_failed"
-
-const emptyStates: Record<ViewFilter, { heading: string; sub: string }> = {
-  pending: {
-    heading: "Queue is empty — great work!",
-    sub: "All leads have been reviewed or are awaiting enrichment.",
-  },
-  reviewed: {
-    heading: "No reviewed leads yet",
-    sub: "Approve or reject leads from the review queue to see them here.",
-  },
-  enrichment_failed: {
-    heading: "No enrichment failures",
-    sub: "No enrichment failures for this campaign.",
-  },
-}
 
 interface LeadsTableProps {
   leads: Lead[]
   selectedId: string | null
   onSelect: (lead: Lead) => void
   onFilteredChange?: (leads: Lead[]) => void
-  onBulkAction?: (ids: string[], action: "approved" | "rejected") => Promise<void>
+  onBulkAction?: (ids: string[], action: "approved" | "rejected" | "rerun_evaluation" | "rerun_enrichment") => Promise<void>
 }
 
-const columns: { key: SortKey; label: string; className?: string }[] = [
-  { key: "company", label: "Company" },
-  { key: "domain", label: "Domain" },
-  { key: "score", label: "Score", className: "w-36" },
-  { key: "status", label: "Status", className: "w-32" },
-  { key: "dateFound", label: "Date found", className: "w-32" },
-]
-
 export function LeadsTable({ leads, selectedId, onSelect, onFilteredChange, onBulkAction }: LeadsTableProps) {
+  const { t } = useTranslation()
+
+  const columns: { key: SortKey; label: string; className?: string }[] = [
+    { key: "company", label: t("leads_table.columns.company", { defaultValue: "Company" }) },
+    { key: "domain", label: t("leads_table.columns.domain", { defaultValue: "Domain" }) },
+    { key: "score", label: t("leads_table.columns.score", { defaultValue: "Score" }), className: "w-36" },
+    { key: "status", label: t("leads_table.columns.status", { defaultValue: "Status" }), className: "w-32" },
+    { key: "dateFound", label: t("leads_table.columns.date_found", { defaultValue: "Date found" }), className: "w-32" },
+  ]
+
+  const emptyStates: Record<ViewFilter, { heading: string; sub: string }> = {
+    pending: {
+      heading: t("leads_table.empty.pending.heading", { defaultValue: "Queue is empty — great work!" }),
+      sub: t("leads_table.empty.pending.sub", { defaultValue: "All leads have been reviewed or are awaiting enrichment." }),
+    },
+    reviewed: {
+      heading: t("leads_table.empty.reviewed.heading", { defaultValue: "No reviewed leads yet" }),
+      sub: t("leads_table.empty.reviewed.sub", { defaultValue: "Approve or reject leads from the review queue to see them here." }),
+    },
+    enrichment_failed: {
+      heading: t("leads_table.empty.failed.heading", { defaultValue: "No enrichment failures" }),
+      sub: t("leads_table.empty.failed.sub", { defaultValue: "No enrichment failures for this campaign." }),
+    },
+  }
+
   const [view, setView] = useState<ViewFilter>("pending")
   const [sortKey, setSortKey] = useState<SortKey>("score")
   const [sortDir, setSortDir] = useState<SortDir>("desc")
@@ -135,7 +139,7 @@ export function LeadsTable({ leads, selectedId, onSelect, onFilteredChange, onBu
                 : "text-muted-foreground hover:text-foreground",
             )}
           >
-            Review queue <span className="font-mono">({pendingCount})</span>
+            {t("leads_table.tabs.pending", { defaultValue: "Pending review" })} <span className="font-mono">({pendingCount})</span>
           </button>
           <button
             role="tab"
@@ -148,7 +152,7 @@ export function LeadsTable({ leads, selectedId, onSelect, onFilteredChange, onBu
                 : "text-muted-foreground hover:text-foreground",
             )}
           >
-            Reviewed <span className="font-mono">({reviewedCount})</span>
+            {t("leads_table.tabs.reviewed", { defaultValue: "Reviewed" })} <span className="font-mono">({reviewedCount})</span>
           </button>
           <button
             role="tab"
@@ -161,7 +165,7 @@ export function LeadsTable({ leads, selectedId, onSelect, onFilteredChange, onBu
                 : "text-muted-foreground hover:text-foreground",
             )}
           >
-            Enrichment failed <span className="font-mono">({failedCount})</span>
+            {t("leads_table.tabs.enrich_failed", { defaultValue: "Enrichment failed" })} <span className="font-mono">({failedCount})</span>
           </button>
         </div>
       </div>
@@ -173,7 +177,7 @@ export function LeadsTable({ leads, selectedId, onSelect, onFilteredChange, onBu
             type="search"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search by company or domain…"
+            placeholder={t("leads_table.search_placeholder", { defaultValue: "Search by company or domain…" })}
             className="w-full rounded-md border border-input bg-background py-1.5 pl-8 pr-3 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/50"
           />
         </div>
@@ -194,22 +198,40 @@ export function LeadsTable({ leads, selectedId, onSelect, onFilteredChange, onBu
           ))}
         </div>
         
-        {selectedIds.size > 0 && view === "pending" && (
+        {selectedIds.size > 0 && (
           <div className="flex items-center gap-2 border-l border-border pl-2 ml-1">
-            <span className="text-xs font-medium text-muted-foreground">{selectedIds.size} selected</span>
+            <span className="text-xs font-medium text-muted-foreground">{selectedIds.size} {t("leads_table.selected", { defaultValue: "selected" })}</span>
+            {view === "pending" && (
+              <>
+                <button
+                  onClick={() => handleBulkAction("approved")}
+                  disabled={isBulkActing}
+                  className="rounded px-2.5 py-1 text-xs font-medium bg-emerald-600/10 text-emerald-600 transition-colors hover:bg-emerald-600/20 disabled:opacity-50"
+                >
+                  {t("dashboard.stats.approved")}
+                </button>
+                <button
+                  onClick={() => handleBulkAction("rejected")}
+                  disabled={isBulkActing}
+                  className="rounded px-2.5 py-1 text-xs font-medium bg-red-600/10 text-red-600 transition-colors hover:bg-red-600/20 disabled:opacity-50"
+                >
+                  {t("dashboard.stats.discarded")}
+                </button>
+              </>
+            )}
             <button
-              onClick={() => handleBulkAction("approved")}
+              onClick={() => handleBulkAction("rerun_evaluation" as any)}
               disabled={isBulkActing}
-              className="rounded px-2.5 py-1 text-xs font-medium bg-emerald-600/10 text-emerald-600 transition-colors hover:bg-emerald-600/20 disabled:opacity-50"
+              className="rounded px-2.5 py-1 text-xs font-medium bg-slate-600/10 text-slate-300 transition-colors hover:bg-slate-600/20 disabled:opacity-50"
             >
-              Approve
+              {t("leads_table.bulk.rerun_eval", { defaultValue: "Rerun Evaluation" })}
             </button>
             <button
-              onClick={() => handleBulkAction("rejected")}
+              onClick={() => handleBulkAction("rerun_enrichment" as any)}
               disabled={isBulkActing}
-              className="rounded px-2.5 py-1 text-xs font-medium bg-red-600/10 text-red-600 transition-colors hover:bg-red-600/20 disabled:opacity-50"
+              className="rounded px-2.5 py-1 text-xs font-medium bg-slate-600/10 text-slate-300 transition-colors hover:bg-slate-600/20 disabled:opacity-50"
             >
-              Reject
+              {t("leads_table.bulk.rerun_enrich", { defaultValue: "Rerun Enrichment" })}
             </button>
           </div>
         )}
@@ -219,19 +241,17 @@ export function LeadsTable({ leads, selectedId, onSelect, onFilteredChange, onBu
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-border">
-              {view === "pending" && (
-                <th scope="col" className="w-10 px-4 py-2 text-left">
-                  <input
-                    type="checkbox"
-                    checked={allSelected}
-                    ref={input => {
-                      if (input) input.indeterminate = someSelected
-                    }}
-                    onChange={toggleSelectAll}
-                    className="size-3.5 rounded border-input bg-background text-primary"
-                  />
-                </th>
-              )}
+              <th scope="col" className="w-10 px-4 py-2 text-left">
+                <input
+                  type="checkbox"
+                  checked={allSelected}
+                  ref={input => {
+                    if (input) input.indeterminate = someSelected
+                  }}
+                  onChange={toggleSelectAll}
+                  className="size-3.5 rounded border-input bg-background text-primary"
+                />
+              </th>
               {columns.map((col) => (
                 <th key={col.key} scope="col" className={cn("px-4 py-2 text-left", col.className)}>
                   <button
@@ -256,7 +276,7 @@ export function LeadsTable({ leads, selectedId, onSelect, onFilteredChange, onBu
           <tbody>
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={view === "pending" ? columns.length + 1 : columns.length} className="px-4 py-12">
+                <td colSpan={columns.length + 1} className="px-4 py-12">
                   <div className="flex flex-col items-center gap-2 text-center">
                     <div className="flex size-10 items-center justify-center rounded-full bg-muted">
                       <Inbox className="size-5 text-muted-foreground" aria-hidden="true" />
@@ -279,17 +299,25 @@ export function LeadsTable({ leads, selectedId, onSelect, onFilteredChange, onBu
                     selectedIds.has(lead.id) && "bg-accent/30",
                   )}
                 >
-                  {view === "pending" && (
-                    <td className="w-10 px-4 py-3" onClick={e => e.stopPropagation()}>
-                      <input
-                        type="checkbox"
-                        checked={selectedIds.has(lead.id)}
-                        onChange={() => toggleRowSelect(lead.id)}
-                        className="size-3.5 rounded border-input bg-background text-primary"
+                  <td className="w-10 px-4 py-3" onClick={e => e.stopPropagation()}>
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.has(lead.id)}
+                      onChange={() => toggleRowSelect(lead.id)}
+                      className="size-3.5 rounded border-input bg-background text-primary"
+                    />
+                  </td>
+                  <td className="px-4 py-3 font-medium text-card-foreground">
+                    <div className="flex items-center gap-2">
+                      <img
+                        src={`https://www.google.com/s2/favicons?domain=${lead.domain}&sz=32`}
+                        alt=""
+                        className="size-5 rounded bg-white shadow-sm"
+                        loading="lazy"
                       />
-                    </td>
-                  )}
-                  <td className="px-4 py-3 font-medium text-card-foreground">{lead.company}</td>
+                      {lead.company}
+                    </div>
+                  </td>
                   <td className="px-4 py-3">
                     <a
                       href={`https://${lead.domain}`}

@@ -26,11 +26,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid request" }, { status: 400 })
   }
 
+  const reviewedBy = session.username ?? "dashboard"
+
   // Write feedback row
   await query(
     `INSERT INTO feedback (candidate_id, decision, note, reviewed_by)
-     VALUES ($1, $2, $3, 'dashboard')`,
-    [candidate_id, decision, note ?? null],
+     VALUES ($1, $2, $3, $4)`,
+    [candidate_id, decision, note ?? null, reviewedBy],
   )
 
   // Flip candidate status

@@ -28,20 +28,38 @@ export async function GET(request: NextRequest) {
     campaignId = CAMPAIGN_SLUG_TO_ID[campaignParam] ?? 1
   }
 
+  const hideBroken = searchParams.get("hide_broken") !== "false" // default true
+
+  // Hide approved leads that don't have proper enrichment data
+  const enrichmentFilter = hideBroken 
+    ? `AND (c.status != 'approved' OR (l.estimated_size IS NOT NULL AND l.estimated_revenue IS NOT NULL))`
+    : ``
+
   const statusCondition = statusFilter
-    ? `AND c.status = $2`
-    : `AND c.status IN ('pending_review', 'approved', 'rejected', 'enrichment_failed')`
+    ? `AND c.status = $2 ${enrichmentFilter}`
+    : `AND c.status IN ('pending_review', 'approved', 'rejected', 'enrichment_failed') ${enrichmentFilter}`
 
   const values: unknown[] = [campaignId]
   if (statusFilter) values.push(statusFilter)
 
   const page = parseInt(searchParams.get("page") ?? "1", 10)
-  const limit = parseInt(searchParams.get("limit") ?? "200", 10)
+  const rawLimit = parseInt(searchParams.get("limit") ?? "50", 10)
+  const limit = Math.min(Math.max(1, isNaN(rawLimit) ? 50 : rawLimit), 200)
   const offset = (page - 1) * limit
 
-  // Count total matching leads
+  const cursorParam = searchParams.get("cursor")
+  const cursorId = cursorParam ? parseInt(cursorParam, 10) : null
+  const cursorCondition = cursorId ? `AND c.id < ${cursorId}` : ""
+
+  // Count total matching leads (must include the joins to filter by l.estimated_size)
   const countRow = await query<{ count: string }>(
-    `SELECT COUNT(*) FROM candidates c WHERE c.campaign_id = $1 ${statusCondition}`,
+    `
+    SELECT COUNT(*) 
+    FROM candidates c
+    LEFT JOIN evaluations e ON c.id = e.candidate_id
+    LEFT JOIN leads l ON c.id = l.candidate_id
+    WHERE c.campaign_id = $1 ${statusCondition}
+    `,
     values
   )
   const total = parseInt(countRow[0]?.count ?? "0", 10)
@@ -111,11 +129,14 @@ export async function GET(request: NextRequest) {
     LEFT JOIN leads l ON l.candidate_id = c.id
     WHERE c.campaign_id = $1
     ${statusCondition}
-    ORDER BY e.score DESC NULLS LAST, c.created_at DESC
+    ${cursorCondition}
+    ORDER BY e.score DESC NULLS LAST, c.id DESC
     LIMIT $${values.length + 1} OFFSET $${values.length + 2}
     `,
     [...values, limit, offset],
   )
 
-  return NextResponse.json({ leads: rows, total, page, limit })
+  const nextCursor = rows.length === limit ? rows[rows.length - 1].id : null
+
+  return NextResponse.json({ leads: rows, total, page, limit, nextCursor })
 }

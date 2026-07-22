@@ -14,8 +14,8 @@ import config
 import db
 import cost_log
 import llm
-# Re-use the existing scrape function
-import stage5
+# STABILIZATION FIX: Import shared crawler client instead of importing stage5 directly
+from crawler_client import crawler_scrape
 
 logger = logging.getLogger(__name__)
 

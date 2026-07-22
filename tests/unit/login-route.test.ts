@@ -1,9 +1,10 @@
 import { describe, it, expect } from 'vitest'
+import { NextRequest } from 'next/server'
 import { POST } from '@/app/api/login/route'
 
 describe('Login API Route', () => {
   it('returns 400 when body is invalid JSON', async () => {
-    const req = new Request('http://localhost:3000/api/login', {
+    const req = new NextRequest('http://localhost:3000/api/login', {
       method: 'POST',
       body: 'invalid-json',
     })
@@ -14,7 +15,7 @@ describe('Login API Route', () => {
   })
 
   it('returns 400 when password is missing', async () => {
-    const req = new Request('http://localhost:3000/api/login', {
+    const req = new NextRequest('http://localhost:3000/api/login', {
       method: 'POST',
       body: JSON.stringify({}),
     })
@@ -28,7 +29,7 @@ describe('Login API Route', () => {
     const originalHash = process.env.DASHBOARD_PASSWORD_HASH
     delete process.env.DASHBOARD_PASSWORD_HASH
 
-    const req = new Request('http://localhost:3000/api/login', {
+    const req = new NextRequest('http://localhost:3000/api/login', {
       method: 'POST',
       body: JSON.stringify({ password: 'any_password' }),
     })

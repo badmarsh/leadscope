@@ -5,22 +5,22 @@ import { leads } from '@/lib/leads-data';
 
 describe('LeadsTable Component', () => {
   it('renders all leads initially', () => {
-    render(<LeadsTable leads={leads} selectedId={null} onSelect={() => {}} onFilteredChange={() => {}} onBulkAction={() => {}} />);
+    render(<LeadsTable leads={leads} selectedId={null} onSelect={() => {}} onFilteredChange={() => {}} onBulkAction={async () => {}} />);
     expect(screen.getByText('Budapesti Klíma Kft.')).toBeInTheDocument();
     expect(screen.getByText('Pannon Hűtéstechnika')).toBeInTheDocument();
   });
 
   it('filters leads by search text', () => {
-    render(<LeadsTable leads={leads} selectedId={null} onSelect={() => {}} onFilteredChange={() => {}} onBulkAction={() => {}} />);
+    render(<LeadsTable leads={leads} selectedId={null} onSelect={() => {}} onFilteredChange={() => {}} onBulkAction={async () => {}} />);
     expect(screen.getByText('Pannon Hűtéstechnika')).toBeInTheDocument();
-    const searchInput = screen.getByPlaceholderText('Search by company or domain…');
+    const searchInput = screen.getByPlaceholderText('leads_table.search_placeholder');
     fireEvent.change(searchInput, { target: { value: 'Budapesti' } });
     expect(screen.queryByText('Pannon Hűtéstechnika')).not.toBeInTheDocument();
     expect(screen.getByText('Budapesti Klíma Kft.')).toBeInTheDocument();
   });
 
   it('filters leads by score presets', () => {
-    render(<LeadsTable leads={leads} selectedId={null} onSelect={() => {}} onFilteredChange={() => {}} onBulkAction={() => {}} />);
+    render(<LeadsTable leads={leads} selectedId={null} onSelect={() => {}} onFilteredChange={() => {}} onBulkAction={async () => {}} />);
     const highBtn = screen.getByText('High 80+');
     fireEvent.click(highBtn);
     expect(screen.getByText('Budapesti Klíma Kft.')).toBeInTheDocument();

@@ -24,19 +24,33 @@ _client: Optional[OpenAI] = None
 
 
 def _get_client() -> OpenAI:
+    """
+    Returns LLM client. Priority:
+      1. Local Gemini proxy (GEMINI_PROXY_ENDPOINT) — free, no key limits
+      2. OpenRouter (OPENROUTER_API_KEY) — fallback only
+    """
     global _client
     if _client is None:
-        if config.OPENROUTER_API_KEY:
+        if config.GEMINI_PROXY_ENDPOINT and config.GEMINI_PROXY_API_KEY:
+            logger.info("LLM client: local proxy at %s", config.GEMINI_PROXY_ENDPOINT)
+            _client = OpenAI(
+                api_key=config.GEMINI_PROXY_API_KEY,
+                base_url=f"{config.GEMINI_PROXY_ENDPOINT.rstrip('/')}/v1",
+            )
+        elif config.OPENROUTER_API_KEY:
+            logger.info("LLM client: OpenRouter (local proxy not configured)")
             _client = OpenAI(
                 api_key=config.OPENROUTER_API_KEY,
                 base_url="https://openrouter.ai/api/v1",
             )
         else:
-            _client = OpenAI(
-                api_key=config.GEMINI_PROXY_API_KEY,
-                base_url=f"{config.GEMINI_PROXY_ENDPOINT.rstrip('/')}/v1",
-            )
+            raise RuntimeError("No LLM backend configured: set GEMINI_PROXY_ENDPOINT or OPENROUTER_API_KEY")
     return _client
+
+
+class LLMSafetyFilterError(Exception):
+    """Raised when the LLM returns an empty response due to content safety filtering."""
+    pass
 
 
 def chat_text(
@@ -48,20 +62,43 @@ def chat_text(
 ) -> tuple[str, int, int]:
     """
     Call the LLM and return (text_response, tokens_in, tokens_out).
-    Raises on API error.
+    Raises on API error or safety filter block.
     """
     client = _get_client()
-    use_model = model or ("google/gemini-2.5-flash" if config.OPENROUTER_API_KEY else config.GEMINI_MODEL)
-    resp = client.chat.completions.create(
-        model=use_model,
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt},
-        ],
-        temperature=temperature,
-        max_tokens=max_tokens,
-    )
+    use_model = model or config.GEMINI_MODEL
+    import time
+    from openai import RateLimitError, APIStatusError
+
+    max_retries = 5
+    resp = None
+    for attempt in range(max_retries):
+        try:
+            resp = client.chat.completions.create(
+                model=use_model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ],
+                temperature=temperature,
+                max_tokens=max_tokens,
+            )
+            break
+        except (RateLimitError, APIStatusError) as e:
+            if attempt == max_retries - 1:
+                logger.error("Max retries reached for LLM call.")
+                raise
+            logger.warning(f"LLM API Error: {e}. Retrying {attempt + 1}/{max_retries}...")
+            time.sleep(2 ** attempt)
+
+    if not resp or not resp.choices:
+        raise LLMSafetyFilterError("LLM returned no choices (possible safety filter block)")
+
     text = resp.choices[0].message.content or ""
+    # STABILIZATION FIX: Detect empty content caused by Gemini safety blocks when scanning malware text
+    if not text.strip() and resp.choices[0].finish_reason in ("safety", "recitation", "FILTERED"):
+        logger.warning("LLM response blocked by safety filter: finish_reason=%s", resp.choices[0].finish_reason)
+        raise LLMSafetyFilterError(f"LLM content blocked by safety filter ({resp.choices[0].finish_reason})")
+
     tokens_in  = resp.usage.prompt_tokens if resp.usage else 0
     tokens_out = resp.usage.completion_tokens if resp.usage else 0
     return text, tokens_in, tokens_out
@@ -90,5 +127,13 @@ def chat_json(
     try:
         return json.loads(stripped), ti, to
     except json.JSONDecodeError:
-        logger.warning("LLM returned non-JSON; returning raw text. First 200 chars: %s", text[:200])
+        logger.error(
+            "LLM_JSON_PARSE_FAILURE model=%s tokens_in=%d tokens_out=%d preview=%r",
+            use_model,
+            ti,
+            to,
+            text[:200],
+        )
+        # Callers MUST check for '_raw' key — this is an error condition,
+        # not a silent degradation. Do not treat it as a valid empty response.
         return {"_raw": text}, ti, to

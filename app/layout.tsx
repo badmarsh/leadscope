@@ -37,6 +37,10 @@ export const viewport: Viewport = {
   ],
 }
 
+import { I18nProvider } from '@/lib/i18n'
+import enDict from '@/locales/en.json'
+import skDict from '@/locales/sk.json'
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -45,9 +49,11 @@ export default function RootLayout({
   return (
     <html lang="en" className="bg-background">
       <body className="antialiased">
-        {children}
-        <LogViewer />
-        {process.env.NODE_ENV === 'production' && <Analytics />}
+        <I18nProvider enDict={enDict} skDict={skDict}>
+          {children}
+          <LogViewer />
+          {process.env.NODE_ENV === 'production' && <Analytics />}
+        </I18nProvider>
       </body>
     </html>
   )

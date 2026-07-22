@@ -19,8 +19,15 @@ from typing import Optional
 from urllib.parse import quote, urlparse
 
 import requests
-from exa_py import Exa
-from tavily import TavilyClient
+try:
+    from exa_py import Exa
+except ImportError:
+    Exa = None
+
+try:
+    from tavily import TavilyClient
+except ImportError:
+    TavilyClient = None
 
 import config
 import db
@@ -218,18 +225,33 @@ def _search_brave(query: str, conn, campaign_id: int) -> list[dict]:
 
 DEDUP_PROMPT = """
 Given the following web search results (JSON array), extract unique B2B business
-domains and company names. Exclude news sites, social media, aggregators,
-job boards, directories, Wikipedia, government portals, and personal blogs.
-Each item should be a real business that could be a lead.
+domains and company names.
+
+EXCLUDE (disqualifiers):
+- News sites, blogs, media outlets, opinion/editorial sites
+- Social media platforms (facebook.com, linkedin.com, instagram.com, twitter.com, tiktok.com, etc.)
+- Aggregators, business directories, job boards, portals
+- Wikipedia, government sites (.gov, .muni.*), educational institutions (.edu)
+- Personal blogs (wordpress.com, blogspot.com, medium.com subdomains)
+- E-commerce marketplaces (amazon, ebay, alza, mall.cz, etc.)
+- Results where the domain is a URL shortener, CDN, or tracking pixel host
+
+INCLUDE (positive signals):
+- Real B2B businesses with a domain they own and operate
+- Companies that appear to offer a product or service
+- For Hungarian-language queries, prefer .hu TLD domains
+- Businesses with a physical presence indicator (address, phone, contact page, or about page)
+
+Each item must be a real company that could plausibly be a sales lead.
 
 Return a JSON array where each element has:
-  - "domain": apex domain only (e.g. "example.com"), no www, no path
-  - "company_name": company name if determinable, else null
+  - "domain": apex domain only (e.g. "example.com"), no www prefix, no path
+  - "company_name": company name if determinable from the title/snippet, else null
 
 Results:
 {results_json}
 
-Return ONLY a valid JSON array. No prose, no markdown.
+Return ONLY a valid JSON array. No prose, no markdown fences.
 """
 
 
@@ -414,7 +436,6 @@ def _keyword_search(campaign_id: int, conn, cooldown_days: int = 30) -> dict:
     )
 
     inserted = 0
-    skipped_dnc = 0
     skipped_existing = 0
 
     for item in candidates_data:
@@ -422,10 +443,6 @@ def _keyword_search(campaign_id: int, conn, cooldown_days: int = 30) -> dict:
         if not domain:
             continue
         company_name = item.get("company_name")
-
-        if _is_do_not_contact(conn, domain, campaign_id):
-            skipped_dnc += 1
-            continue
 
         evidence = {
             "search_queries": queries_run,
@@ -443,6 +460,8 @@ def _keyword_search(campaign_id: int, conn, cooldown_days: int = 30) -> dict:
         if ok:
             inserted += 1
         else:
+            # skipped_existing covers both "already present" and DNC-suppressed cases
+            # since _upsert_candidate handles the DNC check internally
             skipped_existing += 1
 
     return {
@@ -453,7 +472,6 @@ def _keyword_search(campaign_id: int, conn, cooldown_days: int = 30) -> dict:
         "raw_hits": len(all_raw),
         "unique_domains": len(candidates_data),
         "inserted_or_reopened": inserted,
-        "skipped_dnc": skipped_dnc,
         "skipped_existing": skipped_existing,
     }
 
@@ -464,26 +482,45 @@ def _publicwww_search(snippet: str) -> list[str]:
     """
     Query PublicWWW for websites containing snippet.
     Returns list of domain strings.
-    PublicWWW API: https://publicwww.com/websites/{encoded_query}/?export=csv&apikey={key}
+
+    Uses pypublicwww which constructs the correct URL:
+      https://publicwww.com/websites/{encoded_query}/?export=csvu&key={KEY}
+    Note: 'csvu' and 'key=' are the correct params (not 'csv' + 'apikey=').
+    Requires a paid PublicWWW plan — free plan returns 0 results.
     """
     if not config.PUBLICWWW_API_KEY:
         logger.warning("PUBLICWWW_API_KEY not set — skipping signature search")
         return []
 
-    encoded = quote(snippet, safe="")
-    url = f"https://publicwww.com/websites/{encoded}/?export=csv&apikey={config.PUBLICWWW_API_KEY}"
     try:
-        resp = requests.get(url, timeout=30)
-        resp.raise_for_status()
+        from pypublicwww import PyPublicWWW
+        api = PyPublicWWW(apikey=config.PUBLICWWW_API_KEY, timeout=30)
+        csv_text = api._search_websites(snippet, csv=True)
+
+        # Guard: API returns a plain-text error on free/exhausted plans
+        if not csv_text or "API available for paid" in csv_text or csv_text.startswith("<"):
+            logger.warning(
+                "PublicWWW returned no usable data for snippet=%r (plan limit or HTML page). "
+                "Response preview: %r",
+                snippet[:60],
+                csv_text[:120] if csv_text else "",
+            )
+            return []
+
         domains = []
-        for line in resp.text.strip().splitlines():
-            # CSV format: "domain","url","..."
-            parts = line.strip().strip('"').split('","')
+        for line in csv_text.strip().splitlines():
+            if line.startswith("url,"):  # skip header row
+                continue
+            # csvu CSV format: url;ranking  (semicolons, not commas)
+            parts = line.split(",")
             if parts and parts[0]:
-                domain = _extract_domain(parts[0])
+                domain = _extract_domain(parts[0].strip())
                 if domain:
                     domains.append(domain)
+
+        logger.info("PublicWWW returned %d domains for snippet=%r", len(domains), snippet[:60])
         return domains
+
     except Exception as exc:
         logger.error("PublicWWW query failed for snippet=%r: %s", snippet[:60], exc)
         return []

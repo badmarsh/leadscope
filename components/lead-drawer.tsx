@@ -7,6 +7,7 @@ import type { Lead } from "@/lib/leads-data"
 import { formatTimestamp, scoreColorClasses, statusBadgeClasses, statusLabels } from "@/lib/status"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
+import { useTranslation } from "@/lib/i18n"
 
 interface LeadDrawerProps {
   lead: Lead | null
@@ -26,6 +27,7 @@ export function LeadDrawer({ lead, onClose, onDecision, onReopen, onNavigate, ha
   const [copiedPhone, setCopiedPhone] = useState(false)
   const [copiedDraft, setCopiedDraft] = useState(false)
   const [isGeneratingDraft, setIsGeneratingDraft] = useState(false)
+  const { t } = useTranslation()
   const noteRef = useRef("")
   noteRef.current = note
 

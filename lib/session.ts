@@ -6,6 +6,7 @@ import { SessionOptions } from "iron-session"
 
 export interface SessionData {
   loggedIn?: boolean
+  username?: string
 }
 
 const secret = process.env.DASHBOARD_SESSION_SECRET || "complex_32_char_fallback_secret_for_development_mode"
@@ -18,7 +19,7 @@ export const sessionOptions: SessionOptions = {
   cookieName: "leadscope_session",
   password: secret,
   cookieOptions: {
-    secure: process.env.NODE_ENV === "production",
+    secure: process.env.COOKIE_SECURE === "true",
     httpOnly: true,
     sameSite: "lax",
   },

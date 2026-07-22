@@ -8,11 +8,11 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # ── Database ──────────────────────────────────────────────────────────────────
-DATABASE_URL: str = os.environ["DATABASE_URL"]
+DATABASE_URL: str = os.environ.get("DATABASE_URL", "postgresql://leadscope:leadscope@localhost:5432/leadscope")
 
 # ── LLM providers ────────────────────────────────────────────────────────────
-GEMINI_PROXY_API_KEY: str = os.environ["GEMINI_PROXY_API_KEY"]
-GEMINI_PROXY_ENDPOINT: str = os.environ["GEMINI_PROXY_ENDPOINT"]
+GEMINI_PROXY_API_KEY: str = os.environ.get("GEMINI_PROXY_API_KEY", "")
+GEMINI_PROXY_ENDPOINT: str = os.environ.get("GEMINI_PROXY_ENDPOINT", "http://127.0.0.1:8045")
 OPENROUTER_API_KEY: str = os.environ.get("OPENROUTER_API_KEY", "")
 
 # Gemini model string as exposed by the local proxy.
@@ -24,6 +24,8 @@ STAGE1_MODEL: str = os.environ.get("STAGE1_MODEL", "gemini-3.1-pro-low")        
 STAGE2_DEDUP_MODEL: str = os.environ.get("STAGE2_DEDUP_MODEL", "gemini-3.1-flash-lite")  # search result dedup — pure list filtering
 STAGE5_MODEL: str = os.environ.get("STAGE5_MODEL", "gemini-3.6-flash-low")      # enrichment extraction + Slovak sentence
 KB_INGEST_MODEL: str = os.environ.get("KB_INGEST_MODEL", "gemini-3.6-flash-medium")  # malware signature extraction from 15k articles
+SCORER_TEXT_MODEL: str = os.environ.get("SCORER_TEXT_MODEL", "gemini-3.6-flash-high")
+SCORER_VISION_MODEL: str = os.environ.get("SCORER_VISION_MODEL", "gemini-3.1-pro")
 
 OLLAMA_HOST: str = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
 OLLAMA_MODEL: str = os.environ.get("OLLAMA_MODEL", "llama3")
@@ -31,6 +33,9 @@ OLLAMA_MODEL: str = os.environ.get("OLLAMA_MODEL", "llama3")
 # ── Firecrawl ────────────────────────────────────────────────────────────────
 FIRECRAWL_ENDPOINT: str = os.environ.get("FIRECRAWL_ENDPOINT", "https://api.firecrawl.dev")
 FIRECRAWL_API_KEY: str = os.environ.get("FIRECRAWL_API_KEY", "")
+
+# ── Crawler service (Crawl4AI — self-hosted, replaces Firecrawl for enrichment) ──
+CRAWLER_ENDPOINT: str = os.environ.get("CRAWLER_ENDPOINT", "http://crawler:8003")
 
 # ── Search APIs ──────────────────────────────────────────────────────────────
 EXA_API_KEY: str = os.environ.get("EXA_API_KEY", "")
@@ -62,6 +67,7 @@ PRICING_MAP = {
     "serpapi": {"per_query": 0.001},
     "brave": {"per_query": 0.001},
     "publicwww": {"per_query": 0.0},   # quota-based, no marginal USD cost
-    "firecrawl": {"per_query": 0.0},   # self-hosted
+    "firecrawl": {"per_query": 0.0},   # self-hosted (legacy — being phased out)
+    "crawler": {"per_query": 0.0},     # self-hosted Crawl4AI service
     "ollama": {"per_query": 0.0},      # local
 }

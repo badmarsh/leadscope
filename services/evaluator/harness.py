@@ -25,6 +25,28 @@ SCORER_REGISTRY = {
 }
 
 
+def _status_from_score(score: int, min_score: int = 20, is_shitty: bool = False) -> str:
+    if is_shitty or score < min_score:
+        return "discarded"
+    elif score >= 70:
+        return "approved"
+    else:
+        return "pending_review"
+
+
+def _select_scorer(campaign: dict):
+    if campaign.get("id") == 3 or campaign.get("campaign_type") == "wp_remediation":
+        return SCORER_REGISTRY["threat_intel"]
+    eval_type = campaign.get("evaluator_type")
+    if not eval_type:
+        ctype = campaign.get("campaign_type", "")
+        if "shoe" in ctype or "photo" in ctype:
+            eval_type = "image_quality"
+        else:
+            eval_type = "content_relevance"
+    return SCORER_REGISTRY.get(eval_type, SCORER_REGISTRY["content_relevance"])
+
+
 def _load_icp(conn, campaign_id: int) -> tuple[dict, int]:
     """
     Load the current (latest version) icp_config for a campaign.
@@ -190,6 +212,7 @@ def score_candidate(candidate_id: int) -> dict[str, Any]:
             "evaluation_id": eval_row["id"],
             "score": result["score"],
             "rationale": result["rationale"],
+            "evidence_data": result.get("evidence_data", {}),
             "icp_version_used": icp_version,
             "model_used": result.get("model_used", ""),
             "provider": result.get("provider", ""),
@@ -212,7 +235,7 @@ def trigger_scoring(campaign_id: int | None = None) -> dict:
             new_candidates = db.fetchall(
                 conn,
                 """
-                SELECT id, campaign_id, domain
+                SELECT id, campaign_id, domain, company_name
                 FROM candidates
                 WHERE status = 'new' AND campaign_id = %s
                 ORDER BY created_at ASC
@@ -224,7 +247,7 @@ def trigger_scoring(campaign_id: int | None = None) -> dict:
             new_candidates = db.fetchall(
                 conn,
                 """
-                SELECT id, campaign_id, domain
+                SELECT id, campaign_id, domain, company_name
                 FROM candidates
                 WHERE status = 'new'
                 ORDER BY created_at ASC
@@ -233,8 +256,18 @@ def trigger_scoring(campaign_id: int | None = None) -> dict:
             )
 
     campaign_ids = {c["campaign_id"] for c in new_candidates}
-    for cid in campaign_ids:
-        db.set_stage_status(cid, "stage3", "running")
+    
+    # Pre-fetch settings for all involved campaigns to avoid scope issues
+    campaign_settings = {}
+    with db.get_conn() as conn:
+        for cid in campaign_ids:
+            camp = db.fetchone(conn, "SELECT settings FROM campaigns WHERE id = %s", (cid,))
+            if camp:
+                cs = json.loads(camp["settings"]) if isinstance(camp.get("settings"), str) else (camp.get("settings") or {})
+                campaign_settings[cid] = cs
+            else:
+                campaign_settings[cid] = {}
+            db.set_stage_status(cid, "stage3", "running")
 
     try:
         results = []
@@ -242,26 +275,67 @@ def trigger_scoring(campaign_id: int | None = None) -> dict:
         errors = 0
 
         def process_cand(cand):
-            if db.check_stop_signal(cand["campaign_id"], "stage3"):
-                logger.info("Stage 3 stopped via dashboard signal for campaign %s", cand["campaign_id"])
+            cid = cand["campaign_id"]
+            if db.check_stop_signal(cid, "stage3"):
+                logger.info("Stage 3 stopped via dashboard signal for campaign %s", cid)
                 return None
                 
             try:
                 result = score_candidate(cand["id"])
 
-                # Flip status to pending_review
+                domain = (cand.get("domain") or "").lower()
+                company_name = (cand.get("company_name") or "").lower()
+                score = result.get("score", 0)
+
+                # Auto-reject shitty entries
+                is_shitty = False
+                reject_note = ""
+                cand_settings = campaign_settings.get(cid, {})
+                min_score = int(cand_settings.get("min_score_for_review", 20))
+                
+                evidence = result.get("evidence_data", {})
+                rationale_lower = result.get("rationale", "").lower()
+
+                if "jenex" in domain or "jenex" in company_name:
+                    is_shitty = True
+                    reject_note = "Auto-rejected: JENEX company detected."
+                elif score < min_score:
+                    is_shitty = True
+                    reject_note = f"Auto-rejected: Ultra irrelevant or no data retrieved (score {score} < {min_score})."
+                elif evidence.get("photo_quality") == "professional":
+                    is_shitty = True
+                    reject_note = "Auto-rejected: Already uses professional photography (ultra irrelevant)."
+                elif any(kw in rationale_lower for kw in ["veľká značka", "global brand", "major brand", "big brand"]):
+                    is_shitty = True
+                    reject_note = "Auto-rejected: Identified as a major/global brand (ultra irrelevant)."
+
                 with db.get_conn() as conn:
-                    db.execute(
-                        conn,
-                        "UPDATE candidates SET status = 'pending_review' WHERE id = %s",
-                        (cand["id"],)
-                    )
-                return {"candidate_id": cand["id"], "status": "scored", "score": result["score"]}
+                    if is_shitty:
+                        db.execute(
+                            conn,
+                            "UPDATE candidates SET status = 'discarded' WHERE id = %s",
+                            (cand["id"],)
+                        )
+                        logger.info("Auto-rejected candidate %s: %s", cand["id"], reject_note)
+                    elif score >= 70:
+                        db.execute(
+                            conn,
+                            "UPDATE candidates SET status = 'approved' WHERE id = %s",
+                            (cand["id"],)
+                        )
+                        logger.info("Auto-approved candidate %s (score %s >= 70) for enrichment", cand["id"], score)
+                    else:
+                        db.execute(
+                            conn,
+                            "UPDATE candidates SET status = 'pending_review' WHERE id = %s",
+                            (cand["id"],)
+                        )
+                return {"candidate_id": cand["id"], "status": "scored", "score": score}
             except Exception as exc:
                 logger.error("Harness failed for candidate %s: %s", cand["id"], exc)
                 return {"candidate_id": cand["id"], "status": "error", "error": str(exc)}
 
-        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
             for res in executor.map(process_cand, new_candidates):
                 if res is None:
                     break

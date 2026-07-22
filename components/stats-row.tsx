@@ -3,20 +3,23 @@
 import { Activity } from "lucide-react"
 import type { CampaignUsage, Lead } from "@/lib/leads-data"
 import { cn } from "@/lib/utils"
+import { useTranslation } from "@/lib/i18n"
 
 interface StatsRowProps {
   leads: Lead[]
   usage: CampaignUsage
 }
 
-const stats = [
-  { key: "pending", label: "Pending review", dot: "bg-amber-500" },
-  { key: "approved", label: "Approved", dot: "bg-emerald-500" },
-  { key: "rejected", label: "Rejected", dot: "bg-red-500" },
-  { key: "enrichment_failed", label: "Enrich failed", dot: "bg-muted-foreground/50" },
-] as const
-
 export function StatsRow({ leads, usage }: StatsRowProps) {
+  const { t } = useTranslation()
+
+  const stats = [
+    { key: "pending", label: t("dashboard.stats.pending"), dot: "bg-amber-500" },
+    { key: "approved", label: t("dashboard.stats.approved"), dot: "bg-emerald-500" },
+    { key: "rejected", label: t("dashboard.stats.discarded"), dot: "bg-red-500" },
+    { key: "enrichment_failed", label: "Enrich failed", dot: "bg-muted-foreground/50" },
+  ] as const
+
   const counts = {
     pending: leads.filter((l) => l.status === "pending").length,
     approved: leads.filter((l) => l.status === "approved").length,
@@ -35,7 +38,7 @@ export function StatsRow({ leads, usage }: StatsRowProps) {
             <span className="text-xs text-muted-foreground">{s.label}</span>
           </div>
           <p className="mt-2 font-mono text-2xl font-semibold text-card-foreground">
-            {counts[s.key]}
+            {counts[s.key as keyof typeof counts]}
           </p>
         </div>
       ))}

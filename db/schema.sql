@@ -14,6 +14,7 @@ CREATE TABLE campaigns (
   status TEXT DEFAULT 'active',          -- active | paused | draft
   created_at TIMESTAMPTZ DEFAULT now(),
   updated_at TIMESTAMPTZ DEFAULT now(),
+  settings JSONB NOT NULL DEFAULT '{}',
   stage1_status TEXT DEFAULT 'idle',
   stage1_last_run TIMESTAMPTZ,
   stage2_status TEXT DEFAULT 'idle',
@@ -108,6 +109,13 @@ CREATE TABLE leads (
   screenshot_url TEXT,
   products_sold TEXT[],
   enrichment_report TEXT,
+  estimated_size TEXT,
+  estimated_revenue TEXT,
+  estimated_traffic TEXT,
+  firmographics JSONB,
+  buying_power_signals TEXT[],
+  tech_stack TEXT[],
+  cold_email_hook TEXT,
   enriched_at TIMESTAMPTZ DEFAULT now(),
   updated_at TIMESTAMPTZ DEFAULT now()
 );
@@ -183,7 +191,7 @@ CREATE INDEX IF NOT EXISTS idx_candidates_approved ON candidates(status) WHERE s
 CREATE INDEX IF NOT EXISTS idx_api_call_log_campaign_created ON api_call_log(campaign_id, created_at);
 
 -- =============================================================================
--- Campaign settings column (present in DB, document here)
+-- Campaign settings column (documented above in CREATE TABLE)
 -- =============================================================================
 
 -- The settings column stores dashboard slider values as JSONB:
@@ -191,7 +199,7 @@ CREATE INDEX IF NOT EXISTS idx_api_call_log_campaign_created ON api_call_log(cam
 --   "enrichment_retry_hours": 24, "search_cooldown_days": 30,
 --   "max_candidates_per_run": 200, "max_enrichment_per_run": 20,
 --   "min_evidence_urls": 1 }
--- Added via: ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS settings JSONB NOT NULL DEFAULT '{}';
+-- (Added in base schema; no ALTER TABLE needed post-deployment).
 
 -- =============================================================================
 -- Search queries log (used by Stage 2 cooldown)

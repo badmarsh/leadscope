@@ -10,14 +10,12 @@ export const pool: Pool =
   globalForPg.pgPool ??
   new Pool({
     connectionString: process.env.DATABASE_URL,
-    max: 5,
-    idleTimeoutMillis: 30_000,
-    connectionTimeoutMillis: 5_000,
+    max: parseInt(process.env.PG_POOL_MAX ?? "10", 10),
+    idleTimeoutMillis: parseInt(process.env.PG_POOL_IDLE_TIMEOUT_MS ?? "30000", 10),
+    connectionTimeoutMillis: parseInt(process.env.PG_CONN_TIMEOUT_MS ?? "5000", 10),
   })
 
-if (process.env.NODE_ENV !== "production") {
-  globalForPg.pgPool = pool
-}
+globalForPg.pgPool = pool
 
 export async function query<T extends object = Record<string, unknown>>(
   text: string,

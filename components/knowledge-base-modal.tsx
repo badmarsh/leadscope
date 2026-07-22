@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react"
 import { Database, Plus, Trash2, Edit2, Save, X } from "lucide-react"
+import { useTranslation } from "@/lib/i18n"
 import { cn } from "@/lib/utils"
 
 interface Signature {
@@ -20,6 +21,7 @@ interface KnowledgeBaseModalProps {
 }
 
 export function KnowledgeBaseModal({ open, campaignDbId, onClose }: KnowledgeBaseModalProps) {
+  const { t } = useTranslation()
   const [signatures, setSignatures] = useState<Signature[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)

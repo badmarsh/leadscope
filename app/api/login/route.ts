@@ -1,10 +1,24 @@
 import { cookies } from "next/headers"
-import { NextResponse } from "next/server"
+import { NextRequest, NextResponse } from "next/server"
 import { compare } from "bcryptjs"
 import { getIronSession } from "iron-session"
 import { sessionOptions, type SessionData } from "@/lib/session"
+import { isRateLimited, clearAttempts } from "@/lib/rate-limit"
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
+  // Rate limiting: extract real IP from proxy headers or fallback
+  const ip =
+    request.headers.get("x-forwarded-for")?.split(",")[0].trim() ??
+    request.headers.get("x-real-ip") ??
+    "unknown"
+
+  if (isRateLimited(ip)) {
+    return NextResponse.json(
+      { error: "Too many login attempts. Try again in 15 minutes." },
+      { status: 429 },
+    )
+  }
+
   let body: { password?: string }
   try {
     body = await request.json()
@@ -27,8 +41,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid password" }, { status: 401 })
   }
 
+  // Clear failed attempts on successful login
+  clearAttempts(ip)
+
   const session = await getIronSession<SessionData>(await cookies(), sessionOptions)
   session.loggedIn = true
+  session.username = "admin" // single-operator model; extend when multi-user is added
   await session.save()
 
   return NextResponse.json({ ok: true })

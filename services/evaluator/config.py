@@ -23,14 +23,22 @@ GEMINI_MODEL: str = os.environ.get("GEMINI_MODEL", "gemini-3.6-flash-high")
 # Per-task model overrides — set in .env to tune cost/quality per call site
 # Evaluator scorers (stage 3 — runs every 15 min)
 SCORER_TEXT_MODEL: str = os.environ.get("SCORER_TEXT_MODEL", "gemini-3.6-flash-high")   # content_relevance + threat_intel
-SCORER_VISION_MODEL: str = os.environ.get("SCORER_VISION_MODEL", "gemini-3.1-flash-image") # image_quality
+SCORER_VISION_MODEL: str = os.environ.get("SCORER_VISION_MODEL", "gemini-3.1-pro") # image_quality
+STAGE5_MODEL: str = os.environ.get("STAGE5_MODEL", "gemini-3.6-flash-low")
 
 # Vision model for image_quality scorer (legacy alias kept for backwards compat)
 VISION_MODEL: str = os.environ.get("VISION_MODEL", SCORER_VISION_MODEL)
 
-# ── Firecrawl ────────────────────────────────────────────────────────────────
+# ── Firecrawl (still used by content_relevance + image_quality scorers) ────────
 FIRECRAWL_ENDPOINT: str = os.environ.get("FIRECRAWL_ENDPOINT", "https://api.firecrawl.dev")
 FIRECRAWL_API_KEY: str = os.environ.get("FIRECRAWL_API_KEY", "")
+
+# ── Self-hosted Crawl4AI (used by threat_intel scorer for JS-rendered re-verification) ──
+CRAWLER_ENDPOINT: str = os.environ.get("CRAWLER_ENDPOINT", "http://crawler:8003")
+
+# ── Reputation APIs (optional secondary corroboration for threat_intel) ────────
+SAFE_BROWSING_API_KEY: str = os.environ.get("SAFE_BROWSING_API_KEY", "")
+VIRUSTOTAL_API_KEY: str = os.environ.get("VIRUSTOTAL_API_KEY", "")
 
 # ── Few-shot ──────────────────────────────────────────────────────────────────
 # Max number of past feedback decisions to include as few-shot examples
@@ -40,5 +48,12 @@ FEW_SHOT_K: int = int(os.environ.get("FEW_SHOT_K", "5"))
 PRICING_MAP = {
     "openrouter": {"input_per_token": 0.15 / 1_000_000, "output_per_token": 0.60 / 1_000_000},
     "gemini": {"input_per_token": 0.075 / 1_000_000, "output_per_token": 0.30 / 1_000_000},
-    "firecrawl": {"per_query": 0.0},   # self-hosted
+    "firecrawl": {"per_query": 0.0},   # self-hosted (content_relevance + image_quality)
+    "crawler": {"per_query": 0.0},     # self-hosted Crawl4AI (threat_intel)
 }
+
+import logging as _logging
+_logging.getLogger(__name__).info(
+    "Evaluator config loaded | SCORER_VISION_MODEL=%s | SCORER_TEXT_MODEL=%s | PROXY=%s",
+    SCORER_VISION_MODEL, SCORER_TEXT_MODEL, GEMINI_PROXY_ENDPOINT,
+)

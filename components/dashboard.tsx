@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useState } from "react"
 import { campaigns, type CampaignId, type Lead } from "@/lib/leads-data"
 import { DB_ID_TO_CAMPAIGN, CAMPAIGN_TO_DB_ID } from "@/lib/campaigns"  // M3: shared map
+import { useLeads } from "@/lib/hooks/useLeads"
+import { useUsage } from "@/lib/hooks/useUsage"
 import { LoginScreen } from "@/components/login-screen"
 import { TopNav } from "@/components/top-nav"
 import { PipelineStatus } from "@/components/pipeline-status"
@@ -11,7 +13,10 @@ import { LeadsTable } from "@/components/leads-table"
 import { LeadDrawer } from "@/components/lead-drawer"
 import { SettingsModal } from "@/components/settings-modal"
 import { KnowledgeBaseModal } from "@/components/knowledge-base-modal"
+import { HelpModal } from "@/components/help-modal"
+import { N8nModal } from "@/components/n8n-modal"
 import { LogViewer } from "@/components/LogViewer"
+import { useTranslation } from "@/lib/i18n"
 
 const DARK_MODE_KEY = "leadscope-dark-mode"
 
@@ -96,6 +101,8 @@ export function Dashboard() {
   const [loading, setLoading] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [kbOpen, setKbOpen] = useState(false)
+  const [isHelpOpen, setIsHelpOpen] = useState(false)
+  const [isN8nOpen, setIsN8nOpen] = useState(false)
   const [page, setPage] = useState(1)
   const [totalLeads, setTotalLeads] = useState(0)
   const limit = 1000
@@ -104,6 +111,8 @@ export function Dashboard() {
     publicWwwUsed: number
     publicWwwLimit: number
   }>({ openRouterSpend: "$0.00", publicWwwUsed: 0, publicWwwLimit: 1000 })
+
+  const { t } = useTranslation()
 
   const currentLeadIndex = filteredLeads.findIndex(l => l.id === selectedId)
   const hasNext = currentLeadIndex >= 0 && currentLeadIndex < filteredLeads.length - 1
@@ -193,6 +202,7 @@ export function Dashboard() {
 
   async function handleLogin() {
     setLoggedIn(true)
+    await new Promise((r) => setTimeout(r, 100))
     await fetchLeads(activeCampaign, page)
     await fetchUsage(activeCampaign)
   }
@@ -245,20 +255,22 @@ export function Dashboard() {
     }
   }
 
-  async function handleBulkAction(ids: string[], status: "approved" | "rejected") {
-    // Optimistic update
-    setLeads((prev) =>
-      prev.map((l) => (ids.includes(l.id) ? { ...l, status } : l)),
-    )
+  async function handleBulkAction(ids: string[], action: "approved" | "rejected" | "rerun_evaluation" | "rerun_enrichment") {
+    // Optimistic update for approved / rejected
+    if (action === "approved" || action === "rejected") {
+      setLeads((prev) =>
+        prev.map((l) => (ids.includes(l.id) ? { ...l, status: action } : l)),
+      )
+    }
     setSelectedId(null)
 
     try {
       const r = await fetch("/api/action/bulk", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ candidate_ids: ids.map(id => parseInt(id, 10)), decision: status }),
+        body: JSON.stringify({ candidate_ids: ids.map(id => parseInt(id, 10)), decision: action }),
       })
-      if (!r.ok) {
+      if (!r.ok || action === "rerun_evaluation" || action === "rerun_enrichment") {
         await fetchLeads(activeCampaign, page)
       }
     } catch {
@@ -301,6 +313,8 @@ export function Dashboard() {
         onLogout={handleLogout}
         onSettingsOpen={() => setSettingsOpen(true)}
         onKbOpen={() => setKbOpen(true)}
+        onHelpOpen={() => setIsHelpOpen(true)}
+        onN8nOpen={() => setIsN8nOpen(true)}
       />
 
       <main className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-6 lg:px-6">
@@ -317,7 +331,7 @@ export function Dashboard() {
 
         {loading ? (
           <div className="flex h-40 items-center justify-center text-sm text-muted-foreground">
-            Loading leads…
+            {t("dashboard.loading", { defaultValue: "Loading leads..." })}
           </div>
         ) : (
           <div className="flex flex-col gap-4">
@@ -331,7 +345,7 @@ export function Dashboard() {
             <div className="flex items-center justify-between px-2 text-sm text-muted-foreground">
               <div>
                 {totalLeads === 0
-                  ? "No leads"
+                  ? t("leads_table.no_leads")
                   : `Showing ${(page - 1) * limit + 1}–${Math.min(page * limit, totalLeads)} of ${totalLeads} leads`
                 }
               </div>
@@ -341,14 +355,14 @@ export function Dashboard() {
                   onClick={() => setPage(p => Math.max(1, p - 1))}
                   className="rounded-md border bg-card px-3 py-1 hover:bg-accent disabled:opacity-50"
                 >
-                  Previous
+                  {t("dashboard.previous")}
                 </button>
                 <button
                   disabled={page * limit >= totalLeads}
                   onClick={() => setPage(p => p + 1)}
                   className="rounded-md border bg-card px-3 py-1 hover:bg-accent disabled:opacity-50"
                 >
-                  Next
+                  {t("dashboard.next")}
                 </button>
               </div>
             </div>
@@ -377,6 +391,16 @@ export function Dashboard() {
         open={kbOpen}
         campaignDbId={DB_CAMPAIGN_IDS[activeCampaign]}
         onClose={() => setKbOpen(false)}
+      />
+
+      <HelpModal
+        isOpen={isHelpOpen}
+        onClose={() => setIsHelpOpen(false)}
+      />
+
+      <N8nModal
+        isOpen={isN8nOpen}
+        onClose={() => setIsN8nOpen(false)}
       />
 
       <LogViewer />

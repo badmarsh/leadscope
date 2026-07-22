@@ -7,13 +7,13 @@ import { getIronSession } from "iron-session"
 import { sessionOptions, type SessionData } from "@/lib/session"
 
 // Routes that don't require a session
-const PUBLIC_PATHS = ["/api/login", "/api/session", "/login", "/_next", "/favicon.ico"]
+const PUBLIC_PATHS = ["/", "/api/login", "/api/session", "/_next", "/favicon.ico"]
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
 
-  // Allow public paths
-  if (PUBLIC_PATHS.some((p) => pathname.startsWith(p))) {
+  // Allow public paths (exact match for /, prefix match for API/static)
+  if (pathname === "/" || PUBLIC_PATHS.some((p) => p !== "/" && pathname.startsWith(p))) {
     return NextResponse.next()
   }
 

@@ -6,10 +6,13 @@ keyed by campaigns.evaluator_type (content_relevance, image_quality, threat_inte
 """
 import logging
 import os
+from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi import FastAPI, HTTPException, BackgroundTasks, Depends
 
+import config
 import harness
+from auth import require_internal_token
 
 log_dir = "/var/log/app"
 try:
@@ -26,13 +29,29 @@ except (OSError, PermissionError):
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s %(levelname)s %(name)s — %(message)s",
+    force=True,
     handlers=[
         logging.StreamHandler(),
         logging.FileHandler(log_file)
     ]
 )
 
-app = FastAPI(title="Leadscope Evaluator", version="1.0.0")
+logger = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Log active model configuration at startup (after logging is fully initialised)."""
+    logger.info(
+        "Evaluator ready | SCORER_VISION_MODEL=%s | SCORER_TEXT_MODEL=%s | PROXY=%s",
+        config.SCORER_VISION_MODEL,
+        config.SCORER_TEXT_MODEL,
+        config.GEMINI_PROXY_ENDPOINT,
+    )
+    yield
+
+
+app = FastAPI(title="Leadscope Evaluator", version="1.0.0", lifespan=lifespan)
 
 
 @app.get("/health")
@@ -42,7 +61,7 @@ def health():
 
 # IMPORTANT: /score/trigger MUST be defined before /score/{candidate_id}
 # otherwise FastAPI matches "trigger" as candidate_id.
-@app.post("/score/trigger")
+@app.post("/score/trigger", dependencies=[Depends(require_internal_token)])
 def trigger_scoring(background_tasks: BackgroundTasks, background: bool = False):
     """
     Poll for candidates with status='new', score each, flip to 'pending_review'.
@@ -58,7 +77,7 @@ def trigger_scoring(background_tasks: BackgroundTasks, background: bool = False)
         raise HTTPException(status_code=500, detail=f"Trigger failed: {exc}")
 
 
-@app.post("/score/{candidate_id}")
+@app.post("/score/{candidate_id}", dependencies=[Depends(require_internal_token)])
 def score_candidate(candidate_id: int):
     """
     Score a single candidate through the evaluator harness.

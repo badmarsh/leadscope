@@ -9,10 +9,10 @@ from contextlib import contextmanager
 
 import config
 
-_pool: pg_pool.SimpleConnectionPool | None = None
+_pool: pg_pool.ThreadedConnectionPool | None = None
 
 
-def get_pool() -> pg_pool.SimpleConnectionPool:
+def get_pool() -> pg_pool.ThreadedConnectionPool:
     global _pool
     if _pool is None:
         _pool = pg_pool.ThreadedConnectionPool(
@@ -98,8 +98,8 @@ def set_stage_status(campaign_id: int, stage: str, status: str):
                 )
             else:
                 cur.execute(f"UPDATE campaigns SET {stage}_status = %s WHERE id = %s", (status, campaign_id))
-    except Exception:
-        pass  # Never fail the main job if logging fails
+    except Exception as exc:
+        logger.warning("set_stage_status failed (non-fatal): %s", exc)
     finally:
         get_pool().putconn(conn)
 

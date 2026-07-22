@@ -1,4 +1,4 @@
-# Jenex AI / LeadScope Platform
+# LeadScope Platform
 
 A high-performance lead generation, evaluation, and AI-powered intelligence platform built with Next.js 16 (App Router), PostgreSQL, microservices, and Docker.
 
@@ -19,19 +19,10 @@ A high-performance lead generation, evaluation, and AI-powered intelligence plat
              ┌──────────────────────┼──────────────────────┐
              │                      │                      │
    ┌─────────▼─────────┐  ┌─────────▼─────────┐  ┌─────────▼─────────┐
-   │ PostgreSQL DB     │  │ Evaluator Service │  │ TCP Proxy Services│
-   │ (leadscope pool)  │  │ (Python FastAPI)  │  │ (127.0.0.1:8045)  │
+   │ PostgreSQL DB     │  │ Evaluator Service │  │ Stages Service    │
+   │ (leadscope pool)  │  │ (Python FastAPI)  │  │ (Python FastAPI)  │
    └───────────────────┘  └───────────────────┘  └───────────────────┘
 ```
-
----
-
-## 🔒 Security & Defensive Hardening
-
-- **Authentication & Middleware**: Protected page routes are gated behind iron-session HTTP-only cookies with server-side redirects in `middleware.ts`.
-- **Credential Protection**: Plaintext logging has been removed from authentication endpoints. Secret environment variables use fallback expansion (`${VAR:-default}`).
-- **Network Isolation**: Proxy listeners in `proxy.py` and `new_proxy.py` strictly bind to `127.0.0.1`.
-- **Container Hardening**: `Dockerfile.dashboard` operates under a non-root `node` user and enforces runtime container health checks.
 
 ---
 
@@ -40,6 +31,7 @@ A high-performance lead generation, evaluation, and AI-powered intelligence plat
 ### Prerequisites
 - Node.js 22+
 - pnpm 9+
+- Python 3.12+
 - Docker & Docker Compose
 
 ### Installation & Execution
@@ -62,14 +54,94 @@ A high-performance lead generation, evaluation, and AI-powered intelligence plat
 
 ---
 
-## 🧪 Testing Strategy
+## 🔑 First-Run Auth Setup
 
-The repository uses **Vitest** for unit & component testing and **Playwright** for End-to-End browser tests.
+Generate the required secrets before starting:
 
 ```bash
-# Run Unit & Integration Tests
-npx vitest run
+# 1. Session secret (must be ≥32 characters)
+openssl rand -hex 32
+
+# 2. Password hash (replace 'yourpassword' with your actual password)
+node -e "const b=require('bcryptjs'); b.hash('yourpassword',12).then(console.log)"
+```
+
+Set both values in your `.env` file:
+```
+DASHBOARD_SESSION_SECRET=<output of step 1>
+DASHBOARD_PASSWORD_HASH=<output of step 2>
+```
+
+---
+
+## 🗃️ Database Migrations
+
+LeadScope uses [Alembic](https://alembic.sqlalchemy.org/) for schema versioning.
+
+```bash
+# Apply all pending migrations
+DATABASE_URL=postgresql://... alembic -c db/alembic.ini upgrade head
+
+# On an existing deployment (schema already applied), stamp current state:
+DATABASE_URL=postgresql://... alembic -c db/alembic.ini stamp 0001
+
+# Create a new migration after schema changes
+DATABASE_URL=postgresql://... alembic -c db/alembic.ini revision --autogenerate -m "describe change"
+```
+
+---
+
+## 🌊 Pipeline Stages Reference
+
+| Stage | Name | Trigger | Description |
+|---|---|---|---|
+| Stage 1 | ICP Definer | Manual / n8n | Generates search queries and target segments from `business_brief` via LLM |
+| Stage 2 | Target Finder | n8n cron (every 6h) | Multi-provider search waterfall (Exa → Tavily → Serper → SerpAPI → Brave) → domain candidates |
+| Stage 3 | Evaluator | n8n cron | Scores candidates 0–100 against ICP using Firecrawl + Vision AI |
+| Stage 5 | Enrichment | n8n cron | Crawl4AI scrape + `extruct` metadata + LLM gap-fill for contact data |
+
+Stage 4 is an intentional numbering gap reserved for human-in-the-loop validation.
+
+---
+
+## 🌍 Multi-Campaign Support
+
+Three campaigns ship by default:
+
+| Slug | Evaluator | Description |
+|---|---|---|
+| `jenex` | `content_relevance` | HVAC distributor/installer leads in Hungary |
+| `shoe-photo` | `image_quality` | Shoe boutiques with poor product photography |
+| `wp-remediation` | `threat_intel` | WordPress sites with active malware signatures |
+
+To add a new campaign: insert a row into `campaigns`, create an ICP config row, and add the slug → DB ID mapping in `lib/campaigns.ts`.
+
+---
+
+## 🔒 Security Notes
+
+- Single-operator authentication via bcrypt password + iron-session cookie
+- Login rate-limited to 5 attempts per 15 minutes per IP
+- All API routes validate session server-side before any DB operation
+- All SQL queries use parameterized arguments (no string interpolation)
+- HTTP security headers (X-Frame-Options, Content-Security-Policy, etc.) applied globally
+- No secrets committed — all API keys live in `.env` only
+
+---
+
+## 🧪 Testing Strategy
+
+- **Vitest**: TypeScript unit & component tests (`pnpm test`)
+- **pytest**: Python service unit & integration tests (`pytest tests/`)
+- **Playwright**: End-to-End browser smoke tests (`pnpm test:e2e`)
+
+```bash
+# Run TypeScript Unit Tests
+pnpm test
+
+# Run Python Tests
+pytest tests/unit/ tests/integration/
 
 # Run E2E Playwright Suite
-npx playwright test
+pnpm test:e2e
 ```

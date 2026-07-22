@@ -3,6 +3,7 @@ import { cookies } from "next/headers"
 import { getIronSession } from "iron-session"
 import { query } from "@/lib/db"
 import { sessionOptions, SessionData } from "@/lib/session"
+import { chatText } from "@/lib/llm"
 
 export async function POST(req: Request) {
   const session = await getIronSession<SessionData>(await cookies(), sessionOptions)
@@ -39,7 +40,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Lead not found" }, { status: 404 })
     }
 
-    const lead = rows[0]
+    const lead = rows[0] as Record<string, unknown>
 
     // 2. If already generated, return it
     if (lead.draft_email) {
@@ -50,7 +51,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Campaign is missing a business brief. Cannot generate draft." }, { status: 400 })
     }
 
-    // 3. Construct prompt for OpenRouter
+    // 3. Construct prompt
     const prompt = `You are an expert SDR (Sales Development Representative).
 Your task is to write a highly personalized, concise cold outreach email to ${lead.company_name} (${lead.domain}).
 
@@ -66,40 +67,12 @@ ${lead.feedback_note || "N/A"}
 Write a short, engaging email (max 4-5 sentences) that hooks the reader, references our reason for reaching out based on their evaluation, and includes a soft call to action. Keep it professional but conversational. Do not include subject line in the output, just the email body.
 Please write the email in Slovak language as requested by the user previously.`
 
-    // 4. Call LLM (Proxy or OpenRouter)
-    const orKey = process.env.OPENROUTER_API_KEY
-    const proxyUrl = process.env.GEMINI_PROXY_ENDPOINT || "http://host.docker.internal:8046"
-
-    const isProxy = !orKey
-    const apiKey = orKey || process.env.GEMINI_PROXY_API_KEY || "dummy"
-    const baseUrl = isProxy ? `${proxyUrl}/v1/chat/completions` : "https://openrouter.ai/api/v1/chat/completions"
-
-    const response = await fetch(baseUrl, {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-        "HTTP-Referer": "https://jenex.ai", // Required by OpenRouter
-        "X-Title": "Jenex AI", // Required by OpenRouter
-      },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
-        messages: [
-          { role: "system", content: "You are a professional B2B salesperson writing outreach emails." },
-          { role: "user", content: prompt }
-        ],
-        temperature: 0.7,
-      }),
-    })
-
-    if (!response.ok) {
-      const errBody = await response.text()
-      console.error("OpenRouter API error:", errBody)
-      return NextResponse.json({ error: "Failed to generate draft from AI provider" }, { status: 502 })
-    }
-
-    const data = await response.json()
-    const draftContent = data.choices?.[0]?.message?.content
+    // 4. Call shared LLM client
+    const { text: draftContent } = await chatText(
+      prompt,
+      "You are a professional B2B salesperson writing outreach emails.",
+      { temperature: 0.7 },
+    )
 
     if (!draftContent) {
       return NextResponse.json({ error: "Empty response from AI provider" }, { status: 502 })
@@ -111,8 +84,9 @@ Please write the email in Slovak language as requested by the user previously.`
     `, [draftContent, leadId])
 
     return NextResponse.json({ draftEmail: draftContent })
-  } catch (err: any) {
-    console.error("Error generating draft email:", err)
+  } catch (err) {
+    console.error("Error generating draft email:", err instanceof Error ? err.message : err)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
+

@@ -2,11 +2,21 @@ fastapi==0.115.6
 uvicorn[standard]==0.32.1
 psycopg2-binary==2.9.10
 python-dotenv==1.0.1
+alembic==1.15.2
 # LLM providers
 google-genai>=1.16.0
 openai>=1.0.0
-# Search APIs (SDKs where available per §Part 2)
+# Search APIs
 exa-py>=1.9.0
 tavily-python>=0.5.0
 # HTTP for Serper, SerpAPI, Brave, PublicWWW, Firecrawl, Ollama (all raw HTTP)
 requests>=2.32.0
+# Enrichment: structured data extraction + phone normalization
+phonenumbers>=8.13.0
+extruct>=0.16.0
+w3lib>=2.2.1
+
+# Dependencies for API clients
+pypublicwww
+# Periodic background scheduling (watchdog)
+apscheduler>=3.10.0

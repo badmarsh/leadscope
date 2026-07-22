@@ -76,3 +76,25 @@ def publicwww_budget_ok(conn, campaign_id: Optional[int] = None) -> bool:
     )
     used = int(used_row["used"]) if used_row else 0
     return used < budget_row["monthly_quota"]
+
+
+def log_llm_parse_failure(conn, stage: str, model: str, campaign_id: Optional[int] = None) -> None:
+    """
+    Log an LLM JSON parse failure as a zero-cost sentinel row.
+    This makes parse failures visible in the /api/usage cost dashboard
+    under provider = 'llm_parse_failure'.
+    """
+    try:
+        db.execute(
+            conn,
+            """
+            INSERT INTO api_call_log
+                (campaign_id, stage, provider, model, tokens_in, tokens_out, query_count, cost_estimate_usd)
+            VALUES (%s, %s, 'llm_parse_failure', %s, 0, 0, 1, 0.0)
+            """,
+            (campaign_id, stage, model),
+        )
+    except Exception as exc:
+        import logging
+        logging.getLogger(__name__).warning("log_llm_parse_failure failed (non-fatal): %s", exc)
+

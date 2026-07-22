@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react"
 import { Settings, RotateCcw, X, Save } from "lucide-react"
+import { useTranslation } from "@/lib/i18n"
 import { cn } from "@/lib/utils"
 
 interface SettingField {
@@ -30,6 +31,7 @@ const FIELD_ORDER = [
 ]
 
 export function SettingsModal({ open, campaignDbId, onClose }: SettingsModalProps) {
+  const { t } = useTranslation()
   const [schema, setSchema] = useState<Record<string, SettingField>>({})
   const [values, setValues] = useState<Record<string, number>>({})
   const [brief, setBrief] = useState<string>("")

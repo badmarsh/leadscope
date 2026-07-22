@@ -10,11 +10,14 @@ import { sessionOptions, type SessionData } from "@/lib/session"
 import { query } from "@/lib/db"
 
 /** Wrap a field value in double-quotes and escape any internal double-quotes. */
-function csvField(value: string | null | undefined): string {
+export function csvField(value: string | null | undefined): string {
   if (value === null || value === undefined) return ""
   const str = String(value)
+  // Neutralize formula injection: prefix with single quote if starts with formula char
+  const dangerous = ['=', '+', '-', '@', '\t', '\r']
+  const sanitized = dangerous.some(c => str.startsWith(c)) ? `'${str}` : str
   // Escape internal double-quotes by doubling them
-  return `"${str.replace(/"/g, '""')}"`
+  return `"${sanitized.replace(/"/g, '""')}"`
 }
 
 export async function GET(request: NextRequest) {

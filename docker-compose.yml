@@ -75,8 +75,28 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      crawler:
+        condition: service_healthy
     volumes:
       - app_logs:/var/log/app
+  crawler:
+    build:
+      context: ./services/crawler
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "8003:8003"
+    env_file:
+      - .env
+    environment:
+      GEMINI_PROXY_ENDPOINT: ${GEMINI_PROXY_ENDPOINT:-http://host.docker.internal:8045}
+      GEMINI_PROXY_API_KEY: ${GEMINI_PROXY_API_KEY}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8003/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
   dashboard:
     build:
@@ -88,10 +108,9 @@ services:
     env_file:
       - .env
     environment:
+      HOSTNAME: "0.0.0.0"
       DATABASE_URL: postgresql://${POSTGRES_USER:-leadscope}:${POSTGRES_PASSWORD:-leadscope_dev}@postgres:5432/${POSTGRES_DB:-leadscope}
-      # Bcrypt hash is passed here to avoid $ interpolation issues in env_file
       DASHBOARD_SESSION_SECRET: ${DASHBOARD_SESSION_SECRET}
-      DASHBOARD_PASSWORD_HASH: ${DASHBOARD_PASSWORD_HASH}
       GEMINI_PROXY_ENDPOINT: ${GEMINI_PROXY_ENDPOINT:-http://host.docker.internal:8045}
       GEMINI_PROXY_API_KEY: ${GEMINI_PROXY_API_KEY}
     depends_on:
