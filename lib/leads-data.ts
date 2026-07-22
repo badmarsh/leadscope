@@ -66,7 +66,7 @@ export interface CampaignUsage {
 export const campaigns: Campaign[] = [
   { id: "jenex", name: "JENEX HVAC (Hungary)", shortName: "JENEX HVAC", status: "active" },
   { id: "shoe-photo", name: "Small Eshops & Boutiques", shortName: "Eshops & Boutiques", status: "active" },
-  { id: "wp-remediation", name: "WP Remediation", shortName: "WP Remediation", status: "draft" },
+  { id: "wp-remediation", name: "WP Remediation", shortName: "WP Remediation", status: "active" },
 ]
 
 export const campaignUsage: Record<CampaignId, CampaignUsage> = {
@@ -368,3 +368,72 @@ export const leads: Lead[] = [
     },
   },
 ]
+
+import { DB_ID_TO_CAMPAIGN } from "@/lib/campaigns"
+
+// Map DB row → Lead shape expected by components
+export function rowToLead(row: Record<string, unknown>): Lead {
+  const evidenceData = (row.evidence_data as Record<string, unknown> | null) ?? {}
+  const evaluatorType = (evidenceData.evaluator_type as string | undefined) ?? "urls"
+
+  let evidence: Lead["evidence"]
+
+  if (evaluatorType === "image_quality" || evidenceData.images_analyzed) {
+    const images = (evidenceData.images_analyzed as string[] | undefined) ?? []
+    evidence = {
+      kind: "photos",
+      photos: images.slice(0, 4).map((src) => ({ src, label: "Product image" })),
+    }
+  } else if (
+    evaluatorType === "threat_intel" ||
+    evidenceData.malware_family
+  ) {
+    evidence = {
+      kind: "malware",
+      malwareFamily: (evidenceData.malware_family as string) ?? "Unknown",
+      sourcePost: {
+        title: (evidenceData.source_post_title as string) ?? "Security intelligence source",
+        url: (evidenceData.source_post_url as string) ?? "#",
+      },
+      lastConfirmed: (evidenceData.last_confirmed as string) ?? null,
+    }
+  } else {
+    evidence = {
+      kind: "urls",
+      urls: (row.evidence_urls as string[] | undefined) ?? [],
+    }
+  }
+
+  const statusMap: Record<string, Lead["status"]> = {
+    pending_review: "pending",
+    approved: "approved",
+    rejected: "rejected",
+    enrichment_failed: "enrichment_failed",
+  }
+
+  const dbCampaignId = row.campaign_id as number
+  const campaignId: CampaignId = DB_ID_TO_CAMPAIGN[dbCampaignId] ?? "jenex"
+
+  return {
+    id: String(row.id),
+    campaignId,
+    company: (row.company_name as string) ?? (row.domain as string),
+    domain: row.domain as string,
+    score: (row.score as number) ?? 0,
+    status: statusMap[row.status as string] ?? "pending",
+    dateFound: new Date(row.created_at as string).toLocaleDateString("en-CA"),
+    rationale: (row.rationale as string) ?? "",
+    evidence,
+    note: (row.note as string) ?? undefined,
+    contact_email: (row.contact_email as string) ?? undefined,
+    contact_phone: (row.contact_phone as string) ?? undefined,
+    contact_name: (row.contact_name as string) ?? undefined,
+    screenshot_url: (row.screenshot_url as string) ?? undefined,
+    products_sold: (row.products_sold as string[]) ?? undefined,
+    enrichment_report: (row.enrichment_report as string) ?? undefined,
+    draft_email: (row.draft_email as string) ?? undefined,
+    estimated_size: (row.estimated_size as string) ?? undefined,
+    estimated_revenue: (row.estimated_revenue as string) ?? undefined,
+    estimated_traffic: (row.estimated_traffic as string) ?? undefined,
+  }
+}
