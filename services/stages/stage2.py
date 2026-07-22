@@ -89,6 +89,20 @@ def _upsert_candidate(
         logger.debug("Skipping %s — on do_not_contact list for campaign %s", domain, campaign_id)
         return False
 
+    JUNK_DOMAINS = {
+        "amazon.com", "walmart.com", "ebay.com", "etsy.com", "aliexpress.com", 
+        "target.com", "booking.com", "airbnb.com", "facebook.com", "instagram.com", 
+        "twitter.com", "linkedin.com", "youtube.com", "pinterest.com", "wikipedia.org", 
+        "trustpilot.com", "yelp.com", "apple.com", "microsoft.com", "google.com", 
+        "tiktok.com", "tripadvisor.com", "reddit.com", "x.com", "medium.com"
+    }
+    
+    parts = domain.split(".")
+    base_domain = ".".join(parts[-2:]) if len(parts) >= 2 else domain
+    if domain in JUNK_DOMAINS or base_domain in JUNK_DOMAINS:
+        logger.debug("Skipping %s — known junk marketplace/global domain", domain)
+        return False
+
     rows_affected = db.execute(
         conn,
         """
