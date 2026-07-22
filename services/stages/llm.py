@@ -111,6 +111,9 @@ def chat_json(
     max_tokens: int = 4096,
     model: Optional[str] = None,
 ) -> tuple[Any, int, int]:
+    # HARDENING: This module's chat_json returns 3-tuple:
+    # (parsed_obj, tokens_in, tokens_out)
+    # Do NOT confuse with services/evaluator/llm.py which returns 5-tuple.
     """
     Call the LLM expecting JSON output, parse it, and return (parsed_obj, tokens_in, tokens_out).
     Falls back to raw text in a dict if JSON parse fails.
@@ -129,7 +132,7 @@ def chat_json(
     except json.JSONDecodeError:
         logger.error(
             "LLM_JSON_PARSE_FAILURE model=%s tokens_in=%d tokens_out=%d preview=%r",
-            use_model,
+            model or config.GEMINI_MODEL,  # HARDENING: use_model not in scope here
             ti,
             to,
             text[:200],

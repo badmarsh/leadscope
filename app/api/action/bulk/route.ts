@@ -35,7 +35,7 @@ export async function POST(request: NextRequest) {
     } else if (decision === "rerun_evaluation") {
       await query(
         `UPDATE candidates 
-         SET status = 'new', search_attempted_at = NULL, search_attempt_count = 0 
+         SET status = 'new'
          WHERE id = ANY($1::int[])`,
         [candidate_ids]
       )

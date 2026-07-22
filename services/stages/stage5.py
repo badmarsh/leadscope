@@ -186,8 +186,14 @@ def _enrich_info(domain: str, company_name: Optional[str], offer_summary: str, p
         pre_extracted=json.dumps(pre_extracted, ensure_ascii=False),
     )
     try:
-        result, _, _ = llm.chat_json(prompt, model=config.STAGE5_MODEL)
-        return result if isinstance(result, dict) else {}
+        result, ti, to = llm.chat_json(prompt, model=config.STAGE5_MODEL)
+        if isinstance(result, dict) and "_raw" not in result:
+            return result
+        # HARDENING: LLM returned non-JSON or parse failure
+        logger.warning(
+            "LLM enrichment returned non-JSON for %s. Returning empty dict.", domain
+        )
+        return {}
     except Exception as exc:
         logger.warning("LLM enrichment extraction failed for %s: %s", domain, exc)
         return {}
@@ -230,7 +236,7 @@ def _enrich_candidate(candidate: dict, campaign: dict, conn, settings: dict | No
     retry_hours = int(effective_settings.get("enrichment_retry_hours", config.ENRICHMENT_RETRY_HOURS))
     max_attempts = int(effective_settings.get("max_enrichment_attempts", config.MAX_ENRICHMENT_ATTEMPTS))
 
-    if candidate["enrichment_attempted_at"] is not None:
+    if candidate.get("enrichment_attempted_at") is not None:
         cooling = db.fetchone(
             conn,
             """
@@ -529,9 +535,19 @@ def run() -> dict:
                 logger.error("Stage 5: unexpected error for candidate %s: %s", candidate["id"], exc)
                 return {"candidate_id": candidate["id"], "outcome": "error", "error": str(exc)}
 
+        # HARDENING: Use submit+cancel pattern so stop signal actually stops
+        # in-flight enrichment threads, not just the collection loop.
+        futures = []
         with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
-            for res in executor.map(process_cand, approved):
+            for candidate in approved:
+                futures.append(executor.submit(process_cand, candidate))
+
+            for future in concurrent.futures.as_completed(futures):
+                res = future.result()
                 if res is None:
+                    # Stop signal received — cancel all pending futures
+                    for f in futures:
+                        f.cancel()
                     break
                 results.append(res)
 

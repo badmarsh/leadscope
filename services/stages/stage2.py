@@ -48,7 +48,10 @@ def _extract_domain(url: str) -> Optional[str]:
         host = re.sub(r"^www\.", "", host)
         # Remove port
         host = host.split(":")[0].strip()
-        return host if host and "." in host else None
+        # Ensure it looks like a valid domain (no spaces, quotes, brackets, or HTML tags)
+        if host and "." in host and not re.search(r"[<>\s\"'{}\(\)\[\]]", host):
+            return host
+        return None
     except Exception:
         return None
 
@@ -68,6 +71,11 @@ def _is_do_not_contact(conn, domain: str, campaign_id: int) -> bool:
     return row is not None
 
 
+import re as _re
+_DOMAIN_RE = _re.compile(
+    r'^(?:[a-z0-9](?:[a-z0-9\-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$'
+)
+
 def _upsert_candidate(
     conn,
     *,
@@ -85,6 +93,19 @@ def _upsert_candidate(
 
     Uses the exact SQL from §Part 2 — the WHERE clause on DO UPDATE is the mechanism.
     """
+    # HARDENING: Validate domain shape before any DB write
+    domain = domain.lower().strip()
+    # Strip www. prefix if present
+    if domain.startswith("www."):
+        domain = domain[4:]
+    # Reject paths, spaces, HTML artifacts, missing TLD
+    if not _DOMAIN_RE.match(domain):
+        logger.warning(
+            "Rejecting invalid domain %r (failed regex) — source=%s campaign=%s",
+            domain, source, campaign_id,
+        )
+        return False
+
     if _is_do_not_contact(conn, domain, campaign_id):
         logger.debug("Skipping %s — on do_not_contact list for campaign %s", domain, campaign_id)
         return False
@@ -285,8 +306,21 @@ def _llm_dedup(raw_results: list[dict], conn, campaign_id: int) -> list[dict]:
                 tokens_in=ti,
                 tokens_out=to,
             )
-            if isinstance(parsed, list):
+            if isinstance(parsed, dict) and "_raw" in parsed:
+                # HARDENING: LLM returned non-JSON; treat as batch failure
+                logger.warning(
+                    "LLM dedup batch %d returned non-JSON (_raw key present). "
+                    "Falling back to raw domain extraction for this batch.",
+                    i // batch_size,
+                )
+                for r in batch:
+                    domain = _extract_domain(r.get("url", ""))
+                    if domain:
+                        final_parsed.append({"domain": domain, "company_name": None})
+            elif isinstance(parsed, list):
                 final_parsed.extend(parsed)
+            else:
+                logger.warning("LLM dedup returned unexpected type %s; skipping batch.", type(parsed))
         except Exception as exc:
             logger.warning("LLM dedup failed for batch: %s — falling back to raw domain extraction", exc)
             for r in batch:
@@ -502,12 +536,24 @@ def _publicwww_search(snippet: str) -> list[str]:
             )
             return []
 
+        # HARDENING: Validate that response looks like CSV, not HTML/JSON
+        first_nonblank = csv_text.lstrip()
+        if first_nonblank and first_nonblank[0] in ("<", "{", "["):
+            logger.warning(
+                "PublicWWW response starts with %r — likely HTML/JSON error page. "
+                "Snippet: %r",
+                first_nonblank[0],
+                first_nonblank[:120],
+            )
+            return []
+
         domains = []
         for line in csv_text.strip().splitlines():
             if line.startswith("url,"):  # skip header row
                 continue
-            # csvu CSV format: url;ranking  (semicolons, not commas)
-            parts = line.split(",")
+            # HARDENING: csvu format uses semicolons as delimiter, not commas
+            # Format: url;ranking (e.g. "https://example.com;1234")
+            parts = line.split(";")
             if parts and parts[0]:
                 domain = _extract_domain(parts[0].strip())
                 if domain:

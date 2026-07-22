@@ -33,7 +33,7 @@ def _status_from_score(score: int, min_score: int = 20, is_shitty: bool = False)
 
 
 def _select_scorer(campaign: dict):
-    if campaign.get("id") == 3 or campaign.get("campaign_type") == "wp_remediation":
+    if campaign.get("campaign_type") == "wp_remediation":  # HARDENING: removed magic id==3
         return SCORER_REGISTRY["threat_intel"]
     eval_type = campaign.get("evaluator_type")
     if not eval_type:
@@ -318,10 +318,10 @@ def trigger_scoring(campaign_id: int | None = None) -> dict:
                     else:
                         db.execute(
                             conn,
-                            "UPDATE candidates SET status = 'approved' WHERE id = %s",
+                            "UPDATE candidates SET status = 'pending_review' WHERE id = %s",
                             (cand["id"],)
                         )
-                        logger.info("Auto-approved candidate %s (score %s >= %s) for enrichment", cand["id"], score, min_score)
+                        logger.info("Candidate %s passed evaluation (score %s >= %s) and is pending review", cand["id"], score, min_score)
                 return {"candidate_id": cand["id"], "status": "scored", "score": score}
             except Exception as exc:
                 logger.error("Harness failed for candidate %s: %s", cand["id"], exc)

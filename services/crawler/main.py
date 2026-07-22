@@ -15,10 +15,14 @@ from typing import Optional
 import trafilatura
 from crawl4ai import AsyncWebCrawler
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel, HttpUrl
+from pydantic import BaseModel, HttpUrl, Field
+import json
+import os
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+GEMINI_PROXY_ENDPOINT = os.environ.get("GEMINI_PROXY_ENDPOINT", "http://host.docker.internal:8045").rstrip("/")
 
 # ── Persistent browser instance (reused across all requests) ──────────────────
 
@@ -49,6 +53,10 @@ class CrawlRequest(BaseModel):
     bypass_cache: bool = False
     force_playwright: bool = False        # set True to skip trafilatura fast-path
     timeout_ms: int = 30000              # cap at 30s per page
+    extract_images: bool = False
+
+class ProductImagesSchema(BaseModel):
+    urls: list[str] = Field(description="Exactly 4 URLs of product images from the product grid. Do not include logos or UI elements.")
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -98,10 +106,10 @@ async def crawl(req: CrawlRequest):
     Falls back to Crawl4AI/Playwright for JS-rendered SPAs.
     """
     url_str = str(req.url)
-    logger.info("Crawl request: %s (force_playwright=%s)", url_str, req.force_playwright)
+    logger.info("Crawl request: %s (force_playwright=%s, extract_images=%s)", url_str, req.force_playwright, req.extract_images)
 
     # ── Fast path: trafilatura for non-SPA pages ──────────────────────────────
-    if not req.force_playwright:
+    if not req.force_playwright and not req.extract_images:
         fast_text = _trafilatura_scrape(url_str)
         if fast_text and len(fast_text) > 500:
             logger.info("Trafilatura succeeded for %s (%d chars)", url_str, len(fast_text))
@@ -127,6 +135,34 @@ async def crawl(req: CrawlRequest):
 
         result = await _crawler.arun(url=url_str, **kwargs)
 
+        extracted_data = None
+        if req.extract_images and result.success and result.markdown:
+            import httpx
+            import json
+            try:
+                system_prompt = "You are an AI that extracts product images from e-commerce product grids. Extract exactly 4 high-quality product image URLs. Return ONLY actual physical products. Do not extract site logos, UI layout elements, shipping partner logos (like GLS, Packeta), payment icons, or blog banners. Return ONLY valid JSON in this format: {\"urls\": [\"url1\", \"url2\", \"url3\", \"url4\"]}"
+                async with httpx.AsyncClient() as client:
+                    resp = await client.post(
+                        f"{GEMINI_PROXY_ENDPOINT}/v1/chat/completions",
+                        json={
+                            "model": "gemini-3.6-flash-high",
+                            "response_format": {"type": "json_object"},
+                            "messages": [
+                                {"role": "system", "content": system_prompt},
+                                {"role": "user", "content": "Extract images from the following markdown content:\n\n" + result.markdown[:30000]}
+                            ]
+                        },
+                        timeout=30.0
+                    )
+                    resp.raise_for_status()
+                    llm_content = resp.json()["choices"][0]["message"]["content"]
+                    # Sometimes the model wraps it in ```json ... ```
+                    if llm_content.startswith("```json"):
+                        llm_content = llm_content[7:-3].strip()
+                    extracted_data = json.loads(llm_content)
+            except Exception as e:
+                logger.error("Manual LLM extraction failed: %s", e)
+
         if not result.success:
             logger.error("Crawl4AI failed for %s: %s", url_str, result.error_message)
             return {"success": False, "error": result.error_message, "renderer": "playwright"}
@@ -137,11 +173,13 @@ async def crawl(req: CrawlRequest):
             len(result.markdown or ""),
             len((result.media or {}).get("images", [])),
         )
+        
         return {
             "success": True,
             "markdown": result.markdown,
             "media": result.media,
             "links": result.links,
+            "extracted_data": extracted_data,
             "renderer": "playwright",
         }
 

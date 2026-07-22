@@ -10,8 +10,8 @@ from scorers.image_quality import score
 @patch('scorers.image_quality.firecrawl_client')
 @patch('scorers.image_quality.llm')
 def test_score_with_images(mock_llm, mock_firecrawl):
-    mock_firecrawl.scrape_domain_pages.return_value = {"http://example.com": "some content"}
-    mock_firecrawl.extract_image_urls.return_value = ["http://example.com/img1.jpg", "http://example.com/img2.jpg", "http://example.com/img3.jpg"]
+    mock_firecrawl.scrape_domain_pages.return_value = {"http://example.com/products": {"markdown": "some content", "html": "<html></html>"}}
+    mock_firecrawl.extract_product_grid_images_via_crawler.return_value = ["http://example.com/img1.jpg", "http://example.com/img2.jpg", "http://example.com/img3.jpg"]
     mock_llm.chat_vision.return_value = ({"score": 70, "photo_quality": "poor", "business_activity": "active", "product_count_estimate": 50, "issues_found": ["low resolution"]}, 10, 5, "gemini-2.5-flash", "gemini")
 
     candidate = {"domain": "example.com"}
@@ -29,7 +29,8 @@ def test_score_with_images(mock_llm, mock_firecrawl):
 @patch('scorers.image_quality.firecrawl_client')
 @patch('scorers.image_quality.llm')
 def test_score_without_images_falls_back_to_text(mock_llm, mock_firecrawl):
-    mock_firecrawl.scrape_domain_pages.return_value = {"http://example.com": "some content"}
+    mock_firecrawl.scrape_domain_pages.return_value = {"http://example.com": {"markdown": "some content", "html": "<html></html>"}}
+    mock_firecrawl.extract_product_grid_images_via_crawler.return_value = []
     mock_firecrawl.extract_image_urls.return_value = []
     mock_llm.chat_json.return_value = ({"score": 60, "rationale": "no images"}, 10, 5, "gemini-2.5-flash", "gemini")
 
@@ -45,8 +46,8 @@ def test_score_without_images_falls_back_to_text(mock_llm, mock_firecrawl):
 @patch('scorers.image_quality.firecrawl_client')
 @patch('scorers.image_quality.llm')
 def test_score_clamps_above_100(mock_llm, mock_firecrawl):
-    mock_firecrawl.scrape_domain_pages.return_value = {"http://example.com": "some content"}
-    mock_firecrawl.extract_image_urls.return_value = ["img.jpg"]
+    mock_firecrawl.scrape_domain_pages.return_value = {"http://example.com": {"markdown": "some content", "html": "<html></html>"}}
+    mock_firecrawl.extract_product_grid_images_via_crawler.return_value = ["img.jpg"]
     mock_llm.chat_vision.return_value = ({"score": 150}, 10, 5, "model", "gemini")
 
     candidate = {"domain": "example.com"}
@@ -59,8 +60,8 @@ def test_score_clamps_above_100(mock_llm, mock_firecrawl):
 @patch('scorers.image_quality.firecrawl_client')
 @patch('scorers.image_quality.llm')
 def test_score_clamps_below_0(mock_llm, mock_firecrawl):
-    mock_firecrawl.scrape_domain_pages.return_value = {"http://example.com": "some content"}
-    mock_firecrawl.extract_image_urls.return_value = ["img.jpg"]
+    mock_firecrawl.scrape_domain_pages.return_value = {"http://example.com": {"markdown": "some content", "html": "<html></html>"}}
+    mock_firecrawl.extract_product_grid_images_via_crawler.return_value = ["img.jpg"]
     mock_llm.chat_vision.return_value = ({"score": -10}, 10, 5, "model", "gemini")
 
     candidate = {"domain": "example.com"}
@@ -73,8 +74,8 @@ def test_score_clamps_below_0(mock_llm, mock_firecrawl):
 @patch('scorers.image_quality.firecrawl_client')
 @patch('scorers.image_quality.llm')
 def test_score_handles_non_json_response(mock_llm, mock_firecrawl):
-    mock_firecrawl.scrape_domain_pages.return_value = {"http://example.com": "some content"}
-    mock_firecrawl.extract_image_urls.return_value = ["img.jpg"]
+    mock_firecrawl.scrape_domain_pages.return_value = {"http://example.com": {"markdown": "some content", "html": "<html></html>"}}
+    mock_firecrawl.extract_product_grid_images_via_crawler.return_value = ["img.jpg"]
     mock_llm.chat_vision.return_value = ({"_raw": "I cannot analyze..."}, 10, 5, "model", "gemini")
 
     candidate = {"domain": "example.com"}
@@ -88,7 +89,7 @@ def test_score_handles_non_json_response(mock_llm, mock_firecrawl):
 @patch('scorers.image_quality.llm')
 def test_score_early_exit_dead_site(mock_llm, mock_firecrawl):
     # No social media, copyright 2020 -> older than 2 years -> dead
-    mock_firecrawl.scrape_domain_pages.return_value = {"http://example.com": "Welcome. Copyright 2020."}
+    mock_firecrawl.scrape_domain_pages.return_value = {"http://example.com": {"markdown": "Welcome. Copyright 2020.", "html": "<html></html>"}}
     mock_firecrawl.detect_tech_stack.return_value = []
     
     candidate = {"domain": "example.com"}
@@ -100,3 +101,21 @@ def test_score_early_exit_dead_site(mock_llm, mock_firecrawl):
     assert result["evidence_data"]["business_activity"] == "inactive"
     assert not mock_llm.chat_vision.called
     assert not mock_llm.chat_json.called
+
+@patch('scorers.image_quality.firecrawl_client')
+@patch('scorers.image_quality.llm')
+def test_score_fallback_to_markdown_images(mock_llm, mock_firecrawl):
+    mock_firecrawl.scrape_domain_pages.return_value = {"http://example.com": {"markdown": "![img](markdown.jpg)", "html": "<html></html>"}}
+    mock_firecrawl.extract_product_grid_images_via_crawler.return_value = []
+    mock_firecrawl.extract_image_urls.return_value = ["http://example.com/markdown.jpg"]
+    mock_llm.chat_vision.return_value = ({"score": 80, "photo_quality": "poor", "business_activity": "active", "product_count_estimate": 10}, 10, 5, "gemini-2.5-flash", "gemini")
+
+    candidate = {"domain": "example.com"}
+    campaign = {"id": 1, "business_brief": "test"}
+    icp = {"version": 1}
+
+    result = score(candidate, campaign, icp, [])
+    
+    assert mock_firecrawl.extract_image_urls.called
+    assert result["score"] == 80
+    assert result["evidence_data"]["images_analyzed"] == ["http://example.com/markdown.jpg"]

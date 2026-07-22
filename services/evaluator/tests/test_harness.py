@@ -62,4 +62,4 @@ def test_auto_approve_high_score(mock_db, mock_score):
     
     calls = mock_db.execute.call_args_list
     query = calls[0][0][1]
-    assert "UPDATE candidates SET status = 'approved'" in query
+    assert "UPDATE candidates SET status = 'pending_review'" in query

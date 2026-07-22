@@ -28,6 +28,10 @@ EVALUATOR_DIR = os.path.join(os.path.dirname(__file__), "..")
 if EVALUATOR_DIR not in sys.path:
     sys.path.insert(0, EVALUATOR_DIR)
 
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -55,6 +59,8 @@ class TestModelSelection(unittest.TestCase):
         """Import llm module with patched environment and reset its module-level cache."""
         import importlib
         with patch.dict(os.environ, env_overrides, clear=False):
+            sys.modules.pop("config", None)
+            sys.modules.pop("llm", None)
             import config as cfg
             importlib.reload(cfg)
             import llm
@@ -67,7 +73,7 @@ class TestModelSelection(unittest.TestCase):
             "OPENROUTER_API_KEY": "sk-or-test-key",
             "DATABASE_URL": "postgresql://x:x@localhost/x",
             "GEMINI_PROXY_API_KEY": "sk-test",
-            "GEMINI_PROXY_ENDPOINT": "http://localhost:8045",
+            "GEMINI_PROXY_ENDPOINT": "",
         }
         llm, cfg = self._import_fresh_llm(env)
 
@@ -133,11 +139,17 @@ class TestOpenRouterFallback(unittest.TestCase):
         env = {
             "OPENROUTER_API_KEY": "sk-or-real-key",
             "GEMINI_PROXY_API_KEY": "sk-local",
-            "GEMINI_PROXY_ENDPOINT": "http://localhost:8045",
+            "GEMINI_PROXY_ENDPOINT": "",
             "GEMINI_MODEL": "gemini-3.6-flash-high",
             "DATABASE_URL": "postgresql://x:x@localhost/x",
         }
         with patch.dict(os.environ, env, clear=False):
+            import sys
+            sys.path = [p for p in sys.path if "services\\stages" not in p and "services/stages" not in p]
+            if EVALUATOR_DIR not in sys.path:
+                sys.path.insert(0, EVALUATOR_DIR)
+            sys.modules.pop('config', None)
+            sys.modules.pop('llm', None)
             import config as cfg
             importlib.reload(cfg)
             import llm
@@ -232,6 +244,12 @@ class TestChatJsonParsing(unittest.TestCase):
             "DATABASE_URL": "postgresql://x:x@localhost/x",
         }
         with patch.dict(os.environ, env, clear=False):
+            import sys
+            sys.path = [p for p in sys.path if "services\\stages" not in p and "services/stages" not in p]
+            if EVALUATOR_DIR not in sys.path:
+                sys.path.insert(0, EVALUATOR_DIR)
+            sys.modules.pop('config', None)
+            sys.modules.pop('llm', None)
             import config as cfg
             importlib.reload(cfg)
             import llm
@@ -292,6 +310,12 @@ class TestProxyClientConstruction(unittest.TestCase):
             "DATABASE_URL": "postgresql://x:x@localhost/x",
         }
         with patch.dict(os.environ, env, clear=False):
+            import sys
+            sys.path = [p for p in sys.path if "services\\stages" not in p and "services/stages" not in p]
+            if EVALUATOR_DIR not in sys.path:
+                sys.path.insert(0, EVALUATOR_DIR)
+            sys.modules.pop('config', None)
+            sys.modules.pop('llm', None)
             import config as cfg
             importlib.reload(cfg)
             import llm
@@ -336,6 +360,12 @@ class TestLiveProxy(unittest.TestCase):
             "DATABASE_URL": "postgresql://x:x@localhost/x",
         }
         with patch.dict(os.environ, env, clear=False):
+            import sys
+            sys.path = [p for p in sys.path if "services\\stages" not in p and "services/stages" not in p]
+            if EVALUATOR_DIR not in sys.path:
+                sys.path.insert(0, EVALUATOR_DIR)
+            sys.modules.pop('config', None)
+            sys.modules.pop('llm', None)
             import config as cfg
             importlib.reload(cfg)
             import llm

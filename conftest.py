@@ -1,7 +1,18 @@
-import os
+# conftest.py — repo root
+# HARDENING: This file intentionally does NOT add service directories to
+# sys.path. Each service must be tested in isolation:
+#   python -m pytest services/stages
+#   python -m pytest services/evaluator
+# Running `pytest` from the repo root only collects non-service tests
+# (e.g. integration tests in /tests/).
 import sys
+import os
 
-# Add repo root to sys.path so services can be imported as services.evaluator or services.stages
-ROOT_DIR = os.path.dirname(__file__)
-if ROOT_DIR not in sys.path:
-    sys.path.insert(0, ROOT_DIR)
+# Explicitly REMOVE any service directory from sys.path to prevent
+# namespace collisions between services/stages/config.py and
+# services/evaluator/config.py.
+_repo_root = os.path.dirname(__file__)
+for _service_dir in ["services/stages", "services/evaluator", "services/crawler"]:
+    _abs = os.path.join(_repo_root, _service_dir)
+    if _abs in sys.path:
+        sys.path.remove(_abs)

@@ -4,6 +4,9 @@ llm.py — LLM client for the evaluator service.
 Primary: OpenRouter (spec says evaluator uses OpenRouter).
 Fallback: local Gemini proxy (same OpenAI-compat format).
 """
+# HARDENING: This module's chat_json/chat_vision return 5-tuple:
+# (parsed_obj, tokens_in, tokens_out, model_used, provider)
+# Do NOT confuse with services/stages/llm.py which returns 3-tuple.
 import base64
 import json
 import logging
@@ -183,7 +186,12 @@ def chat_vision(
     for url in image_urls[:10]:  # cap at 10 images
         try:
             # Try to fetch the image ourselves, handling redirects and preventing LLM fetching errors
-            resp = requests.get(url, timeout=10, allow_redirects=True)
+            headers = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                "Accept": "image/webp,image/apng,image/*,*/*;q=0.8",
+                "Accept-Language": "en-US,en;q=0.9",
+            }
+            resp = requests.get(url, timeout=10, allow_redirects=True, headers=headers)
             if resp.status_code == 200 and len(resp.content) > 0:
                 content_type = resp.headers.get('Content-Type', '').lower()
                 # Only process supported image formats (Gemini does not support SVG)

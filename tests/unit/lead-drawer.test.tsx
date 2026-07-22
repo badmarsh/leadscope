@@ -75,4 +75,35 @@ describe('LeadDrawer Component', () => {
 
     expect(handleReopen).toHaveBeenCalledWith(approvedLead.id);
   });
+  
+  it('renders images from evidence.photos correctly', () => {
+    const leadWithImages = {
+      ...pendingLead,
+      evidence: {
+        kind: "photos",
+        photos: [
+          { src: 'https://example.com/img1.png', label: 'Photo 1' },
+          { src: 'https://example.com/img2.png', label: 'Photo 2' }
+        ]
+      }
+    };
+    
+    render(
+      <LeadDrawer
+        lead={leadWithImages as any}
+        onClose={vi.fn()}
+        onDecision={vi.fn()}
+        onReopen={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText(/Evidence|Dôkazy/i)).toBeInTheDocument();
+    
+    // Check if images are rendered
+    const images = screen.getAllByRole('img');
+    const evidenceImages = images.filter(img => img.getAttribute('src')?.includes('example.com'));
+    expect(evidenceImages.length).toBe(2);
+    expect(evidenceImages[0].getAttribute('src')).toContain('img1.png');
+    expect(evidenceImages[1].getAttribute('src')).toContain('img2.png');
+  });
 });

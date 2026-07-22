@@ -73,15 +73,20 @@ def score(candidate: dict, campaign: dict, icp: dict, few_shot: list[dict]) -> d
 
     # Scrape product pages
     product_paths = ["", "/products", "/shop", "/termekek", "/webshop", "/catalogue"]
-    pages = firecrawl_client.scrape_domain_pages(domain, paths=product_paths)
+    pages = firecrawl_client.scrape_domain_pages(domain, paths=product_paths, include_html=True)
+    
+    # pages is {url: {"markdown": md, "html": html}}
+    # Extract markdown text for text-based analysis
+    pages_markdown = {url: data.get("markdown", "") for url, data in pages.items()}
+    
     scraped = "\n\n---\n\n".join(
-        f"### {url}\n{text[:1500]}" for url, text in list(pages.items())[:4]
+        f"### {url}\n{text[:1500]}" for url, text in list(pages_markdown.items())[:4]
     )
     if not scraped:
         scraped = "(No content could be scraped)"
 
     # Tech stack detection
-    tech_stack = firecrawl_client.detect_tech_stack(pages)
+    tech_stack = firecrawl_client.detect_tech_stack(pages_markdown)
 
     # Early "Dead site" filter
     import re, datetime
@@ -90,7 +95,7 @@ def score(candidate: dict, campaign: dict, icp: dict, few_shot: list[dict]) -> d
     has_recent_copyright = True
     copyright_found = False
 
-    for text in pages.values():
+    for text in pages_markdown.values():
         text_lower = text.lower()
         if any(p in text_lower for p in ["facebook.com", "instagram.com", "tiktok.com", "twitter.com", "x.com"]):
             has_socials = True
@@ -115,10 +120,29 @@ def score(candidate: dict, campaign: dict, icp: dict, few_shot: list[dict]) -> d
             "tokens_in": 0, "tokens_out": 0,
         }
 
-    # Extract image URLs
+    # Extract image URLs using Crawl4AI LLM Extraction for the first product-like page
     all_images = []
-    for text in pages.values():
-        all_images.extend(firecrawl_client.extract_image_urls(text, evaluator_type="image_quality"))
+    
+    # Try to find a good product page URL first
+    product_url = None
+    for url in pages.keys():
+        if any(w in url.lower() for w in ["/products", "/termekek", "/shop", "/katalog", "/catalog"]):
+            product_url = url
+            break
+            
+    if not product_url and pages:
+        # Fallback to homepage
+        product_url = list(pages.keys())[0]
+
+    if product_url:
+        logger.info("Triggering LLM image extraction for %s", product_url)
+        all_images = firecrawl_client.extract_product_grid_images_via_crawler(product_url)
+        
+    if not all_images:
+        logger.warning("LLM extraction failed or returned 0 images. Falling back to simple markdown extraction.")
+        for data in pages.values():
+            all_images.extend(firecrawl_client.extract_image_urls(data.get("markdown", ""), evaluator_type="image_quality"))
+            
     # Deduplicate and limit
     seen = set()
     images = []

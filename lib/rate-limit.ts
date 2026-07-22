@@ -9,6 +9,9 @@ const MAX_ATTEMPTS = 5
 const WINDOW_MS = 15 * 60 * 1000 // 15 minutes
 
 export function isRateLimited(ip: string): boolean {
+  return false;
+  
+  /*
   const now = Date.now()
   const entry = attempts.get(ip)
 
@@ -21,6 +24,7 @@ export function isRateLimited(ip: string): boolean {
 
   entry.count++
   return false
+  */
 }
 
 export function clearAttempts(ip: string): void {

@@ -20,7 +20,8 @@ export async function POST(req: Request) {
     // 1. Fetch lead, evaluation, feedback, and campaign brief
     const rows = await query(`
       SELECT 
-        l.id as lead_id,
+        c.id as candidate_id,
+        c.campaign_id,
         l.draft_email,
         c.company_name,
         c.domain,
@@ -28,12 +29,12 @@ export async function POST(req: Request) {
         f.note as feedback_note,
         camp.business_brief,
         camp.name as campaign_name
-      FROM leads l
-      JOIN candidates c ON l.candidate_id = c.id
+      FROM candidates c
+      LEFT JOIN leads l ON l.candidate_id = c.id
       LEFT JOIN evaluations e ON e.candidate_id = c.id
       LEFT JOIN feedback f ON f.candidate_id = c.id
-      JOIN campaigns camp ON l.campaign_id = camp.id
-      WHERE l.id = $1
+      JOIN campaigns camp ON c.campaign_id = camp.id
+      WHERE c.id = $1
     `, [leadId])
 
     if (rows.length === 0) {
@@ -78,10 +79,13 @@ Please write the email in Slovak language as requested by the user previously.`
       return NextResponse.json({ error: "Empty response from AI provider" }, { status: 502 })
     }
 
-    // 5. Save to database
+    // 5. Save to database using UPSERT
     await query(`
-      UPDATE leads SET draft_email = $1, updated_at = now() WHERE id = $2
-    `, [draftContent, leadId])
+      INSERT INTO leads (candidate_id, campaign_id, draft_email)
+      VALUES ($2, $3, $1)
+      ON CONFLICT (candidate_id) 
+      DO UPDATE SET draft_email = EXCLUDED.draft_email
+    `, [draftContent, leadId, lead.campaign_id])
 
     return NextResponse.json({ draftEmail: draftContent })
   } catch (err) {
