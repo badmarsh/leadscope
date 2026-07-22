@@ -1,0 +1,346 @@
+"use client"
+
+import { useMemo, useState, useEffect } from "react"
+import { ArrowDown, ArrowUp, ArrowUpDown, ExternalLink, Inbox, Search } from "lucide-react"
+import type { Lead } from "@/lib/leads-data"
+import { formatDate, scoreColorClasses, statusBadgeClasses, statusLabels } from "@/lib/status"
+import { cn } from "@/lib/utils"
+
+type SortKey = "company" | "domain" | "score" | "status" | "dateFound"
+type SortDir = "asc" | "desc"
+type ViewFilter = "pending" | "reviewed" | "enrichment_failed"
+
+const emptyStates: Record<ViewFilter, { heading: string; sub: string }> = {
+  pending: {
+    heading: "Queue is empty — great work!",
+    sub: "All leads have been reviewed or are awaiting enrichment.",
+  },
+  reviewed: {
+    heading: "No reviewed leads yet",
+    sub: "Approve or reject leads from the review queue to see them here.",
+  },
+  enrichment_failed: {
+    heading: "No enrichment failures",
+    sub: "No enrichment failures for this campaign.",
+  },
+}
+
+interface LeadsTableProps {
+  leads: Lead[]
+  selectedId: string | null
+  onSelect: (lead: Lead) => void
+  onFilteredChange?: (leads: Lead[]) => void
+  onBulkAction?: (ids: string[], action: "approved" | "rejected") => Promise<void>
+}
+
+const columns: { key: SortKey; label: string; className?: string }[] = [
+  { key: "company", label: "Company" },
+  { key: "domain", label: "Domain" },
+  { key: "score", label: "Score", className: "w-36" },
+  { key: "status", label: "Status", className: "w-32" },
+  { key: "dateFound", label: "Date found", className: "w-32" },
+]
+
+export function LeadsTable({ leads, selectedId, onSelect, onFilteredChange, onBulkAction }: LeadsTableProps) {
+  const [view, setView] = useState<ViewFilter>("pending")
+  const [sortKey, setSortKey] = useState<SortKey>("score")
+  const [sortDir, setSortDir] = useState<SortDir>("desc")
+  const [search, setSearch] = useState("")
+  const [scoreFilter, setScoreFilter] = useState<'all'|'high'|'med'|'low'>('all')
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [isBulkActing, setIsBulkActing] = useState(false)
+
+  const filtered = useMemo(() => {
+    const subset = leads.filter((l) => {
+      if (view === "pending") { if (l.status !== "pending") return false }
+      else if (view === "reviewed") { if (l.status !== "approved" && l.status !== "rejected") return false }
+      else { if (l.status !== "enrichment_failed") return false }
+      if (search) {
+        const q = search.toLowerCase()
+        if (!l.company.toLowerCase().includes(q) && !l.domain.toLowerCase().includes(q)) return false
+      }
+      if (scoreFilter === 'high') return l.score >= 80
+      if (scoreFilter === 'med') return l.score >= 60 && l.score < 80
+      if (scoreFilter === 'low') return l.score < 60
+      return true
+    })
+    return [...subset].sort((a, b) => {
+      let cmp: number
+      if (sortKey === "score") cmp = a.score - b.score
+      else if (sortKey === "dateFound") cmp = a.dateFound.localeCompare(b.dateFound)
+      else cmp = String(a[sortKey]).localeCompare(String(b[sortKey]))
+      return sortDir === "asc" ? cmp : -cmp
+    })
+  }, [leads, view, sortKey, sortDir, search, scoreFilter])
+
+  useEffect(() => {
+    onFilteredChange?.(filtered)
+  }, [filtered, onFilteredChange])
+
+  function toggleSort(key: SortKey) {
+    if (key === sortKey) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"))
+    } else {
+      setSortKey(key)
+      setSortDir(key === "score" || key === "dateFound" ? "desc" : "asc")
+    }
+  }
+
+  const pendingCount = leads.filter((l) => l.status === "pending").length
+  const reviewedCount = leads.filter((l) => l.status === "approved" || l.status === "rejected").length
+  const failedCount = leads.filter((l) => l.status === "enrichment_failed").length
+
+  const allSelected = filtered.length > 0 && selectedIds.size === filtered.length
+  const someSelected = selectedIds.size > 0 && selectedIds.size < filtered.length
+
+  function toggleSelectAll() {
+    if (allSelected) {
+      setSelectedIds(new Set())
+    } else {
+      setSelectedIds(new Set(filtered.map(l => l.id)))
+    }
+  }
+
+  function toggleRowSelect(id: string) {
+    const next = new Set(selectedIds)
+    if (next.has(id)) next.delete(id)
+    else next.add(id)
+    setSelectedIds(next)
+  }
+
+  async function handleBulkAction(action: "approved" | "rejected") {
+    if (!onBulkAction || selectedIds.size === 0) return
+    setIsBulkActing(true)
+    try {
+      await onBulkAction(Array.from(selectedIds), action)
+      setSelectedIds(new Set())
+    } finally {
+      setIsBulkActing(false)
+    }
+  }
+
+  return (
+    <section aria-label="Leads" className="rounded-lg border border-border bg-card">
+      <div className="flex items-center justify-between gap-4 border-b border-border px-4 py-3">
+        <h2 className="text-sm font-semibold text-card-foreground">Leads</h2>
+        <div className="flex items-center gap-1 rounded-md bg-muted p-0.5" role="tablist" aria-label="Lead view filter">
+          <button
+            role="tab"
+            aria-selected={view === "pending"}
+            onClick={() => { setView("pending"); setSelectedIds(new Set()) }}
+            className={cn(
+              "rounded px-2.5 py-1 text-xs transition-colors",
+              view === "pending"
+                ? "bg-card font-medium text-card-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            Review queue <span className="font-mono">({pendingCount})</span>
+          </button>
+          <button
+            role="tab"
+            aria-selected={view === "reviewed"}
+            onClick={() => { setView("reviewed"); setSelectedIds(new Set()) }}
+            className={cn(
+              "rounded px-2.5 py-1 text-xs transition-colors",
+              view === "reviewed"
+                ? "bg-card font-medium text-card-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            Reviewed <span className="font-mono">({reviewedCount})</span>
+          </button>
+          <button
+            role="tab"
+            aria-selected={view === "enrichment_failed"}
+            onClick={() => { setView("enrichment_failed"); setSelectedIds(new Set()) }}
+            className={cn(
+              "rounded px-2.5 py-1 text-xs transition-colors",
+              view === "enrichment_failed"
+                ? "bg-card font-medium text-card-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            Enrichment failed <span className="font-mono">({failedCount})</span>
+          </button>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2 border-b border-border px-4 py-2">
+        <div className="relative flex-1 min-w-[180px]">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" aria-hidden="true" />
+          <input
+            type="search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search by company or domain…"
+            className="w-full rounded-md border border-input bg-background py-1.5 pl-8 pr-3 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/50"
+          />
+        </div>
+        <div className="flex items-center gap-1" role="group" aria-label="Score filter">
+          {(['all', 'high', 'med', 'low'] as const).map((f) => (
+            <button
+              key={f}
+              onClick={() => setScoreFilter(f)}
+              className={cn(
+                "rounded px-2.5 py-1 text-xs transition-colors",
+                scoreFilter === f
+                  ? "bg-card font-medium text-card-foreground shadow-sm ring-1 ring-border"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              {f === 'all' ? 'All' : f === 'high' ? 'High 80+' : f === 'med' ? 'Med 60–79' : 'Low <60'}
+            </button>
+          ))}
+        </div>
+        
+        {selectedIds.size > 0 && view === "pending" && (
+          <div className="flex items-center gap-2 border-l border-border pl-2 ml-1">
+            <span className="text-xs font-medium text-muted-foreground">{selectedIds.size} selected</span>
+            <button
+              onClick={() => handleBulkAction("approved")}
+              disabled={isBulkActing}
+              className="rounded px-2.5 py-1 text-xs font-medium bg-emerald-600/10 text-emerald-600 transition-colors hover:bg-emerald-600/20 disabled:opacity-50"
+            >
+              Approve
+            </button>
+            <button
+              onClick={() => handleBulkAction("rejected")}
+              disabled={isBulkActing}
+              className="rounded px-2.5 py-1 text-xs font-medium bg-red-600/10 text-red-600 transition-colors hover:bg-red-600/20 disabled:opacity-50"
+            >
+              Reject
+            </button>
+          </div>
+        )}
+      </div>
+
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-border">
+              {view === "pending" && (
+                <th scope="col" className="w-10 px-4 py-2 text-left">
+                  <input
+                    type="checkbox"
+                    checked={allSelected}
+                    ref={input => {
+                      if (input) input.indeterminate = someSelected
+                    }}
+                    onChange={toggleSelectAll}
+                    className="size-3.5 rounded border-input bg-background text-primary"
+                  />
+                </th>
+              )}
+              {columns.map((col) => (
+                <th key={col.key} scope="col" className={cn("px-4 py-2 text-left", col.className)}>
+                  <button
+                    onClick={() => toggleSort(col.key)}
+                    className="flex items-center gap-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+                  >
+                    {col.label}
+                    {sortKey === col.key ? (
+                      sortDir === "asc" ? (
+                        <ArrowUp className="size-3" aria-hidden="true" />
+                      ) : (
+                        <ArrowDown className="size-3" aria-hidden="true" />
+                      )
+                    ) : (
+                      <ArrowUpDown className="size-3 opacity-40" aria-hidden="true" />
+                    )}
+                  </button>
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.length === 0 && (
+              <tr>
+                <td colSpan={view === "pending" ? columns.length + 1 : columns.length} className="px-4 py-12">
+                  <div className="flex flex-col items-center gap-2 text-center">
+                    <div className="flex size-10 items-center justify-center rounded-full bg-muted">
+                      <Inbox className="size-5 text-muted-foreground" aria-hidden="true" />
+                    </div>
+                    <p className="text-sm font-medium text-card-foreground">{emptyStates[view].heading}</p>
+                    <p className="text-sm text-muted-foreground">{emptyStates[view].sub}</p>
+                  </div>
+                </td>
+              </tr>
+            )}
+            {filtered.map((lead) => {
+              const score = scoreColorClasses(lead.score)
+              return (
+                <tr
+                  key={lead.id}
+                  onClick={() => onSelect(lead)}
+                  className={cn(
+                    "cursor-pointer border-b border-border/60 transition-colors last:border-0 hover:bg-accent/50",
+                    selectedId === lead.id && "bg-accent/70",
+                    selectedIds.has(lead.id) && "bg-accent/30",
+                  )}
+                >
+                  {view === "pending" && (
+                    <td className="w-10 px-4 py-3" onClick={e => e.stopPropagation()}>
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(lead.id)}
+                        onChange={() => toggleRowSelect(lead.id)}
+                        className="size-3.5 rounded border-input bg-background text-primary"
+                      />
+                    </td>
+                  )}
+                  <td className="px-4 py-3 font-medium text-card-foreground">{lead.company}</td>
+                  <td className="px-4 py-3">
+                    <a
+                      href={`https://${lead.domain}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                      className="inline-flex items-center gap-1 font-mono text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+                    >
+                      {lead.domain}
+                      <ExternalLink className="size-3" aria-hidden="true" />
+                    </a>
+                    {lead.screenshot_url && (
+                      <img
+                        src={lead.screenshot_url}
+                        alt=""
+                        loading="lazy"
+                        className="w-[1px] h-[1px] opacity-0 inline-block"
+                        aria-hidden="true"
+                        decoding="async"
+                      />
+                    )}
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-2">
+                      <span className={cn("w-7 text-right font-mono text-xs font-semibold", score.text)}>
+                        {lead.score}
+                      </span>
+                      <div className="h-1.5 w-16 overflow-hidden rounded-full bg-muted" aria-hidden="true">
+                        <div className={cn("h-full rounded-full", score.bar)} style={{ width: `${lead.score}%` }} />
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-4 py-3">
+                    <span
+                      className={cn(
+                        "inline-block rounded-full px-2 py-0.5 text-xs font-medium",
+                        statusBadgeClasses[lead.status],
+                      )}
+                    >
+                      {statusLabels[lead.status]}
+                    </span>
+                  </td>
+                  <td className="whitespace-nowrap px-4 py-3 font-mono text-xs text-muted-foreground">
+                    {formatDate(lead.dateFound)}
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  )
+}

@@ -1,0 +1,49 @@
+{
+  "name": "Stage 5 — Enrichment (Cron, Poll Approved Candidates)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{"field": "minutes", "minutesInterval": 30}]
+        }
+      },
+      "id": "d4e5f6a7-0005-0005-0005-000000000001",
+      "name": "Every 30 Minutes",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://stages:8002/stage5/run",
+        "options": {
+          "timeout": 600000
+        }
+      },
+      "id": "d4e5f6a7-0005-0005-0005-000000000002",
+      "name": "Run Stage 5",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.first().json;\nif (data.ok) {\n  const r = data.result;\n  console.log(`Stage 5: total=${r.total} enriched=${r.enriched} failed=${r.enrichment_failed} retry=${r.firecrawl_failed_retry} dnc=${r.skipped_dnc}`);\n} else {\n  console.error('Stage 5 error:', JSON.stringify(data));\n}\nreturn $input.all();"
+      },
+      "id": "d4e5f6a7-0005-0005-0005-000000000003",
+      "name": "Log Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [680, 300]
+    }
+  ],
+  "connections": {
+    "Every 30 Minutes": {"main": [[{"node": "Run Stage 5", "type": "main", "index": 0}]]},
+    "Run Stage 5": {"main": [[{"node": "Log Results", "type": "main", "index": 0}]]}
+  },
+  "settings": {"executionOrder": "v1"},
+  "active": false,
+  "tags": [{"name": "stage5"}, {"name": "leadscope"}],
+  "meta": {"instanceId": "leadscope"}
+}

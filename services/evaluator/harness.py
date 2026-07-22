@@ -1,0 +1,281 @@
+"""
+harness.py — Shared evaluator harness.
+
+Orchestrates: load candidate → load campaign → load icp_config →
+fetch few-shot feedback → dispatch to scorer → write evaluations + api_call_log.
+"""
+import json
+import logging
+import concurrent.futures
+from typing import Any
+
+import config
+import db
+from scorers import content_relevance, image_quality, threat_intel
+
+logger = logging.getLogger(__name__)
+
+# ── Scorer registry keyed by campaigns.evaluator_type ──────────────────────────
+# NOTE (v3 judgment call from spec): three hardcoded strategies, not a DB-driven
+# prompt system. The dict itself is the extension point if a fourth ever shows up.
+SCORER_REGISTRY = {
+    "content_relevance": content_relevance.score,
+    "image_quality": image_quality.score,
+    "threat_intel": threat_intel.score,
+}
+
+
+def _load_icp(conn, campaign_id: int) -> tuple[dict, int]:
+    """
+    Load the current (latest version) icp_config for a campaign.
+    Returns (icp_dict, version_number).
+    """
+    row = db.fetchone(
+        conn,
+        """
+        SELECT version, target_segments, keywords_hu, keywords_en, disqualifiers
+        FROM icp_config
+        WHERE campaign_id = %s
+        ORDER BY version DESC
+        LIMIT 1
+        """,
+        (campaign_id,),
+    )
+    if not row:
+        return {}, 0
+
+    # Parse JSON fields if they're strings
+    icp = {
+        "target_segments": json.loads(row["target_segments"]) if isinstance(row["target_segments"], str) else row["target_segments"],
+        "keywords_hu": row["keywords_hu"] or [],
+        "keywords_en": row["keywords_en"] or [],
+        "disqualifiers": json.loads(row["disqualifiers"]) if isinstance(row["disqualifiers"], str) else row["disqualifiers"],
+    }
+    return icp, row["version"]
+
+
+def _load_few_shot(conn, campaign_id: int, k: int = None) -> list[dict]:
+    """
+    Retrieve the k most recent feedback decisions for this campaign.
+    Few-shot pools must never cross campaigns (spec requirement).
+    """
+    if k is None:
+        k = config.FEW_SHOT_K
+
+    rows = db.fetchall(
+        conn,
+        """
+        SELECT f.decision, f.note, c.domain, c.company_name
+        FROM feedback f
+        JOIN candidates c ON c.id = f.candidate_id
+        WHERE c.campaign_id = %s
+        ORDER BY f.created_at DESC
+        LIMIT %s
+        """,
+        (campaign_id, k),
+    )
+    return rows
+
+
+def _log_call(conn, campaign_id: int, provider: str, model: str, tokens_in: int, tokens_out: int) -> None:
+    """Write a row to api_call_log for this scoring call."""
+    pricing = config.PRICING_MAP.get(provider, {})
+    if "input_per_token" in pricing:
+        cost = round(
+            tokens_in * pricing["input_per_token"] + tokens_out * pricing["output_per_token"],
+            6,
+        )
+    else:
+        cost = 0.0
+
+    db.execute(
+        conn,
+        """
+        INSERT INTO api_call_log
+            (campaign_id, stage, provider, model, tokens_in, tokens_out, query_count, cost_estimate_usd)
+        VALUES (%s, 'stage3', %s, %s, %s, %s, 1, %s)
+        """,
+        (campaign_id, provider, model, tokens_in or None, tokens_out or None, cost),
+    )
+
+
+def score_candidate(candidate_id: int) -> dict[str, Any]:
+    """
+    Score a single candidate through the full harness pipeline.
+    Returns the evaluation result dict.
+    Raises ValueError if candidate/campaign not found or evaluator_type unknown.
+    """
+    with db.get_conn() as conn:
+        # 1. Load candidate
+        candidate = db.fetchone(
+            conn,
+            """
+            SELECT id, campaign_id, domain, company_name, source,
+                   query_used, evidence_data, status
+            FROM candidates WHERE id = %s
+            """,
+            (candidate_id,),
+        )
+        if not candidate:
+            raise ValueError(f"Candidate {candidate_id} not found")
+
+        # 2. Load campaign config
+        campaign = db.fetchone(
+            conn,
+            """
+            SELECT id, slug, name, evaluator_type, business_brief
+            FROM campaigns WHERE id = %s
+            """,
+            (candidate["campaign_id"],),
+        )
+        if not campaign:
+            raise ValueError(f"Campaign {candidate['campaign_id']} not found")
+
+        evaluator_type = campaign["evaluator_type"]
+        scorer_fn = SCORER_REGISTRY.get(evaluator_type)
+        if not scorer_fn:
+            raise ValueError(f"Unknown evaluator_type: {evaluator_type!r}")
+
+        # 3. Load current ICP version
+        icp, icp_version = _load_icp(conn, campaign["id"])
+
+        # 4. Retrieve few-shot feedback (same campaign only)
+        few_shot = _load_few_shot(conn, campaign["id"])
+
+        # 5. Dispatch to the matching scorer
+        logger.info(
+            "Scoring candidate %s (domain=%s) with %s scorer (icp v%s, %d few-shot)",
+            candidate_id, candidate["domain"], evaluator_type, icp_version, len(few_shot),
+        )
+        result = scorer_fn(candidate, campaign, icp, few_shot)
+
+        # 6. Write to evaluations
+        eval_row = db.execute_returning(
+            conn,
+            """
+            INSERT INTO evaluations
+                (candidate_id, score, rationale, evidence_urls, evidence_data,
+                 model_used, icp_version_used, status)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, 'pending_review')
+            RETURNING id, score, icp_version_used
+            """,
+            (
+                candidate_id,
+                result["score"],
+                result["rationale"],
+                result.get("evidence_urls", []),
+                json.dumps(result.get("evidence_data", {})),
+                result.get("model_used", ""),
+                icp_version,
+            ),
+        )
+
+        # 7. Log the API call
+        _log_call(
+            conn,
+            campaign_id=campaign["id"],
+            provider=result.get("provider", "openrouter"),
+            model=result.get("model_used", ""),
+            tokens_in=result.get("tokens_in", 0),
+            tokens_out=result.get("tokens_out", 0),
+        )
+
+        logger.info(
+            "Evaluation complete: candidate=%s score=%s eval_id=%s icp_v=%s",
+            candidate_id, result["score"], eval_row["id"], icp_version,
+        )
+
+        return {
+            "candidate_id": candidate_id,
+            "evaluation_id": eval_row["id"],
+            "score": result["score"],
+            "rationale": result["rationale"],
+            "icp_version_used": icp_version,
+            "model_used": result.get("model_used", ""),
+            "provider": result.get("provider", ""),
+            "tokens_in": result.get("tokens_in", 0),
+            "tokens_out": result.get("tokens_out", 0),
+        }
+
+
+def trigger_scoring(campaign_id: int | None = None) -> dict:
+    """
+    Poll for candidates with status='new', score each, flip to 'pending_review'.
+    This is the bridge between Stage 2 (produces 'new') and the dashboard
+    (displays 'pending_review').
+    """
+    with db.get_conn() as conn:
+        if campaign_id:
+            camp = db.fetchone(conn, "SELECT settings FROM campaigns WHERE id = %s", (campaign_id,))
+            settings = json.loads(camp["settings"]) if camp and isinstance(camp.get("settings"), str) else (camp.get("settings") or {})
+            limit = int(settings.get("evaluator_batch_size", 50))
+            new_candidates = db.fetchall(
+                conn,
+                """
+                SELECT id, campaign_id, domain
+                FROM candidates
+                WHERE status = 'new' AND campaign_id = %s
+                ORDER BY created_at ASC
+                LIMIT %s
+                """,
+                (campaign_id, limit)
+            )
+        else:
+            new_candidates = db.fetchall(
+                conn,
+                """
+                SELECT id, campaign_id, domain
+                FROM candidates
+                WHERE status = 'new'
+                ORDER BY created_at ASC
+                LIMIT 50
+                """
+            )
+
+    campaign_ids = {c["campaign_id"] for c in new_candidates}
+    for cid in campaign_ids:
+        db.set_stage_status(cid, "stage3", "running")
+
+    try:
+        results = []
+        scored = 0
+        errors = 0
+
+        def process_cand(cand):
+            if db.check_stop_signal(cand["campaign_id"], "stage3"):
+                logger.info("Stage 3 stopped via dashboard signal for campaign %s", cand["campaign_id"])
+                return None
+                
+            try:
+                result = score_candidate(cand["id"])
+
+                # Flip status to pending_review
+                with db.get_conn() as conn:
+                    db.execute(
+                        conn,
+                        "UPDATE candidates SET status = 'pending_review' WHERE id = %s",
+                        (cand["id"],)
+                    )
+                return {"candidate_id": cand["id"], "status": "scored", "score": result["score"]}
+            except Exception as exc:
+                logger.error("Harness failed for candidate %s: %s", cand["id"], exc)
+                return {"candidate_id": cand["id"], "status": "error", "error": str(exc)}
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+            for res in executor.map(process_cand, new_candidates):
+                if res is None:
+                    break
+                results.append(res)
+                if res["status"] == "scored":
+                    scored += 1
+                else:
+                    errors += 1
+
+        return {
+            "scored": scored,
+            "errors": errors,
+            "details": results
+        }
+    finally:
+        for cid in campaign_ids:
+            db.set_stage_status(cid, "stage3", "idle")

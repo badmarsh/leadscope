@@ -1,0 +1,8 @@
+fastapi==0.115.6
+uvicorn[standard]==0.32.1
+psycopg2-binary==2.9.10
+python-dotenv==1.0.1
+# LLM — OpenAI SDK for both OpenRouter and local proxy
+openai>=1.0.0
+# HTTP for Firecrawl
+requests>=2.32.0

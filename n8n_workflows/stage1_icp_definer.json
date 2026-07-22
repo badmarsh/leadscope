@@ -1,0 +1,98 @@
+{
+  "name": "Stage 1 — ICP Definer (Manual Trigger)",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "a1b2c3d4-0001-0001-0001-000000000001",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Set campaign_id to run Stage 1 for.\n// Change this value before each run.\nconst campaign_id = $input.first().json.campaign_id || 1;\nreturn [{ json: { campaign_id } }];"
+      },
+      "id": "a1b2c3d4-0001-0001-0001-000000000002",
+      "name": "Set Campaign ID",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://stages:8002/stage1/run",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ campaign_id: $json.campaign_id }) }}",
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "id": "a1b2c3d4-0001-0001-0001-000000000003",
+      "name": "Run Stage 1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {"caseSensitive": true, "leftValue": "", "typeValidation": "strict"},
+          "conditions": [
+            {
+              "id": "cond-ok",
+              "leftValue": "={{ $json.ok }}",
+              "rightValue": true,
+              "operator": {"type": "boolean", "operation": "true"}
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "a1b2c3d4-0001-0001-0001-000000000004",
+      "name": "Check Success",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const r = $input.first().json.result;\nconsole.log(`Stage 1 complete: campaign=${r.campaign_id} icp_config_id=${r.icp_config_id} version=${r.version} segments=${r.segments} keywords_hu=${r.keywords_hu?.length} keywords_en=${r.keywords_en?.length}`);\nreturn $input.all();"
+      },
+      "id": "a1b2c3d4-0001-0001-0001-000000000005",
+      "name": "Log Success",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1120, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "const detail = $input.first().json.detail || 'Unknown error';\nconsole.error(`Stage 1 FAILED: ${detail}`);\nthrow new Error(`Stage 1 failed: ${detail}`);"
+      },
+      "id": "a1b2c3d4-0001-0001-0001-000000000006",
+      "name": "Log Error",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1120, 400]
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {"main": [[{"node": "Set Campaign ID", "type": "main", "index": 0}]]},
+    "Set Campaign ID": {"main": [[{"node": "Run Stage 1", "type": "main", "index": 0}]]},
+    "Run Stage 1": {"main": [[{"node": "Check Success", "type": "main", "index": 0}]]},
+    "Check Success": {
+      "main": [
+        [{"node": "Log Success", "type": "main", "index": 0}],
+        [{"node": "Log Error", "type": "main", "index": 0}]
+      ]
+    }
+  },
+  "settings": {"executionOrder": "v1"},
+  "active": false,
+  "tags": [{"name": "stage1"}, {"name": "leadscope"}],
+  "meta": {
+    "instanceId": "leadscope"
+  }
+}

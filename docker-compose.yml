@@ -1,0 +1,152 @@
+services:
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-leadscope}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-leadscope_dev}
+      POSTGRES_DB: ${POSTGRES_DB:-leadscope}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-leadscope}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  n8n:
+    image: n8nio/n8n:latest
+    restart: unless-stopped
+    ports:
+      - "5678:5678"
+    environment:
+      - N8N_BASIC_AUTH_ACTIVE=true
+      - N8N_BASIC_AUTH_USER=${N8N_BASIC_AUTH_USER:-admin}
+      - N8N_BASIC_AUTH_PASSWORD=${N8N_BASIC_AUTH_PASSWORD:-admin_dev}
+      - DB_TYPE=postgresdb
+      - DB_POSTGRESDB_HOST=postgres
+      - DB_POSTGRESDB_PORT=5432
+      - DB_POSTGRESDB_DATABASE=${POSTGRES_DB:-leadscope}
+      - DB_POSTGRESDB_USER=${POSTGRES_USER:-leadscope}
+      - DB_POSTGRESDB_PASSWORD=${POSTGRES_PASSWORD:-leadscope_dev}
+      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY:-change_me_before_production}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - n8n_data:/home/node/.n8n
+
+  evaluator:
+    build:
+      context: ./services/evaluator
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "8001:8001"
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-leadscope}:${POSTGRES_PASSWORD:-leadscope_dev}@postgres:5432/${POSTGRES_DB:-leadscope}
+      GEMINI_PROXY_ENDPOINT: ${GEMINI_PROXY_ENDPOINT:-http://host.docker.internal:8045}
+      GEMINI_PROXY_API_KEY: ${GEMINI_PROXY_API_KEY}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - app_logs:/var/log/app
+
+  stages:
+    build:
+      context: ./services/stages
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "8002:8002"
+    env_file:
+      - .env
+    environment:
+      # Override DATABASE_URL and proxy endpoints to use Docker service/host names
+      DATABASE_URL: postgresql://${POSTGRES_USER:-leadscope}:${POSTGRES_PASSWORD:-leadscope_dev}@postgres:5432/${POSTGRES_DB:-leadscope}
+      GEMINI_PROXY_ENDPOINT: ${GEMINI_PROXY_ENDPOINT:-http://host.docker.internal:8045}
+      GEMINI_PROXY_API_KEY: ${GEMINI_PROXY_API_KEY}
+      OLLAMA_HOST: ${OLLAMA_HOST:-http://host.docker.internal:11434}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - app_logs:/var/log/app
+
+  dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile.dashboard
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-leadscope}:${POSTGRES_PASSWORD:-leadscope_dev}@postgres:5432/${POSTGRES_DB:-leadscope}
+      # Bcrypt hash is passed here to avoid $ interpolation issues in env_file
+      DASHBOARD_SESSION_SECRET: ${DASHBOARD_SESSION_SECRET}
+      DASHBOARD_PASSWORD_HASH: ${DASHBOARD_PASSWORD_HASH}
+      GEMINI_PROXY_ENDPOINT: ${GEMINI_PROXY_ENDPOINT:-http://host.docker.internal:8045}
+      GEMINI_PROXY_API_KEY: ${GEMINI_PROXY_API_KEY}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - app_logs:/var/log/app
+
+  job-budget-monitor:
+    build:
+      context: ./services/stages
+      dockerfile: Dockerfile
+    profiles:
+      - jobs
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-leadscope}:${POSTGRES_PASSWORD:-leadscope_dev}@postgres:5432/${POSTGRES_DB:-leadscope}
+    volumes:
+      - ./services/jobs:/app/jobs
+    command: ["python", "/app/jobs/budget_monitor.py"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  job-rescore-icp:
+    build:
+      context: ./services/stages
+      dockerfile: Dockerfile
+    profiles:
+      - jobs
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-leadscope}:${POSTGRES_PASSWORD:-leadscope_dev}@postgres:5432/${POSTGRES_DB:-leadscope}
+      EVALUATOR_HOST: evaluator:8001
+    volumes:
+      - ./services/jobs:/app/jobs
+    command: ["python", "/app/jobs/rescore_icp.py"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  browserless:
+    image: ghcr.io/browserless/chromium:latest
+    restart: unless-stopped
+    ports:
+      - "8047:3000"
+    environment:
+      - CONNECTION_TIMEOUT=300000
+      - MAX_CONCURRENT_SESSIONS=10
+
+
+
+volumes:
+  postgres_data:
+  n8n_data:
+  app_logs:
