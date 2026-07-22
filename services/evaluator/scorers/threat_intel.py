@@ -50,6 +50,17 @@ Found snippets: {found_snippets}
 ## Reputation API results
 Google Safe Browsing: {safe_browsing_result}
 VirusTotal: {virustotal_result}
+Wayback Machine (recency): {wayback_result}
+
+A site where snippet_confirmed=False BUT wayback shows a recent snapshot
+(last_snapshot_date within last 14 days) suggests the owner recently cleaned up
+— this is a WARM LEAD. Score 50-65 with recommendation="warm_lead_cleanup_in_progress".
+
+WordPress version (from RSS feed): {wp_version_result}
+
+If cve_risk is "critical" or "high" AND snippet_confirmed=True, upgrade the
+rationale to explicitly mention unpatched CVEs. This changes the pitch from
+"you're infected" to "your site has known exploitable vulnerabilities AND active malware."
 
 ## Past feedback (few-shot)
 {few_shot_examples}
@@ -73,7 +84,7 @@ Return JSON with:
 - "snippet_confirmed": boolean — was the exact or partial snippet found?
 - "malware_family": string — the malware family name (e.g. "SocGholish", "Balada Injector")
 - "confidence": "high" | "medium" | "low"
-- "recommendation": "remediation_candidate" | "needs_manual_check" | "likely_clean"
+- "recommendation": "remediation_candidate" | "needs_manual_check" | "likely_clean" | "warm_lead_cleanup_in_progress"
 """
 
 
@@ -132,11 +143,21 @@ def _scrape_wp_site(domain: str) -> dict[str, str]:
 def _check_snippet_present(scraped_content: str, snippets: list[str]) -> tuple[bool, list[str]]:
     """
     Check if any malware snippets are still present in the scraped content.
-    Checks exact match first, then partial match (first 30 chars) for obfuscated variants.
+    Three-pass strategy:
+      1. Exact match (case-insensitive)
+      2. Partial match (first 30 chars) for obfuscated inline variants
+      3. Base64 decode pass — extract all base64 blobs from the page,
+         decode each, and check if the decoded string contains any known
+         snippet fragment (catches re-encoded Balada/SocGholish variants)
     Returns (any_found: bool, list_of_found_snippets: list[str]).
     """
+    import base64 as _b64
+    import re as _re
+
     found = []
     content_lower = scraped_content.lower()
+
+    # Pass 1 + 2: exact and partial
     for snippet in snippets:
         snippet_clean = snippet.strip().lower()
         if not snippet_clean:
@@ -145,6 +166,37 @@ def _check_snippet_present(scraped_content: str, snippets: list[str]) -> tuple[b
             found.append(snippet)
         elif len(snippet_clean) > 30 and snippet_clean[:30] in content_lower:
             found.append(snippet + " (partial match — possible obfuscated variant)")
+
+    # Pass 3: base64 decode
+    # Extract all candidate base64 strings (length >= 40, only valid b64 chars)
+    b64_candidates = _re.findall(r'[A-Za-z0-9+/]{40,}={0,2}', scraped_content)
+    decoded_blobs = []
+    for b64_str in b64_candidates[:200]:  # cap at 200 to avoid DoS on large pages
+        try:
+            padded = b64_str + "=" * ((-len(b64_str)) % 4)
+            decoded = _b64.b64decode(padded).decode("utf-8", errors="ignore").lower()
+            if decoded:
+                decoded_blobs.append(decoded)
+        except Exception:
+            continue
+
+    if decoded_blobs:
+        decoded_corpus = " ".join(decoded_blobs)
+        for snippet in snippets:
+            snippet_clean = snippet.strip().lower()
+            if not snippet_clean or len(snippet_clean) < 10:
+                continue
+            # Use a meaningful fragment: domain-like or path-like substring
+            # (first 20 chars is usually distinctive enough for C2 domains)
+            fragment = snippet_clean[:20]
+            if fragment in decoded_corpus:
+                label = snippet + " (found via base64 decode — re-encoded variant)"
+                if label not in found:
+                    found.append(label)
+                    logger.info(
+                        "Base64 decode match for snippet fragment '%s'", fragment
+                    )
+
     return len(found) > 0, found
 
 
@@ -219,6 +271,109 @@ def _check_virustotal(domain: str) -> dict:
         return {"error": str(exc)}
 
 
+def _check_wayback_recency(domain: str) -> dict:
+    """
+    Query the Wayback Machine CDX API for the 3 most recent snapshots of the domain.
+    Returns {
+        "last_snapshot_date": "YYYYMMDDHHMMSS" | None,
+        "snapshot_count_last_30d": int,
+        "status": "active_archiving" | "rarely_archived" | "no_snapshots" | "error"
+    }
+    Uses no API key. Timeout set low (5s) — this is a non-blocking enrichment signal.
+    """
+    try:
+        resp = requests.get(
+            "http://web.archive.org/cdx/search/cdx",
+            params={
+                "url": domain,
+                "output": "json",
+                "limit": "5",
+                "fl": "timestamp,statuscode",
+                "filter": "statuscode:200",
+                "collapse": "timestamp:8",  # deduplicate to 1 per day
+            },
+            timeout=5,
+        )
+        if resp.status_code != 200:
+            return {"status": "error", "last_snapshot_date": None, "snapshot_count_last_30d": 0}
+
+        rows = resp.json()
+        if not rows or len(rows) < 2:  # first row is header
+            return {"status": "no_snapshots", "last_snapshot_date": None, "snapshot_count_last_30d": 0}
+
+        data_rows = rows[1:]  # skip header row ["timestamp","statuscode"]
+        timestamps = [r[0] for r in data_rows if r[0]]
+
+        last_ts = timestamps[0] if timestamps else None
+
+        # Count snapshots within last 30 days
+        from datetime import datetime, timedelta
+        cutoff = (datetime.utcnow() - timedelta(days=30)).strftime("%Y%m%d%H%M%S")
+        recent = [t for t in timestamps if t >= cutoff]
+
+        status = "active_archiving" if len(recent) >= 2 else "rarely_archived"
+        logger.info(
+            "Wayback CDX for %s: last_snapshot=%s recent_30d=%d",
+            domain, last_ts, len(recent),
+        )
+        return {
+            "last_snapshot_date": last_ts,
+            "snapshot_count_last_30d": len(recent),
+            "status": status,
+        }
+    except Exception as exc:
+        logger.warning("Wayback CDX failed for %s: %s", domain, exc)
+        return {"status": "error", "last_snapshot_date": None, "snapshot_count_last_30d": 0}
+
+
+def _detect_wp_version(domain: str) -> dict:
+    """
+    Detect WordPress version from the RSS feed generator tag.
+    /?feed=rss2 exposes <generator>https://wordpress.org/?v=X.Y.Z</generator>
+    without any authentication. Returns {"version": "6.7.1", "cve_risk": "low"|"medium"|"high"|"unknown"}.
+    Times out fast (6s) since this is a non-blocking enrichment signal.
+    """
+    import re
+    try:
+        resp = requests.get(
+            f"https://{domain}/?feed=rss2",
+            timeout=6,
+            headers={"User-Agent": "Mozilla/5.0"},
+            allow_redirects=True,
+        )
+        if resp.status_code != 200:
+            return {"version": None, "cve_risk": "unknown"}
+
+        match = re.search(
+            r"<generator>https://wordpress\.org/\?v=([\d.]+)</generator>",
+            resp.text,
+        )
+        if not match:
+            return {"version": None, "cve_risk": "unknown"}
+
+        version_str = match.group(1)
+        parts = version_str.split(".")
+        major = int(parts[0]) if parts else 0
+        minor = int(parts[1]) if len(parts) > 1 else 0
+
+        # WP < 5.8 = critical unpatched RCE; 5.8–6.3 = high; 6.4–6.6 = medium; 6.7+ = low
+        if major < 5 or (major == 5 and minor < 8):
+            cve_risk = "critical"
+        elif major == 5 or (major == 6 and minor < 4):
+            cve_risk = "high"
+        elif major == 6 and minor < 7:
+            cve_risk = "medium"
+        else:
+            cve_risk = "low"
+
+        logger.info("WP version for %s: %s (cve_risk=%s)", domain, version_str, cve_risk)
+        return {"version": version_str, "cve_risk": cve_risk}
+
+    except Exception as exc:
+        logger.warning("WP version detection failed for %s: %s", domain, exc)
+        return {"version": None, "cve_risk": "unknown"}
+
+
 # ── Main scorer ───────────────────────────────────────────────────────────────
 
 def score(candidate: dict, campaign: dict, icp: dict, few_shot: list[dict]) -> dict:
@@ -263,10 +418,12 @@ def score(candidate: dict, campaign: dict, icp: dict, few_shot: list[dict]) -> d
         domain, snippet_confirmed, found_snippets,
     )
 
-    # ── 4. Reputation API checks (optional secondary corroboration) ───────────
+    # ── 4. Reputation + recency checks ────────────────────────────────────────
     homepage_url = f"https://{domain}"
     safe_browsing = _check_safe_browsing(homepage_url)
     virustotal = _check_virustotal(domain)
+    wayback = _check_wayback_recency(domain)
+    wp_version_info = _detect_wp_version(domain)
 
     # ── 5. Few-shot examples ──────────────────────────────────────────────────
     few_shot_str = "(No prior feedback available)"
@@ -285,6 +442,8 @@ def score(candidate: dict, campaign: dict, icp: dict, few_shot: list[dict]) -> d
         found_snippets=str(found_snippets)[:500] if found_snippets else "none",
         safe_browsing_result=json.dumps(safe_browsing),
         virustotal_result=json.dumps(virustotal),
+        wayback_result=json.dumps(wayback),
+        wp_version_result=json.dumps(wp_version_info),
         few_shot_examples=few_shot_str,
     )
 
@@ -300,6 +459,8 @@ def score(candidate: dict, campaign: dict, icp: dict, few_shot: list[dict]) -> d
                 "snippet_confirmed": snippet_confirmed,
                 "safe_browsing": safe_browsing,
                 "virustotal": virustotal,
+                "wayback": wayback,
+                "wp_version": wp_version_info,
                 "raw_response": result.get("_raw", "")[:500],
             },
             "model_used": model,
@@ -322,6 +483,8 @@ def score(candidate: dict, campaign: dict, icp: dict, few_shot: list[dict]) -> d
             "pages_scraped": list(pages.keys()),
             "safe_browsing": safe_browsing,
             "virustotal": virustotal,
+            "wayback": wayback,
+            "wp_version": wp_version_info,
         },
         "model_used": model,
         "provider": provider,

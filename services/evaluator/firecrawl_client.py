@@ -315,8 +315,15 @@ def extract_product_grid_images_via_crawler(url: str) -> list[str]:
         logger.warning("Crawler LLM extraction failed for %s: %s", url, exc)
     return []
 
-def detect_tech_stack(pages_dict: dict[str, str]) -> list[str]:
-    """Detect e-commerce platforms or tech stack footprints from scraped text."""
+def detect_tech_stack(pages_dict: dict[str, str | dict]) -> list[str]:
+    """
+    Detect e-commerce platforms or tech stack footprints from scraped content.
+    pages_dict values may be plain markdown strings OR {"markdown":..., "html":...} dicts
+    (when scrape_domain_pages was called with include_html=True).
+    Returns a list of strings. WooCommerce entries include version if detectable,
+    e.g. ["WooCommerce 7.8.2 (outdated)"].
+    """
+    import re
     stack = set()
     signatures = {
         "Shopify": ["powered by shopify", "cdn.shopify.com"],
@@ -324,13 +331,42 @@ def detect_tech_stack(pages_dict: dict[str, str]) -> list[str]:
         "Shoptet": ["shoptet", "powered by shoptet"],
         "PrestaShop": ["prestashop"],
         "Magento": ["magento"],
-        "Wix": ["wix.com", "powered by wix"]
+        "Wix": ["wix.com", "powered by wix"],
     }
-    
-    for text in pages_dict.values():
+
+    for content in pages_dict.values():
+        # Support both plain-string pages and include_html=True dicts
+        if isinstance(content, dict):
+            text = content.get("markdown", "")
+            html = content.get("html", "")
+        else:
+            text = content
+            html = ""
+
         text_lower = text.lower()
+        html_lower = html.lower()
+        combined_lower = text_lower + " " + html_lower
+
         for platform, footprints in signatures.items():
-            if any(f in text_lower for f in footprints):
-                stack.add(platform)
-                
+            if any(f in combined_lower for f in footprints):
+                if platform == "WooCommerce" and html:
+                    # Try to extract version from meta generator tag
+                    m = re.search(
+                        r'<meta[^>]+name=["\']generator["\'][^>]+content=["\']WooCommerce\s+([\d.]+)["\']',
+                        html,
+                        re.IGNORECASE,
+                    )
+                    if m:
+                        version_str = m.group(1)
+                        parts = version_str.split(".")
+                        major = int(parts[0]) if parts else 0
+                        minor = int(parts[1]) if len(parts) > 1 else 0
+                        outdated = major < 8 or (major == 8 and minor < 5)
+                        label = f"WooCommerce {version_str}" + (" (outdated)" if outdated else "")
+                        stack.add(label)
+                    else:
+                        stack.add(platform)
+                else:
+                    stack.add(platform)
+
     return list(stack)

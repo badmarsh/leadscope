@@ -76,25 +76,47 @@ def _load_icp(conn, campaign_id: int) -> tuple[dict, int]:
 
 def _load_few_shot(conn, campaign_id: int, k: int = None) -> list[dict]:
     """
-    Retrieve the k most recent feedback decisions for this campaign.
+    Retrieve the k most recent feedback decisions for this campaign,
+    balanced 50/50 between approved and rejected to prevent LLM score drift.
     Few-shot pools must never cross campaigns (spec requirement).
     """
     if k is None:
         k = config.FEW_SHOT_K
 
-    rows = db.fetchall(
+    half = max(1, k // 2)
+
+    approved_rows = db.fetchall(
         conn,
         """
         SELECT f.decision, f.note, c.domain, c.company_name
         FROM feedback f
         JOIN candidates c ON c.id = f.candidate_id
-        WHERE c.campaign_id = %s
+        WHERE c.campaign_id = %s AND f.decision = 'approved'
         ORDER BY f.created_at DESC
         LIMIT %s
         """,
-        (campaign_id, k),
+        (campaign_id, half),
     )
-    return rows
+    rejected_rows = db.fetchall(
+        conn,
+        """
+        SELECT f.decision, f.note, c.domain, c.company_name
+        FROM feedback f
+        JOIN candidates c ON c.id = f.candidate_id
+        WHERE c.campaign_id = %s AND f.decision = 'rejected'
+        ORDER BY f.created_at DESC
+        LIMIT %s
+        """,
+        (campaign_id, half),
+    )
+    # Interleave: approved[0], rejected[0], approved[1], rejected[1]...
+    combined = []
+    for pair in zip(approved_rows, rejected_rows):
+        combined.extend(pair)
+    # Append any leftovers if one pool is smaller than the other
+    combined.extend(approved_rows[len(rejected_rows):])
+    combined.extend(rejected_rows[len(approved_rows):])
+    return combined[:k]
 
 
 def _log_call(conn, campaign_id: int, provider: str, model: str, tokens_in: int, tokens_out: int) -> None:
@@ -303,6 +325,9 @@ def trigger_scoring(campaign_id: int | None = None) -> dict:
                 elif evidence.get("photo_quality") == "professional":
                     is_shitty = True
                     reject_note = "Auto-rejected: Already uses professional photography (ultra irrelevant)."
+                elif evidence.get("product_type") == "other":
+                    is_shitty = True
+                    reject_note = "Auto-rejected: Product type identified as non-shoe business."
                 elif any(kw in rationale_lower for kw in ["veľká značka", "global brand", "major brand", "big brand"]):
                     is_shitty = True
                     reject_note = "Auto-rejected: Identified as a major/global brand (ultra irrelevant)."

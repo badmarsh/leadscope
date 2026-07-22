@@ -23,6 +23,7 @@ export async function POST(req: Request) {
         c.id as candidate_id,
         c.campaign_id,
         l.draft_email,
+        l.cold_email_hook,
         c.company_name,
         c.domain,
         e.rationale,
@@ -53,6 +54,14 @@ export async function POST(req: Request) {
     }
 
     // 3. Construct prompt
+    const coldHook = (lead.cold_email_hook as string | null) ?? null
+
+    const hookSection = coldHook
+      ? `\nPre-computed personalized opening hook (USE THIS as the opening sentence verbatim or
+    only lightly paraphrased — it was written in the site's own language based on actual
+    product photos analyzed by a vision model):\n"${coldHook}"\n`
+      : ""
+
     const prompt = `You are an expert SDR (Sales Development Representative).
 Your task is to write a highly personalized, concise cold outreach email to ${lead.company_name} (${lead.domain}).
 
@@ -64,8 +73,11 @@ ${lead.rationale || "N/A"}
 
 Reviewer Note:
 ${lead.feedback_note || "N/A"}
-
-Write a short, engaging email (max 4-5 sentences) that hooks the reader, references our reason for reaching out based on their evaluation, and includes a soft call to action. Keep it professional but conversational. Do not include subject line in the output, just the email body.
+${hookSection}
+Write a short, engaging email (max 4-5 sentences) that hooks the reader, references our reason
+for reaching out based on their evaluation, and includes a soft call to action.
+${coldHook ? "Start with the pre-computed opening hook above." : ""}
+Keep it professional but conversational. Do not include subject line in the output, just the email body.
 Please write the email in Slovak language as requested by the user previously.`
 
     // 4. Call shared LLM client
