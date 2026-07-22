@@ -1,10 +1,18 @@
+import os
+import sys
 import pytest
 from unittest.mock import MagicMock
-from services.stages.stage5 import _enrich_info
+
+# Path setup — allow importing from services/stages without installing
+STAGES_DIR = os.path.join(os.path.dirname(__file__), "..")
+if STAGES_DIR not in sys.path:
+    sys.path.insert(0, STAGES_DIR)
+
+from stage5 import _enrich_info
 
 def test_enrich_info_prompt(mocker):
     # Mock llm.chat_json on the imported reference in stage5
-    mock_chat = mocker.patch('services.stages.stage5.llm.chat_json', return_value=({"email": "test@test.com"}, "", ""))
+    mock_chat = mocker.patch('stage5.llm.chat_json', return_value=({"email": "test@test.com"}, 10, 5))
     
     domain = "example.com"
     company_name = "Example Corp"

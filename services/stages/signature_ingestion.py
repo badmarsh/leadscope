@@ -1,12 +1,17 @@
 import os
 import sys
 import json
+import logging
 import requests
 import psycopg2
 from pydantic import BaseModel
 from typing import List, Optional
 from google import genai
 from google.genai import types
+
+import config
+
+logger = logging.getLogger(__name__)
 
 DATABASE_URL = os.environ.get("DATABASE_URL")
 FIRECRAWL_ENDPOINT = os.environ.get("FIRECRAWL_ENDPOINT", "https://api.firecrawl.dev")
@@ -35,7 +40,7 @@ def scrape_with_firecrawl(url: str) -> str:
             return f.read()
 
     if not FIRECRAWL_API_KEY:
-        print("No FIRECRAWL_API_KEY, falling back to basic requests/BeautifulSoup...")
+        logger.warning("No FIRECRAWL_API_KEY, falling back to basic requests/BeautifulSoup...")
         r = requests.get(url, timeout=15)
         r.raise_for_status()
         from bs4 import BeautifulSoup
@@ -110,18 +115,18 @@ def extract_signatures(markdown: str) -> tuple[List[Signature], int, int]:
         return result.signatures, tokens_in, tokens_out
     except Exception as e:
         content = response.choices[0].message.content if response.choices else "No content"
-        print(f"Failed to parse LLM output: {e}\nRaw output: {content}")
+        logger.warning("Failed to parse LLM output: %s\nRaw output: %s", e, content)
         return [], tokens_in, tokens_out
 
 def ingest_url(url: str):
-    print(f"\nIngesting {url}...")
+    logger.info("Ingesting %s...", url)
     conn = get_db()
     cur = conn.cursor()
 
     cur.execute("SELECT id FROM campaigns WHERE slug = 'wp-remediation'")
     row = cur.fetchone()
     if not row:
-        print("wp-remediation campaign not found in DB.")
+        logger.error("wp-remediation campaign not found in DB.")
         conn.close()
         return
     campaign_id = row[0]
@@ -129,11 +134,11 @@ def ingest_url(url: str):
     try:
         markdown = scrape_with_firecrawl(url)
     except Exception as e:
-        print(f"Scrape failed: {e}")
+        logger.warning("Scrape failed: %s", e)
         conn.close()
         return
 
-    print(f"Scraped {len(markdown)} chars. Extracting signatures...")
+    logger.info("Scraped %s chars. Extracting signatures...", len(markdown))
     signatures, tokens_in, tokens_out = extract_signatures(markdown)
     
     inserted_count = 0
@@ -148,7 +153,7 @@ def ingest_url(url: str):
         """, (campaign_id, sig.snippet, sig.malware_family, db_url, sig.confidence))
         if cur.rowcount > 0:
             inserted_count += 1
-            print(f"  + Inserted snippet (family: {sig.malware_family})")
+            logger.info("  + Inserted snippet (family: %s)", sig.malware_family)
 
     cost = (tokens_in / 1_000_000 * 0.10) + (tokens_out / 1_000_000 * 0.40)
     
@@ -157,10 +162,11 @@ def ingest_url(url: str):
         VALUES (%s, 'signature_ingestion', 'gemini', 'gemini-3-flash', %s, %s, %s)
     """, (campaign_id, tokens_in, tokens_out, cost))
 
-    print(f"Done. Extracted {len(signatures)} total, inserted {inserted_count} new. Logged API call ({tokens_in} in / {tokens_out} out).")
+    logger.info("Done. Extracted %s total, inserted %s new. Logged API call (%s in / %s out).", len(signatures), inserted_count, tokens_in, tokens_out)
     conn.close()
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s — %(message)s")
     urls = sys.argv[1:]
     if not urls:
         print("Usage: python signature_ingestion.py <url1> [url2] ...")

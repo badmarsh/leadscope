@@ -36,7 +36,8 @@ export async function GET(request: NextRequest) {
   if (statusFilter) values.push(statusFilter)
 
   const page = parseInt(searchParams.get("page") ?? "1", 10)
-  const limit = parseInt(searchParams.get("limit") ?? "200", 10)
+  const rawLimit = parseInt(searchParams.get("limit") ?? "200", 10)
+  const limit = Math.min(Math.max(1, isNaN(rawLimit) ? 200 : rawLimit), 500)
   const offset = (page - 1) * limit
 
   // Count total matching leads

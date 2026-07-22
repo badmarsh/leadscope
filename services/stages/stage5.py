@@ -170,7 +170,7 @@ def _enrich_candidate(candidate: dict, campaign: dict, conn, settings: dict | No
         cooling = db.fetchone(
             conn,
             """
-            SELECT enrichment_attempted_at < now() - interval '%s hours' AS past_cooldown
+            SELECT enrichment_attempted_at < now() - make_interval(hours => %s) AS past_cooldown
             FROM candidates WHERE id = %s
             """,
             (retry_hours, candidate_id),

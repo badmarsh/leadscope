@@ -125,7 +125,6 @@ def score(candidate: dict, campaign: dict, icp: dict, few_shot: list[dict]) -> d
             "matching_segments": result.get("matching_segments", []),
             "disqualifier_hits": result.get("disqualifier_hits", []),
             "pages_scraped": list(pages.keys()),
-            "cached_pages": pages,
         },
         "model_used": model,
         "provider": provider,

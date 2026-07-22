@@ -1,7 +1,15 @@
+import os
+import sys
 import pytest
 import psycopg2
 from unittest.mock import MagicMock
-from services.stages.db import set_stage_status, check_stop_signal
+
+# Path setup — allow importing from services/stages without installing
+STAGES_DIR = os.path.join(os.path.dirname(__file__), "..")
+if STAGES_DIR not in sys.path:
+    sys.path.insert(0, STAGES_DIR)
+
+from db import set_stage_status, check_stop_signal
 
 @pytest.fixture
 def mock_pool(mocker):
@@ -12,7 +20,7 @@ def mock_pool(mocker):
     conn_mock.cursor.return_value.__enter__.return_value = cursor_mock
     pool_mock.getconn.return_value = conn_mock
     
-    mocker.patch('services.stages.db.get_pool', return_value=pool_mock)
+    mocker.patch('db.get_pool', return_value=pool_mock)
     
     return pool_mock, conn_mock, cursor_mock
 
@@ -49,7 +57,7 @@ def test_check_stop_signal_true(mocker):
     cm.__enter__.return_value = conn_mock
     cm.__exit__.return_value = False
     
-    mocker.patch('services.stages.db.get_conn', return_value=cm)
+    mocker.patch('db.get_conn', return_value=cm)
     
     cursor_mock.fetchone.return_value = {"stage1_status": "stopping"}
     
@@ -68,7 +76,7 @@ def test_check_stop_signal_false(mocker):
     cm = MagicMock()
     cm.__enter__.return_value = conn_mock
     cm.__exit__.return_value = False
-    mocker.patch('services.stages.db.get_conn', return_value=cm)
+    mocker.patch('db.get_conn', return_value=cm)
     
     cursor_mock.fetchone.return_value = {"stage2_status": "running"}
     

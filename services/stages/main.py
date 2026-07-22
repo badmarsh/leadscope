@@ -17,14 +17,23 @@ import stage2
 import stage5
 import kb_ingest
 
-os.makedirs("/var/log/app", exist_ok=True)
+log_dir = "/var/log/app"
+try:
+    os.makedirs(log_dir, exist_ok=True)
+    log_file = os.path.join(log_dir, "system.log")
+    with open(log_file, "a") as f:
+        pass
+except (OSError, PermissionError):
+    log_dir = os.path.join(os.path.dirname(__file__), "logs")
+    os.makedirs(log_dir, exist_ok=True)
+    log_file = os.path.join(log_dir, "system.log")
 
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s %(levelname)s %(name)s — %(message)s",
     handlers=[
         logging.StreamHandler(),
-        logging.FileHandler("/var/log/app/system.log")
+        logging.FileHandler(log_file)
     ]
 )
 

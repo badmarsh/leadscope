@@ -97,7 +97,7 @@ class TestModelSelection(unittest.TestCase):
         llm, cfg = self._import_fresh_llm(env)
 
         fake_resp = _make_openai_response('{"score": 75}')
-        with patch("openai.OpenAI") as MockOpenAI:
+        with patch("llm.OpenAI") as MockOpenAI:
             mock_instance = MagicMock()
             mock_instance.chat.completions.create.return_value = fake_resp
             MockOpenAI.return_value = mock_instance
@@ -108,6 +108,24 @@ class TestModelSelection(unittest.TestCase):
 
         self.assertEqual(provider, "gemini")
         self.assertEqual(model_used, "gemini-2.5-flash")
+
+    def test_all_per_task_models_are_configured(self):
+        """regression guard: verify no old/broken models are configured."""
+        env = {
+            "OPENROUTER_API_KEY": "",
+            "DATABASE_URL": "postgresql://x:x@localhost/x",
+            "GEMINI_PROXY_API_KEY": "sk-test",
+            "GEMINI_PROXY_ENDPOINT": "http://localhost:8045",
+        }
+        llm, cfg = self._import_fresh_llm(env)
+        models_in_use = [
+            cfg.GEMINI_MODEL,
+            cfg.SCORER_TEXT_MODEL,
+            cfg.SCORER_VISION_MODEL,
+        ]
+        for model in models_in_use:
+            self.assertNotIn(model, {"gemini-2.5-flash", "gemini-3-flash"},
+                f"Model {model!r} is an old/broken identifier that causes HTTP 400 on the proxy")
 
     def test_model_name_is_not_gemini_3_flash(self):
         """Ensure the broken model name that causes proxy 400s is not the default."""
