@@ -89,20 +89,6 @@ def _upsert_candidate(
         logger.debug("Skipping %s — on do_not_contact list for campaign %s", domain, campaign_id)
         return False
 
-    JUNK_DOMAINS = {
-        "amazon.com", "walmart.com", "ebay.com", "etsy.com", "aliexpress.com", 
-        "target.com", "booking.com", "airbnb.com", "facebook.com", "instagram.com", 
-        "twitter.com", "linkedin.com", "youtube.com", "pinterest.com", "wikipedia.org", 
-        "trustpilot.com", "yelp.com", "apple.com", "microsoft.com", "google.com", 
-        "tiktok.com", "tripadvisor.com", "reddit.com", "x.com", "medium.com"
-    }
-    
-    parts = domain.split(".")
-    base_domain = ".".join(parts[-2:]) if len(parts) >= 2 else domain
-    if domain in JUNK_DOMAINS or base_domain in JUNK_DOMAINS:
-        logger.debug("Skipping %s — known junk marketplace/global domain", domain)
-        return False
-
     rows_affected = db.execute(
         conn,
         """
@@ -238,23 +224,18 @@ def _search_brave(query: str, conn, campaign_id: int) -> list[dict]:
 # ── Keyword search waterfall ───────────────────────────────────────────────────
 
 DEDUP_PROMPT = """
-Given the following web search results (JSON array), extract unique B2B business
-domains and company names.
+You are a ruthless B2B lead generation evaluator. Your ONLY job is to extract unique, independent B2B/B2C business domains from the provided search results.
 
-EXCLUDE (disqualifiers):
-- News sites, blogs, media outlets, opinion/editorial sites
-- Social media platforms (facebook.com, linkedin.com, instagram.com, twitter.com, tiktok.com, etc.)
-- Aggregators, business directories, job boards, portals
-- Wikipedia, government sites (.gov, .muni.*), educational institutions (.edu)
-- Personal blogs (wordpress.com, blogspot.com, medium.com subdomains)
-- E-commerce marketplaces (amazon, ebay, alza, mall.cz, etc.)
-- Results where the domain is a URL shortener, CDN, or tracking pixel host
+CRITICAL DISQUALIFIERS - YOU MUST ABSOLUTELY EXCLUDE THESE:
+1. ANY global e-commerce marketplace (Amazon, Walmart, eBay, Etsy, AliExpress, Target, Alza).
+2. ANY directory, aggregator, or review site (Yelp, Trustpilot, TripAdvisor, Booking.com, Airbnb).
+3. ANY social media platform or network (Facebook, Instagram, Twitter, X, LinkedIn, YouTube, Pinterest, Reddit, TikTok).
+4. ANY informational wiki, news site, or blog (Wikipedia, Medium, WordPress).
+5. ANY massive technology corporation (Google, Apple, Microsoft).
 
 INCLUDE (positive signals):
-- Real B2B businesses with a domain they own and operate
-- Companies that appear to offer a product or service
-- For Hungarian-language queries, prefer .hu TLD domains
-- Businesses with a physical presence indicator (address, phone, contact page, or about page)
+- Real, independent B2B or local businesses with their own standalone domain.
+- For Hungarian-language queries, prefer .hu TLD domains.
 
 Each item must be a real company that could plausibly be a sales lead.
 
