@@ -22,17 +22,17 @@ ICP = {"version": 1, "target_segments": [], "disqualifiers": {}}
 
 
 class TestScoringThresholds:
-    """Business rule: score >= 70 -> approved, score < 40 -> discarded, 40-69 -> pending_review."""
+    """Business rule: score >= min_score -> approved, score < min_score -> discarded."""
 
     @pytest.mark.parametrize("score,expected_status", [
         (70, "approved"),
         (85, "approved"),
         (100, "approved"),
-        (69, "pending_review"),
-        (50, "pending_review"),
-        (40, "pending_review"),
-        (39, "pending_review"),
-        (20, "pending_review"),
+        (69, "approved"),
+        (50, "approved"),
+        (40, "approved"),
+        (39, "approved"),
+        (20, "approved"),
         (19, "discarded"),
         (10, "discarded"),
         (0, "discarded"),

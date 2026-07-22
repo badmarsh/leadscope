@@ -28,10 +28,8 @@ SCORER_REGISTRY = {
 def _status_from_score(score: int, min_score: int = 20, is_shitty: bool = False) -> str:
     if is_shitty or score < min_score:
         return "discarded"
-    elif score >= 70:
-        return "approved"
     else:
-        return "pending_review"
+        return "approved"
 
 
 def _select_scorer(campaign: dict):
@@ -178,7 +176,7 @@ def score_candidate(candidate_id: int) -> dict[str, Any]:
             INSERT INTO evaluations
                 (candidate_id, score, rationale, evidence_urls, evidence_data,
                  model_used, icp_version_used, status)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, 'pending_review')
+            VALUES (%s, %s, %s, %s, %s, %s, %s, 'approved')
             RETURNING id, score, icp_version_used
             """,
             (
@@ -317,19 +315,13 @@ def trigger_scoring(campaign_id: int | None = None) -> dict:
                             (cand["id"],)
                         )
                         logger.info("Auto-rejected candidate %s: %s", cand["id"], reject_note)
-                    elif score >= 70:
+                    else:
                         db.execute(
                             conn,
                             "UPDATE candidates SET status = 'approved' WHERE id = %s",
                             (cand["id"],)
                         )
-                        logger.info("Auto-approved candidate %s (score %s >= 70) for enrichment", cand["id"], score)
-                    else:
-                        db.execute(
-                            conn,
-                            "UPDATE candidates SET status = 'pending_review' WHERE id = %s",
-                            (cand["id"],)
-                        )
+                        logger.info("Auto-approved candidate %s (score %s >= %s) for enrichment", cand["id"], score, min_score)
                 return {"candidate_id": cand["id"], "status": "scored", "score": score}
             except Exception as exc:
                 logger.error("Harness failed for candidate %s: %s", cand["id"], exc)
