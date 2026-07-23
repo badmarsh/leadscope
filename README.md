@@ -16,12 +16,16 @@ A high-performance lead generation, evaluation, and AI-powered intelligence plat
                          │   iron-session Auth │
                          └──────────┬──────────┘
                                     │
-             ┌──────────────────────┼──────────────────────┐
-             │                      │                      │
-   ┌─────────▼─────────┐  ┌─────────▼─────────┐  ┌─────────▼─────────┐
-   │ PostgreSQL DB     │  │ Evaluator Service │  │ Stages Service    │
-   │ (leadscope pool)  │  │ (Python FastAPI)  │  │ (Python FastAPI)  │
-   └───────────────────┘  └───────────────────┘  └───────────────────┘
+    ┌──────────────────────┬────────┴─────────────┬──────────────────────┐
+    │                      │                      │                      │
+┌───▼───────────────┐  ┌───▼───────────────┐  ┌───▼───────────────┐  ┌───▼───────────────┐
+│ PostgreSQL DB     │  │ Evaluator Service │  │ Stages Service    │  │ Crawler Service   │
+│ (leadscope pool)  │  │ (Python FastAPI)  │  │ (Python FastAPI)  │  │ (Crawl4AI)        │
+└─────────▲─────────┘  └───────────────────┘  └───────────────────┘  └───────────────────┘
+          │
+   ┌──────┴──────┐
+   │ n8n (crons) │
+   └─────────────┘
 ```
 
 ---

@@ -115,8 +115,8 @@ export function HelpModal({ isOpen, onClose }: HelpModalProps) {
                   This pipeline targets businesses running outdated WordPress sites.
                 </p>
                 <ul className="list-disc list-inside text-sm text-muted-foreground space-y-1.5 ml-2">
-                  <li><strong>Target Finding:</strong> Uses a Python script to scan PublicWWW for domains matching specific malware code signatures.</li>
-                  <li><strong>Evaluation:</strong> Re-verifies the presence of malware snippets on the live site using Crawl4AI and checks reputation via Google Safe Browsing and VirusTotal APIs.</li>
+                  <li><strong>Target Finding:</strong> Uses a Python script to scan PublicWWW for domains matching specific malware code signatures. <em>Applies vertical filtering to exclude non-commercial/gov sites.</em></li>
+                  <li><strong>Evaluation:</strong> Re-verifies malware on the live site using Crawl4AI, checks reputation via Google Safe Browsing/VirusTotal, uses Wayback Machine for recency (identifying recent cleanups as warm leads), and checks WP versions via RSS for CVE risks.</li>
                   <li><strong>Auto-Discard:</strong> Sites that do not have the signature in the fresh scrape or are conclusively clean score low and are discarded.</li>
                   <li><strong>Enrichment:</strong> Scrapes site with Crawl4AI and generates firmographics along with a cold email hook.</li>
                 </ul>
