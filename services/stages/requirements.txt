@@ -20,3 +20,4 @@ w3lib>=2.2.1
 pypublicwww
 # Periodic background scheduling (watchdog)
 apscheduler>=3.10.0
+email-validator>=2.0.0

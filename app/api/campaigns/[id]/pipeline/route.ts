@@ -74,7 +74,10 @@ export async function POST(
 
       const res = await fetch(url, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "X-Internal-Token": process.env.INTERNAL_API_TOKEN || "" 
+        },
         body: body ? JSON.stringify(body) : undefined,
       })
 
