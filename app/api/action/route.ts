@@ -13,6 +13,18 @@ import { NextRequest, NextResponse } from "next/server"
 import { getIronSession } from "iron-session"
 import { sessionOptions, type SessionData } from "@/lib/session"
 import { query } from "@/lib/db"
+import { z } from "zod"
+import crypto from "crypto"
+
+const actionSchema = z.object({
+  candidate_id: z.number(),
+  decision: z.enum(["approved", "rejected"]),
+  note: z.string().optional(),
+})
+
+const patchSchema = z.object({
+  candidate_id: z.number(),
+})
 
 export async function POST(request: NextRequest) {
   const session = await getIronSession<SessionData>(await cookies(), sessionOptions)
@@ -20,13 +32,29 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
-  const { candidate_id, decision, note } = await request.json()
-
-  if (!candidate_id || !["approved", "rejected"].includes(decision)) {
-    return NextResponse.json({ error: "Invalid request" }, { status: 400 })
+  const body = await request.json().catch(() => ({}))
+  const parsed = actionSchema.safeParse(body)
+  if (!parsed.success) {
+    return NextResponse.json({ error: "Invalid request", details: parsed.error }, { status: 400 })
   }
+  let { candidate_id, decision, note } = parsed.data
 
   const reviewedBy = session.username ?? "dashboard"
+
+  if (decision === "approved") {
+    // Check DNC list
+    const dncCheck: any[] = await query(
+      `SELECT 1 FROM do_not_contact d 
+       JOIN candidates c ON LOWER(c.domain) = LOWER(d.domain) OR c.domain LIKE '%.' || d.domain
+       WHERE c.id = $1 AND (d.campaign_id = c.campaign_id OR d.campaign_id IS NULL)
+       LIMIT 1`,
+      [candidate_id]
+    )
+    if (dncCheck.length > 0) {
+      decision = "rejected"
+      note = (note ? note + " | " : "") + "Auto-rejected: Domain found on DNC list."
+    }
+  }
 
   // Write feedback row
   await query(
@@ -41,6 +69,39 @@ export async function POST(request: NextRequest) {
     [decision, candidate_id],
   )
 
+  if (decision === "approved") {
+    // Deliver webhook if configured in campaign settings
+    const campInfo: any[] = await query(
+      `SELECT camp.settings, c.domain FROM candidates c
+       JOIN campaigns camp ON camp.id = c.campaign_id
+       WHERE c.id = $1`,
+      [candidate_id]
+    )
+    if (campInfo.length > 0) {
+      let settings = campInfo[0].settings
+      if (typeof settings === "string") {
+        try { settings = JSON.parse(settings) } catch(e) { settings = {} }
+      }
+      const webhookUrl = settings?.webhook_url
+      if (webhookUrl) {
+        const tsMinute = Math.floor(Date.now() / 60000)
+        const idempotencyKey = crypto.createHash('sha256').update(`${candidate_id}:${tsMinute}`).digest('hex')
+        try {
+          fetch(webhookUrl, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-LeadScope-Idempotency-Key": idempotencyKey
+            },
+            body: JSON.stringify({ event: "lead_approved", candidate_id, domain: campInfo[0].domain })
+          }).catch(e => console.error("Webhook fetch error:", e))
+        } catch (e) {
+          console.error("Webhook error:", e)
+        }
+      }
+    }
+  }
+
   return NextResponse.json({ ok: true })
 }
 
@@ -50,11 +111,13 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
-  const { candidate_id } = await request.json()
+  const body = await request.json().catch(() => ({}))
+  const parsed = patchSchema.safeParse(body)
 
-  if (!candidate_id) {
-    return NextResponse.json({ error: "Invalid request" }, { status: 400 })
+  if (!parsed.success) {
+    return NextResponse.json({ error: "Invalid request", details: parsed.error }, { status: 400 })
   }
+  const { candidate_id } = parsed.data
 
   // C3: Reset status AND enrichment retry state so Stage 5 will re-attempt.
   // Without resetting enrichment_attempted_at and enrichment_attempt_count,

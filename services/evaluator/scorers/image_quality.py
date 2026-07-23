@@ -43,7 +43,7 @@ Domain: {domain}
 Company name: {company_name}
 
 ## Product page text (truncated)
-{scraped_content}
+The text is provided below in the USER DATA section.
 
 ## Product images
 The following {image_count} product image URLs were found. You will see them
@@ -62,6 +62,11 @@ Return JSON with:
 - "issues_found": array of specific photo quality issues (e.g. "low resolution",
   "inconsistent lighting", "cluttered backgrounds", "flat/photo-booth style")
 - "cold_email_hook": 1-2 sentences personalized critique of the photos (e.g. "I loved the layout of your homepage, but the harsh lighting on your main product photos makes the textures hard to see."). Must be in the local language of the site.
+=== END SYSTEM INSTRUCTIONS ===
+
+=== BEGIN USER DATA ===
+{scraped_content}
+=== END USER DATA ===
 """
 
 
@@ -210,6 +215,7 @@ def score(candidate: dict, campaign: dict, icp: dict, few_shot: list[dict]) -> d
             "tech_stack": tech_stack,
             "images_analyzed": images[:8],
             "pages_scraped": list(pages.keys()),
+            "cached_pages": pages_markdown,
         },
         "model_used": model,
         "provider": provider,

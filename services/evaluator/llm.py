@@ -20,8 +20,12 @@ import config
 
 logger = logging.getLogger(__name__)
 
+import re
+
 _or_client: Optional[OpenAI] = None
 _proxy_client: Optional[OpenAI] = None
+_consecutive_failures: int = 0
+MAX_FAILURES_BEFORE_RESET: int = 2
 
 
 def _get_openrouter() -> OpenAI:
@@ -145,11 +149,31 @@ def chat_json(
         lines = stripped.splitlines()
         stripped = "\n".join(lines[1:-1] if lines[-1].strip() == "```" else lines[1:])
 
+    import llm
     try:
         parsed = json.loads(stripped)
+        llm._consecutive_failures = 0
     except json.JSONDecodeError:
-        logger.warning("LLM returned non-JSON; returning raw. First 200: %s", text[:200])
-        parsed = {"_raw": text}
+        # Regex fallback
+        match = re.search(r'\{.*\}', stripped, re.DOTALL)
+        if match:
+            try:
+                parsed = json.loads(match.group(0))
+                llm._consecutive_failures = 0
+            except json.JSONDecodeError:
+                logger.warning("LLM returned non-JSON (regex fallback failed). First 200: %s", text[:200])
+                parsed = {"_raw": text}
+                llm._consecutive_failures += 1
+        else:
+            logger.warning("LLM returned non-JSON; returning raw. First 200: %s", text[:200])
+            parsed = {"_raw": text}
+            llm._consecutive_failures += 1
+            
+        if llm._consecutive_failures >= llm.MAX_FAILURES_BEFORE_RESET:
+            logger.error("Cognitive Continuity: Client context reset triggered due to consecutive failures")
+            llm._or_client = None
+            llm._proxy_client = None
+            llm._consecutive_failures = 0
 
     return parsed, ti, to, use_model, provider
 
@@ -255,9 +279,30 @@ def chat_vision(
         lines = stripped.splitlines()
         stripped = "\n".join(lines[1:-1] if lines[-1].strip() == "```" else lines[1:])
 
+    import llm
     try:
         parsed = json.loads(stripped)
+        llm._consecutive_failures = 0
     except json.JSONDecodeError:
-        parsed = {"_raw": text}
+        # Regex fallback
+        match = re.search(r'\{.*\}', stripped, re.DOTALL)
+        if match:
+            try:
+                parsed = json.loads(match.group(0))
+                llm._consecutive_failures = 0
+            except json.JSONDecodeError:
+                logger.warning("LLM vision returned non-JSON (regex fallback failed). First 200: %s", text[:200])
+                parsed = {"_raw": text}
+                llm._consecutive_failures += 1
+        else:
+            logger.warning("LLM vision returned non-JSON; returning raw. First 200: %s", text[:200])
+            parsed = {"_raw": text}
+            llm._consecutive_failures += 1
+
+        if llm._consecutive_failures >= llm.MAX_FAILURES_BEFORE_RESET:
+            logger.error("Cognitive Continuity: Client context reset triggered due to consecutive failures")
+            llm._or_client = None
+            llm._proxy_client = None
+            llm._consecutive_failures = 0
 
     return parsed, ti, to, use_model, provider

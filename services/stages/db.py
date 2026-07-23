@@ -117,6 +117,29 @@ def set_stage_status(campaign_id: int, stage: str, status: str):
         get_pool().putconn(conn)
 
 
+def acquire_stage_lock(campaign_id: int, stage: str) -> bool:
+    """Atomic acquire: returns True only if we successfully transitioned idle→running."""
+    _validate_stage(stage)
+    conn = get_pool().getconn()
+    try:
+        conn.autocommit = True
+        with conn.cursor() as cur:
+            cur.execute(
+                f"UPDATE campaigns SET {stage}_status = 'running', "
+                f"{stage}_last_run = NOW() "
+                f"WHERE id = %s AND {stage}_status != 'running' "
+                f"RETURNING id",
+                (campaign_id,),
+            )
+            return cur.rowcount == 1
+    except Exception as exc:
+        logger.warning("acquire_stage_lock failed: %s", exc)
+        return False
+    finally:
+        get_pool().putconn(conn)
+
+
+
 def check_stop_signal(campaign_id: int, stage: str) -> bool:
     """
     Check if the stage status has been manually set to 'stopping'.

@@ -59,7 +59,9 @@ def run(campaign_id: int) -> dict[str, Any]:
     Fix C2/H4: entire logic runs inside a single `with db.get_conn() as conn:` block
     so the connection is not returned to the pool prematurely.
     """
-    db.set_stage_status(campaign_id, "stage1", "running")
+    if not db.acquire_stage_lock(campaign_id, "stage1"):
+        logger.info("Stage 1 is already running for campaign %s", campaign_id)
+        return {"status": "skipped", "reason": "already running"}
     try:
         with db.get_conn() as conn:
             # ── 1. Load campaign ──────────────────────────────────────────────────

@@ -62,7 +62,7 @@ def _is_do_not_contact(conn, domain: str, campaign_id: int) -> bool:
         conn,
         """
         SELECT 1 FROM do_not_contact
-        WHERE (%s = domain OR %s LIKE '%%.' || domain)
+        WHERE (LOWER(%s) = LOWER(domain) OR %s LIKE '%%.' || domain)
           AND (campaign_id = %s OR campaign_id IS NULL)
         LIMIT 1
         """,
@@ -144,7 +144,8 @@ def _search_exa(query: str, conn, campaign_id: int) -> list[dict]:
         return []
     try:
         exa = Exa(api_key=config.EXA_API_KEY)
-        results = exa.search_and_contents(query, type="auto", use_autoprompt=False, num_results=10)
+        # Assuming the SDK passes **kwargs to requests or supports timeout
+        results = exa.search_and_contents(query, type="auto", use_autoprompt=False, num_results=10, timeout=15)
         cost_log.log_call(conn, "stage2", "exa", campaign_id=campaign_id, query_count=1)
         return [
             {"url": r.url, "title": getattr(r, "title", ""), "snippet": getattr(r, "text", "")[:300]}
@@ -161,7 +162,7 @@ def _search_tavily(query: str, conn, campaign_id: int) -> list[dict]:
         return []
     try:
         client = TavilyClient(api_key=config.TAVILY_API_KEY)
-        resp = client.search(query, max_results=10)
+        resp = client.search(query, max_results=10, timeout=15)
         cost_log.log_call(conn, "stage2", "tavily", campaign_id=campaign_id, query_count=1)
         return [
             {"url": r.get("url", ""), "title": r.get("title", ""), "snippet": r.get("content", "")[:300]}
@@ -655,7 +656,9 @@ def _signature_search(campaign_id: int, conn) -> dict:
 
 def run(campaign_id: int) -> dict:
     """Run Stage 2 for a specific campaign. Routes on finder_type."""
-    db.set_stage_status(campaign_id, "stage2", "running")
+    if not db.acquire_stage_lock(campaign_id, "stage2"):
+        logger.info("Stage 2 is already running for campaign %s", campaign_id)
+        return {"status": "skipped", "reason": "already running"}
     try:
         with db.get_conn() as conn:
             campaign = db.fetchone(

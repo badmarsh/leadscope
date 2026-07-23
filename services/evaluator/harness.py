@@ -178,6 +178,42 @@ def score_candidate(candidate_id: int) -> dict[str, Any]:
         if not scorer_fn:
             raise ValueError(f"Unknown evaluator_type: {evaluator_type!r}")
 
+        # Check DNC list
+        is_dnc = db.fetchone(
+            conn,
+            """
+            SELECT 1 FROM do_not_contact
+            WHERE (LOWER(%s) = LOWER(domain) OR %s LIKE '%%.' || domain)
+              AND (campaign_id = %s OR campaign_id IS NULL)
+            LIMIT 1
+            """,
+            (candidate["domain"], candidate["domain"], candidate["campaign_id"]),
+        )
+        if is_dnc:
+            db.execute(conn, "UPDATE candidates SET status = 'discarded' WHERE id = %s", (candidate_id,))
+            return {"candidate_id": candidate_id, "score": 0, "rationale": "Domain is on Do Not Contact list."}
+
+        # Check for duplicates using safe interval arithmetic
+        dup = db.fetchone(
+            conn,
+            """
+            SELECT id FROM candidates
+            WHERE domain = %s AND campaign_id = %s AND id != %s
+              AND created_at > NOW() - (30 * INTERVAL '1 day')
+            ORDER BY created_at DESC LIMIT 1
+            """,
+            (candidate["domain"], candidate["campaign_id"], candidate_id)
+        )
+        if dup:
+            import json
+            dup_id_json = json.dumps(int(dup["id"]))
+            db.execute(
+                conn, 
+                "UPDATE candidates SET status = 'duplicate', duplicate_of_candidate_id = %s WHERE id = %s",
+                (dup_id_json, candidate_id)
+            )
+            return {"candidate_id": candidate_id, "score": 0, "rationale": f"Duplicate of candidate {dup['id']} within 30 days."}
+
         # 3. Load current ICP version
         icp, icp_version = _load_icp(conn, campaign["id"])
 
@@ -279,15 +315,24 @@ def trigger_scoring(campaign_id: int | None = None) -> dict:
     
     # Pre-fetch settings for all involved campaigns to avoid scope issues
     campaign_settings = {}
-    with db.get_conn() as conn:
-        for cid in campaign_ids:
+    
+    # We must filter out campaigns we couldn't acquire lock for, so we don't process their candidates
+    locked_campaign_ids = set()
+    for cid in campaign_ids:
+        if not db.acquire_stage_lock(cid, "stage3"):
+            logger.info("Stage 3 already running for campaign %s", cid)
+            continue
+        locked_campaign_ids.add(cid)
+        with db.get_conn() as conn:
             camp = db.fetchone(conn, "SELECT settings FROM campaigns WHERE id = %s", (cid,))
             if camp:
                 cs = json.loads(camp["settings"]) if isinstance(camp.get("settings"), str) else (camp.get("settings") or {})
                 campaign_settings[cid] = cs
             else:
                 campaign_settings[cid] = {}
-            db.set_stage_status(cid, "stage3", "running")
+                
+    # Filter candidates to only those belonging to locked campaigns
+    new_candidates = [cand for cand in new_candidates if cand["campaign_id"] in locked_campaign_ids]
 
     try:
         results = []
@@ -316,9 +361,15 @@ def trigger_scoring(campaign_id: int | None = None) -> dict:
                 evidence = result.get("evidence_data", {})
                 rationale_lower = result.get("rationale", "").lower()
 
-                if "jenex" in domain or "jenex" in company_name:
+                blocked_terms = cand_settings.get("blocked_domain_terms", [])
+                if isinstance(blocked_terms, str):
+                    blocked_terms = [t.strip().lower() for t in blocked_terms.split(",") if t.strip()]
+                elif isinstance(blocked_terms, list):
+                    blocked_terms = [str(t).lower() for t in blocked_terms]
+
+                if any(t in domain for t in blocked_terms) or any(t in company_name for t in blocked_terms):
                     is_shitty = True
-                    reject_note = "Auto-rejected: JENEX company detected."
+                    reject_note = f"Auto-rejected: Matches blocked term from campaign settings."
                 elif score < min_score:
                     is_shitty = True
                     reject_note = f"Auto-rejected: Ultra irrelevant or no data retrieved (score {score} < {min_score})."

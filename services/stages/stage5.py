@@ -35,6 +35,7 @@ import db
 import cost_log
 import llm
 # STABILIZATION FIX: Extracted shared crawler client to break circular dependencies
+import email_validator
 import crawler_client
 from crawler_client import crawler_scrape as _crawler_scrape, CONTACT_PATHS
 
@@ -150,9 +151,9 @@ def _normalize_phone(raw_phone: Optional[str], default_region: str = "SK") -> Op
 
 EXTRACT_PROMPT = """
 You are enriching a business lead from their website content.
+
+=== BEGIN SYSTEM INSTRUCTIONS ===
 Company: {company_name} ({domain})
-Page content (markdown):
-{page_text}
 
 The following data was ALREADY extracted deterministically — do NOT override it unless you have stronger evidence:
 Pre-extracted: {pre_extracted}
@@ -173,6 +174,11 @@ Extract the following (fill in gaps not already covered by pre-extracted data):
 Return ONLY valid JSON with keys: "email", "name", "phone", "products_sold", "estimated_size", "estimated_revenue", "estimated_traffic", "report", "firmographics", "buying_power_signals", "tech_stack".
 No prose outside the JSON.
 CRITICAL: "report" and "products_sold" MUST be written in Slovak language.
+=== END SYSTEM INSTRUCTIONS ===
+
+=== BEGIN USER DATA ===
+{page_text}
+=== END USER DATA ===
 """
 
 
@@ -364,6 +370,8 @@ def _enrich_candidate(candidate: dict, campaign: dict, conn, settings: dict | No
     existing_evidence_images = eval_evidence.get("images_analyzed") or []
     merged_images = list(dict.fromkeys(existing_evidence_images + (crawl_images or [])))[:20]
 
+    email_quality = email_validator.classify_email(email) if email else None
+
     # ── Insert into leads ─────────────────────────────────────────────────────
     db.execute(
         conn,
@@ -372,9 +380,9 @@ def _enrich_candidate(candidate: dict, campaign: dict, conn, settings: dict | No
             candidate_id, campaign_id, contact_email, contact_name,
             contact_phone, screenshot_url, products_sold, enrichment_report,
             estimated_size, estimated_revenue, estimated_traffic,
-            firmographics, buying_power_signals, tech_stack, cold_email_hook
+            firmographics, buying_power_signals, tech_stack, cold_email_hook, email_quality
         )
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         ON CONFLICT (candidate_id) DO UPDATE SET
             contact_email     = COALESCE(EXCLUDED.contact_email,     leads.contact_email),
             contact_name      = COALESCE(EXCLUDED.contact_name,      leads.contact_name),
@@ -392,10 +400,11 @@ def _enrich_candidate(candidate: dict, campaign: dict, conn, settings: dict | No
             tech_stack        = CASE WHEN cardinality(EXCLUDED.tech_stack) > 0
                                      THEN EXCLUDED.tech_stack ELSE leads.tech_stack END,
             cold_email_hook   = COALESCE(EXCLUDED.cold_email_hook,   leads.cold_email_hook),
+            email_quality     = COALESCE(EXCLUDED.email_quality,     leads.email_quality),
             enriched_at       = now()
         """,
         (candidate_id, campaign_id, email, contact_name, phone, screenshot_url, products_sold, report,
-         est_size, est_rev, est_traffic, json.dumps(firmographics), buying_power_signals, combined_tech_stack, cold_email_hook),
+         est_size, est_rev, est_traffic, json.dumps(firmographics), buying_power_signals, combined_tech_stack, cold_email_hook, email_quality),
     )
 
     # Update evaluations evidence with merged product images for dashboard display
@@ -497,7 +506,7 @@ def run() -> dict:
             FROM candidates c
             JOIN campaigns camp ON camp.id = c.campaign_id
             LEFT JOIN leads l ON l.candidate_id = c.id
-            WHERE c.status IN ('evaluated', 'pending_review', 'approved', 'rejected')
+            WHERE c.status IN ('evaluated', 'pending_review', 'approved')
             ORDER BY c.created_at ASC
             """,
         )
@@ -505,7 +514,9 @@ def run() -> dict:
     campaign_ids = {c["campaign_id"] for c in approved}
     logger.info("Stage 5: Fetched %d candidates across %d campaigns", len(approved), len(campaign_ids))
     for cid in campaign_ids:
-        db.set_stage_status(cid, "stage5", "running")
+        if not db.acquire_stage_lock(cid, "stage5"):
+            logger.info("Stage 5 already running for campaign %s", cid)
+            continue
 
     try:
         results = []

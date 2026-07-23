@@ -41,7 +41,7 @@ still active based on fresh evidence provided below.
 {signatures_json}
 
 ## Fresh Playwright scrape of the site (re-verification via Crawl4AI)
-{scraped_content}
+The scraped content is provided below in the USER DATA section.
 
 ## Re-verification result
 Snippet still present in fresh Playwright scrape: {snippet_confirmed}
@@ -85,6 +85,11 @@ Return JSON with:
 - "malware_family": string — the malware family name (e.g. "SocGholish", "Balada Injector")
 - "confidence": "high" | "medium" | "low"
 - "recommendation": "remediation_candidate" | "needs_manual_check" | "likely_clean" | "warm_lead_cleanup_in_progress"
+=== END SYSTEM INSTRUCTIONS ===
+
+=== BEGIN USER DATA ===
+{scraped_content}
+=== END USER DATA ===
 """
 
 
@@ -474,13 +479,14 @@ def score(candidate: dict, campaign: dict, icp: dict, few_shot: list[dict]) -> d
         "rationale": result.get("rationale", ""),
         "evidence_urls": list(pages.keys()),
         "evidence_data": {
-            "snippet_confirmed": result.get("snippet_confirmed", snippet_confirmed),
+            "snippet_confirmed": snippet_confirmed,
             "malware_family": result.get("malware_family", "unknown"),
             "confidence": result.get("confidence", "low"),
             "recommendation": result.get("recommendation", "needs_manual_check"),
             "matched_signatures": matched_sigs,
             "found_in_fresh_scrape": found_snippets,
             "pages_scraped": list(pages.keys()),
+            "cached_pages": pages,
             "safe_browsing": safe_browsing,
             "virustotal": virustotal,
             "wayback": wayback,
