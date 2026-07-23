@@ -107,6 +107,7 @@ def test_score_early_exit_dead_site(mock_llm, mock_firecrawl):
 def test_score_fallback_to_markdown_images(mock_llm, mock_firecrawl):
     mock_firecrawl.scrape_domain_pages.return_value = {"http://example.com": {"markdown": "![img](markdown.jpg)", "html": "<html></html>"}}
     mock_firecrawl.extract_product_grid_images_via_crawler.return_value = []
+    mock_firecrawl.extract_product_grid_images.return_value = []
     mock_firecrawl.extract_image_urls.return_value = ["http://example.com/markdown.jpg"]
     mock_llm.chat_vision.return_value = ({"score": 80, "photo_quality": "poor", "business_activity": "active", "product_count_estimate": 10}, 10, 5, "gemini-2.5-flash", "gemini")
 

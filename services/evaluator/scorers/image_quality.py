@@ -139,8 +139,14 @@ def score(candidate: dict, campaign: dict, icp: dict, few_shot: list[dict]) -> d
         all_images = firecrawl_client.extract_product_grid_images_via_crawler(product_url)
         
     if not all_images:
-        logger.warning("LLM extraction failed or returned 0 images. Falling back to simple markdown extraction.")
+        logger.warning("LLM extraction failed or returned 0 images. Falling back to HTML/Markdown extraction.")
         for data in pages.values():
+            html_content = data.get("html", "")
+            if html_content:
+                html_images = firecrawl_client.extract_product_grid_images(html_content)
+                if html_images:
+                    all_images.extend(html_images)
+                    continue
             all_images.extend(firecrawl_client.extract_image_urls(data.get("markdown", ""), evaluator_type="image_quality"))
             
     # Deduplicate and limit
