@@ -69,8 +69,7 @@ export async function POST(
     }
 
     try {
-      // First set status to running in DB so UI updates instantly
-      await query(`UPDATE campaigns SET ${stage}_status = 'running' WHERE id = $1`, [campaignId])
+      // The backend acquires the lock atomatically; we do not pre-emptively set status to running
 
       const res = await fetch(url, {
         method: "POST",
@@ -82,16 +81,14 @@ export async function POST(
       })
 
       if (!res.ok) {
-        // Revert status on error
-        await query(`UPDATE campaigns SET ${stage}_status = 'idle' WHERE id = $1`, [campaignId])
+        // We do not revert status here, backend controls it.
         const errText = await res.text()
         return NextResponse.json({ error: `Pipeline trigger failed: ${errText}` }, { status: res.status })
       }
 
       return NextResponse.json({ ok: true, message: "Pipeline started" })
     } catch (err: unknown) {
-      // Revert status on error
-      await query(`UPDATE campaigns SET ${stage}_status = 'idle' WHERE id = $1`, [campaignId])
+      // We do not revert status here, backend controls it.
       const message = err instanceof Error ? err.message : String(err)
       return NextResponse.json({ error: `Failed to connect to pipeline service: ${message}` }, { status: 500 })
     }
