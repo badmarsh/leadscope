@@ -205,7 +205,6 @@ def score_candidate(candidate_id: int) -> dict[str, Any]:
             (candidate["domain"], candidate["campaign_id"], candidate_id)
         )
         if dup:
-            import json
             dup_id_json = json.dumps(int(dup["id"]))
             db.execute(
                 conn, 
