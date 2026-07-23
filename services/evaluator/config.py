@@ -29,6 +29,11 @@ STAGE5_MODEL: str = os.environ.get("STAGE5_MODEL", "gemini-3.6-flash-low")
 # Vision model for image_quality scorer (legacy alias kept for backwards compat)
 VISION_MODEL: str = os.environ.get("VISION_MODEL", SCORER_VISION_MODEL)
 
+# ── Cognitive Continuity Harness ─────────────────────────────────────────────
+LLM_MAX_REPAIR_ATTEMPTS: int = int(os.environ.get("LLM_MAX_REPAIR_ATTEMPTS", "2"))
+LLM_DEGRADATION_RESET_THRESHOLD: int = int(os.environ.get("LLM_DEGRADATION_RESET_THRESHOLD", "3"))
+LLM_ANCHOR_SCHEMA_IN_SYSTEM: bool = os.environ.get("LLM_ANCHOR_SCHEMA_IN_SYSTEM", "true").lower() == "true"
+
 # ── Firecrawl (still used by content_relevance + image_quality scorers) ────────
 FIRECRAWL_ENDPOINT: str = os.environ.get("FIRECRAWL_ENDPOINT", "https://api.firecrawl.dev")
 FIRECRAWL_API_KEY: str = os.environ.get("FIRECRAWL_API_KEY", "")

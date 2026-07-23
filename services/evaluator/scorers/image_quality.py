@@ -183,13 +183,14 @@ def score(candidate: dict, campaign: dict, icp: dict, few_shot: list[dict]) -> d
         image_count=len(images),
     )
 
+    req_fields = ["score", "rationale", "cold_email_hook", "photo_quality", "product_type", "evidence_urls"]
     # Use vision model if we have images, otherwise text-only
     if images:
         result, ti, to, model, provider = llm.chat_vision(
-            prompt, images, temperature=0.2
+            prompt, images, temperature=0.2, required_fields=req_fields
         )
     else:
-        result, ti, to, model, provider = llm.chat_json(prompt, temperature=0.2)
+        result, ti, to, model, provider = llm.chat_json(prompt, temperature=0.2, required_fields=req_fields)
 
     if "_raw" in result:
         logger.warning("image_quality scorer got non-JSON response")

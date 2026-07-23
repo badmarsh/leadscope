@@ -227,6 +227,19 @@ def score_candidate(candidate_id: int) -> dict[str, Any]:
         )
         result = scorer_fn(candidate, campaign, icp, few_shot)
 
+        if result.get("_raw") or (isinstance(result.get("evidence_data"), dict) and result["evidence_data"].get("raw_response")):
+            logger.error(
+                "Cognitive failure for candidate %s (domain=%s): LLM returned _raw after all retries. "
+                "Resetting status to 'new' for retry on next run.",
+                candidate_id, candidate["domain"],
+            )
+            db.execute(
+                conn,
+                "UPDATE candidates SET status = 'new' WHERE id = %s",
+                (candidate_id,),
+            )
+            return {"candidate_id": candidate_id, "score": 0, "rationale": "LLM cognitive failure — will retry."}
+
         # 6. Write to evaluations
         eval_row = db.execute_returning(
             conn,

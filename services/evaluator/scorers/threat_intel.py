@@ -452,7 +452,11 @@ def score(candidate: dict, campaign: dict, icp: dict, few_shot: list[dict]) -> d
         few_shot_examples=few_shot_str,
     )
 
-    result, ti, to, model, provider = llm.chat_json(prompt, temperature=0.1)
+    result, ti, to, model, provider = llm.chat_json(
+        prompt,
+        temperature=0.1,
+        required_fields=["score", "rationale", "confidence", "snippet_confirmed", "recommendation", "evidence_urls"]
+    )
 
     if "_raw" in result:
         logger.warning("threat_intel scorer: LLM returned non-JSON response for domain=%s", domain)

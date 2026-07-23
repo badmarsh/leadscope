@@ -25,7 +25,6 @@ import re
 _or_client: Optional[OpenAI] = None
 _proxy_client: Optional[OpenAI] = None
 _consecutive_failures: int = 0
-MAX_FAILURES_BEFORE_RESET: int = 2
 
 
 def _get_openrouter() -> OpenAI:
@@ -78,18 +77,36 @@ def _call_with_retry(client: OpenAI, max_retries: int = 5, **kwargs):
             _time.sleep(wait)
 
 
+def _anchor_system_prompt(system_prompt: str, required_fields: list[str] | None) -> str:
+    """Append required JSON schema reminder to END of system prompt for recency bias."""
+    if not required_fields:
+        return system_prompt
+    fields_json = json.dumps({f: "..." for f in required_fields})
+    anchor = (
+        "\n\n"
+        "=== MANDATORY JSON SCHEMA (READ LAST) ===\n"
+        f"Your response MUST be a JSON object with ALL of these keys: {fields_json}\n"
+        "Do NOT omit any key. Return ONLY raw JSON. No markdown fences.\n"
+        "=== END MANDATORY JSON SCHEMA ==="
+    )
+    return system_prompt + anchor
+
+
 def chat_json(
     user_prompt: str,
     system_prompt: str = "You are a helpful assistant. Return only valid JSON.",
     temperature: float = 0.1,
     max_tokens: int = 4096,
     model: Optional[str] = None,
+    required_fields: list[str] | None = None,
 ) -> tuple[Any, int, int, str, str]:
     """
     Call LLM expecting JSON output.
     Returns (parsed_obj, tokens_in, tokens_out, model_used, provider).
     Tries OpenRouter first, falls back to local proxy.
     """
+    global _consecutive_failures, _or_client, _proxy_client
+    system_prompt = _anchor_system_prompt(system_prompt, required_fields)
     # Choose primary provider (prioritize local proxy if configured)
     if config.GEMINI_PROXY_ENDPOINT:
         client = _get_proxy()
@@ -149,31 +166,41 @@ def chat_json(
         lines = stripped.splitlines()
         stripped = "\n".join(lines[1:-1] if lines[-1].strip() == "```" else lines[1:])
 
-    import llm
     try:
         parsed = json.loads(stripped)
-        llm._consecutive_failures = 0
+        _consecutive_failures = 0
     except json.JSONDecodeError:
         # Regex fallback
         match = re.search(r'\{.*\}', stripped, re.DOTALL)
         if match:
             try:
                 parsed = json.loads(match.group(0))
-                llm._consecutive_failures = 0
+                _consecutive_failures = 0
             except json.JSONDecodeError:
                 logger.warning("LLM returned non-JSON (regex fallback failed). First 200: %s", text[:200])
                 parsed = {"_raw": text}
-                llm._consecutive_failures += 1
+                _consecutive_failures += 1
         else:
             logger.warning("LLM returned non-JSON; returning raw. First 200: %s", text[:200])
             parsed = {"_raw": text}
-            llm._consecutive_failures += 1
+            _consecutive_failures += 1
             
-        if llm._consecutive_failures >= llm.MAX_FAILURES_BEFORE_RESET:
+        if _consecutive_failures >= config.LLM_DEGRADATION_RESET_THRESHOLD:
             logger.error("Cognitive Continuity: Client context reset triggered due to consecutive failures")
-            llm._or_client = None
-            llm._proxy_client = None
-            llm._consecutive_failures = 0
+            _or_client = None
+            _proxy_client = None
+            _consecutive_failures = 0
+
+    if required_fields and parsed and "_raw" not in parsed:
+        missing = [f for f in required_fields if f not in parsed]
+        if missing:
+            logger.warning("LLM response missing required fields %s — treating as partial failure", missing)
+            _consecutive_failures += 1
+            if _consecutive_failures >= config.LLM_DEGRADATION_RESET_THRESHOLD:
+                logger.error("Cognitive Continuity: Client context reset triggered due to consecutive failures")
+                _or_client = None
+                _proxy_client = None
+                _consecutive_failures = 0
 
     return parsed, ti, to, use_model, provider
 
@@ -185,11 +212,14 @@ def chat_vision(
     temperature: float = 0.1,
     max_tokens: int = 4096,
     model: Optional[str] = None,
+    required_fields: list[str] | None = None,
 ) -> tuple[Any, int, int, str, str]:
     """
     Call a vision-capable LLM with image URLs.
     Returns (parsed_json, tokens_in, tokens_out, model_used, provider).
     """
+    global _consecutive_failures, _or_client, _proxy_client
+    system_prompt = _anchor_system_prompt(system_prompt, required_fields)
     if config.GEMINI_PROXY_ENDPOINT:
         client = _get_proxy()
         use_model = model or config.SCORER_VISION_MODEL
@@ -279,30 +309,40 @@ def chat_vision(
         lines = stripped.splitlines()
         stripped = "\n".join(lines[1:-1] if lines[-1].strip() == "```" else lines[1:])
 
-    import llm
     try:
         parsed = json.loads(stripped)
-        llm._consecutive_failures = 0
+        _consecutive_failures = 0
     except json.JSONDecodeError:
         # Regex fallback
         match = re.search(r'\{.*\}', stripped, re.DOTALL)
         if match:
             try:
                 parsed = json.loads(match.group(0))
-                llm._consecutive_failures = 0
+                _consecutive_failures = 0
             except json.JSONDecodeError:
                 logger.warning("LLM vision returned non-JSON (regex fallback failed). First 200: %s", text[:200])
                 parsed = {"_raw": text}
-                llm._consecutive_failures += 1
+                _consecutive_failures += 1
         else:
             logger.warning("LLM vision returned non-JSON; returning raw. First 200: %s", text[:200])
             parsed = {"_raw": text}
-            llm._consecutive_failures += 1
+            _consecutive_failures += 1
 
-        if llm._consecutive_failures >= llm.MAX_FAILURES_BEFORE_RESET:
+        if _consecutive_failures >= config.LLM_DEGRADATION_RESET_THRESHOLD:
             logger.error("Cognitive Continuity: Client context reset triggered due to consecutive failures")
-            llm._or_client = None
-            llm._proxy_client = None
-            llm._consecutive_failures = 0
+            _or_client = None
+            _proxy_client = None
+            _consecutive_failures = 0
+
+    if required_fields and parsed and "_raw" not in parsed:
+        missing = [f for f in required_fields if f not in parsed]
+        if missing:
+            logger.warning("LLM response missing required fields %s — treating as partial failure", missing)
+            _consecutive_failures += 1
+            if _consecutive_failures >= config.LLM_DEGRADATION_RESET_THRESHOLD:
+                logger.error("Cognitive Continuity: Client context reset triggered due to consecutive failures")
+                _or_client = None
+                _proxy_client = None
+                _consecutive_failures = 0
 
     return parsed, ti, to, use_model, provider

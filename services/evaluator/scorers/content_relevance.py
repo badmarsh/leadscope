@@ -134,12 +134,13 @@ def score(candidate: dict, campaign: dict, icp: dict, few_shot: list[dict]) -> d
             seen.add(u)
             images.append(u)
 
+    req_fields = ["score", "rationale", "evidence_urls", "matching_segments", "disqualifier_hits"]
     if images:
         result, ti, to, model, provider = llm.chat_vision(
-            prompt, images, temperature=0.2
+            prompt, images, temperature=0.2, required_fields=req_fields
         )
     else:
-        result, ti, to, model, provider = llm.chat_json(prompt, temperature=0.2)
+        result, ti, to, model, provider = llm.chat_json(prompt, temperature=0.2, required_fields=req_fields)
 
     if "_raw" in result:
         logger.warning("content_relevance scorer got non-JSON response")
