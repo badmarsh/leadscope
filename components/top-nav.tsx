@@ -4,6 +4,7 @@ import { LogOut, Moon, Radar, Settings, Sun, Database, HelpCircle, Webhook, Lang
 import { campaigns, type CampaignId } from "@/lib/leads-data"
 import { cn } from "@/lib/utils"
 import { useTranslation, type Locale } from "@/lib/i18n"
+import Link from "next/link"
 
 interface TopNavProps {
   activeCampaign: CampaignId
@@ -38,14 +39,14 @@ export function TopNav({
     <header className="sticky top-0 z-30 border-b border-border bg-background/90 backdrop-blur">
       <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3 lg:px-6">
         <div className="flex min-w-0 items-center gap-6">
-          <div className="flex shrink-0 items-center gap-2">
+          <Link href="/" className="flex shrink-0 items-center gap-2">
             <div className="flex size-7 items-center justify-center rounded-md bg-primary text-primary-foreground">
               <Radar className="size-4" aria-hidden="true" />
             </div>
             <span className="hidden text-sm font-semibold tracking-tight text-foreground sm:block">
               {t("nav.title")}
             </span>
-          </div>
+          </Link>
 
           <nav aria-label="Campaigns" className="min-w-0 overflow-x-auto">
             <div role="tablist" className="flex items-center gap-1">
