@@ -16,14 +16,13 @@ GEMINI_PROXY_ENDPOINT: str = os.environ.get("GEMINI_PROXY_ENDPOINT", "http://127
 OPENROUTER_API_KEY: str = os.environ.get("OPENROUTER_API_KEY", "")
 
 # Gemini model string as exposed by the local proxy.
-# Use gemini-3.6-flash-high for the general fallback.
 GEMINI_MODEL: str = os.environ.get("GEMINI_MODEL", "gemini-3.6-flash-high")
 
-# Per-task model overrides — each call site has different complexity requirements
-STAGE1_MODEL: str = os.environ.get("STAGE1_MODEL", "gemini-3.1-pro-low")        # ICP generation — foundational, run once, worth Pro quality
-STAGE2_DEDUP_MODEL: str = os.environ.get("STAGE2_DEDUP_MODEL", "gemini-3.1-flash-lite")  # search result dedup — pure list filtering
-STAGE5_MODEL: str = os.environ.get("STAGE5_MODEL", "gemini-3.6-flash-low")      # enrichment extraction + Slovak sentence
-KB_INGEST_MODEL: str = os.environ.get("KB_INGEST_MODEL", "gemini-3.6-flash-medium")  # malware signature extraction from 15k articles
+# Per-task model overrides
+STAGE1_MODEL: str = os.environ.get("STAGE1_MODEL", "gemini-3.1-pro-low")
+STAGE2_DEDUP_MODEL: str = os.environ.get("STAGE2_DEDUP_MODEL", "gemini-3.1-flash-lite")
+STAGE5_MODEL: str = os.environ.get("STAGE5_MODEL", "gemini-3.6-flash-low")
+KB_INGEST_MODEL: str = os.environ.get("KB_INGEST_MODEL", "gemini-3.6-flash-medium")
 SCORER_TEXT_MODEL: str = os.environ.get("SCORER_TEXT_MODEL", "gemini-3.6-flash-high")
 SCORER_VISION_MODEL: str = os.environ.get("SCORER_VISION_MODEL", "gemini-3.1-pro")
 
@@ -32,10 +31,9 @@ OLLAMA_MODEL: str = os.environ.get("OLLAMA_MODEL", "llama3")
 
 # ── Firecrawl ────────────────────────────────────────────────────────────────
 FIRECRAWL_ENDPOINT: str = os.environ.get("FIRECRAWL_ENDPOINT", "https://api.firecrawl.dev")
-# Search & Data Providers
 FIRECRAWL_API_KEY = os.environ.get("FIRECRAWL_API_KEY", "")
 
-# ── Crawler service (Crawl4AI — self-hosted, replaces Firecrawl for enrichment) ──
+# ── Crawler service (Crawl4AI — self-hosted) ─────────────────────────────────
 CRAWLER_ENDPOINT: str = os.environ.get("CRAWLER_ENDPOINT", "http://crawler:8003")
 
 # ── Search APIs ──────────────────────────────────────────────────────────────
@@ -50,20 +48,22 @@ NETLAS_API_KEY: str = os.environ.get("NETLAS_API_KEY", "")
 AHREFS_API_KEY: str = os.environ.get("AHREFS_API_KEY", "")
 VIRUSTOTAL_API_KEY: str = os.environ.get("VIRUSTOTAL_API_KEY", "")
 HUNTER_API_KEY: str = os.environ.get("HUNTER_API_KEY", "")
+SHODAN_API_KEY: str = os.environ.get("SHODAN_API_KEY", "")
+
+# ── Contact enrichment ────────────────────────────────────────────────────────
+# Apollo.io People Search — person-level contacts with job titles + LinkedIn URLs
+APOLLO_API_KEY: str = os.environ.get("APOLLO_API_KEY", "")
+# Set to "false" to skip Hunter email verification (saves API credits)
+HUNTER_VERIFY_CONTACTS: bool = os.environ.get("HUNTER_VERIFY_CONTACTS", "true").lower() == "true"
 
 # ── Tuning constants ──────────────────────────────────────────────────────────
 MAX_ENRICHMENT_ATTEMPTS: int = int(os.environ.get("MAX_ENRICHMENT_ATTEMPTS", "3"))
 ENRICHMENT_RETRY_HOURS: int = int(os.environ.get("ENRICHMENT_RETRY_HOURS", "24"))
-# Minimum hits before moving to next provider in keyword-search waterfall
 KEYWORD_MIN_HITS: int = int(os.environ.get("KEYWORD_MIN_HITS", "5"))
-# Cooldown window for stale-candidate reopen (days)
 STALE_REOPEN_DAYS: int = int(os.environ.get("STALE_REOPEN_DAYS", "90"))
-# Days before re-running the exact same search query (overridable via campaign settings UI)
 SEARCH_COOLDOWN_DAYS: int = int(os.environ.get("SEARCH_COOLDOWN_DAYS", "30"))
 
 # ── Cost-estimate pricing map (USD per unit) ──────────────────────────────────
-# Update these periodically as provider pricing changes — see §0.4 staleness caveat.
-# Gemini 2.5 Flash pricing (per token at 2024 rates):
 PRICING_MAP = {
     "gemini": {"input_per_token": 0.075 / 1_000_000, "output_per_token": 0.30 / 1_000_000},
     "openrouter": {"input_per_token": 0.003 / 1_000, "output_per_token": 0.015 / 1_000},
@@ -72,11 +72,17 @@ PRICING_MAP = {
     "serper": {"per_query": 0.001},
     "serpapi": {"per_query": 0.001},
     "brave": {"per_query": 0.001},
-    "publicwww": {"per_query": 0.0},   # quota-based, no marginal USD cost
-    "firecrawl": {"per_query": 0.0},   # self-hosted (legacy — being phased out)
-    "crawler": {"per_query": 0.0},     # self-hosted Crawl4AI service
-    "ollama": {"per_query": 0.0},      # local
-    "urlhaus": {"per_query": 0.0},     # free API
-    "urlscan": {"per_query": 0.0},     # free tier
-    "certstream": {"per_query": 0.0},  # free WebSocket feed
+    "publicwww": {"per_query": 0.0},
+    "firecrawl": {"per_query": 0.0},
+    "crawler": {"per_query": 0.0},
+    "ollama": {"per_query": 0.0},
+    "urlhaus": {"per_query": 0.0},
+    "urlscan": {"per_query": 0.0},
+    "certstream": {"per_query": 0.0},
+    "apollo": {"per_query": 0.0},   # credit-based; no USD marginal cost tracked here
+    "shodan": {"per_query": 0.0},   # query-credit-based
+    "malwarebazaar": {"per_query": 0.0},  # free API
 }
+
+# ── Few-shot calibration ─────────────────────────────────────────────────────
+FEW_SHOT_K: int = int(os.environ.get("FEW_SHOT_K", "5"))
