@@ -26,6 +26,7 @@ class Campaign(BaseModel):
     added: date
     stale_after_days: int
     source_url: str
+    signature_defaults: Optional[dict] = None
     publicwww_query: Optional[str] = None
     fit: Optional[str] = None
     location: str
