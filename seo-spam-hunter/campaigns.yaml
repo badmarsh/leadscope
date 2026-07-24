@@ -13,7 +13,7 @@ campaigns:
       hashes: []
       domains: []
     wayback_pivot:
-      enabled: true
+      enabled: false
       match_mime: "text/html"
     notes: >
       Attackers inject thousands of fake Japanese-language pages at gibberish slug paths.
@@ -68,4 +68,4 @@ campaigns:
     urlscan_pivot:
       - 'page.body:"{{ANCHOR_TEXT_KEYWORD}}"'
     virustotal_pivot: { hashes: [], domains: [] }
-    wayback_pivot: { enabled: true }
+    wayback_pivot: { enabled: false }

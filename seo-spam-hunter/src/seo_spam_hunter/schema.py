@@ -34,15 +34,14 @@ class Campaign(BaseModel):
     wayback_pivot: WaybackPivot = Field(default_factory=WaybackPivot)
     notes: Optional[str] = None
 
-    @field_validator("publicwww_query")
-    @classmethod
-    def validate_no_placeholders(cls, v: Optional[str]) -> Optional[str]:
-        if v and "{{" in v and "}}" in v:
-            raise ValueError(
-                f"Campaign contains unresolved placeholder in publicwww_query: {v}. "
-                "Please replace template placeholders before running."
-            )
-        return v
+    @property
+    def is_template(self) -> bool:
+        if self.publicwww_query and "{{" in self.publicwww_query and "}}" in self.publicwww_query:
+            return True
+        for query in self.urlscan_pivot:
+            if "{{" in query and "}}" in query:
+                return True
+        return False
 
     @property
     def is_stale(self) -> bool:
@@ -112,12 +111,15 @@ def freshness_gate(campaigns: List[Campaign], force_stale: bool = False) -> None
     console.print(table)
 
     if has_stale and not force_stale:
-        console.print(
-            "\n[bold red]ERROR: One or more campaigns have passed their stale_after_days threshold![/bold red]"
-        )
-        console.print(
-            "[yellow]IOCs decay over time. Re-run with '--i-know-this-is-stale' flag to proceed with expired campaigns.[/yellow]\n"
-        )
         raise ValueError(
-            "Expired campaigns present. Use --i-know-this-is-stale to proceed."
+            "One or more campaigns are STALE. "
+            "Please update campaigns.yaml with fresh IOCs or run with --i-know-this-is-stale"
         )
+
+    has_template = False
+    for c in campaigns:
+        if c.is_template:
+            has_template = True
+            
+    if has_template:
+        raise ValueError("One or more campaigns are templates (contain unresolved {{ }} placeholders). Please instantiate them first.")

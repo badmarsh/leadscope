@@ -488,15 +488,18 @@ def _keyword_search(campaign_id: int, conn, cooldown_days: int = 30) -> dict:
         queries_run.append(query)
 
         # ── Log this query run ─────────────────────────────────────────────────
-        db.execute(
-            conn,
-            """
-            INSERT INTO search_queries_log (campaign_id, query, query_yield_count)
-            VALUES (%s, %s, %s)
-            ON CONFLICT (campaign_id, query) DO UPDATE SET last_run_at = now(), query_yield_count = EXCLUDED.query_yield_count
-            """,
-            (campaign_id, query, len(hits)),
-        )
+        if len(hits) > 0:
+            db.execute(
+                conn,
+                """
+                INSERT INTO search_queries_log (campaign_id, query, query_yield_count)
+                VALUES (%s, %s, %s)
+                ON CONFLICT (campaign_id, query) DO UPDATE SET last_run_at = now(), query_yield_count = EXCLUDED.query_yield_count
+                """,
+                (campaign_id, query, len(hits)),
+            )
+        else:
+            logger.warning("Query %r yielded 0 hits (likely rate limited). Not logging to cooldown.", query)
 
     # Run HU keywords
     for kw in (icp["keywords_hu"] or []):

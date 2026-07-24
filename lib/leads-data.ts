@@ -86,8 +86,8 @@ export interface CampaignUsage {
 }
 
 export const campaigns: Campaign[] = [
-  { id: "jenex", name: "JENEX HVAC Hungary", shortName: "JENEX", status: "paused" },
-  { id: "shoe-photo", name: "Shoe Photo Upgrade", shortName: "Shoes", status: "paused" },
+  { id: "jenex", name: "JENEX HVAC Hungary", shortName: "JENEX", status: "active" },
+  { id: "shoe-photo", name: "Shoe Photo Upgrade", shortName: "Shoes", status: "active" },
   { id: "wp-remediation", name: "WP Malware Remediation", shortName: "WP Remediation", status: "active" },
 ]
 

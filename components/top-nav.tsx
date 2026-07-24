@@ -83,36 +83,7 @@ export function TopNav({
           </nav>
         </div>
 
-        <div className="flex shrink-0 items-center gap-1.5">
-          <div className="flex items-center gap-1 mr-1 border-r border-border pr-2">
-            <Link
-              href="/wp-hunter"
-              title="WP Compromise Hunter Pipeline"
-              aria-label="WP Compromise Hunter Pipeline"
-              className="flex size-7 items-center justify-center rounded-md text-cyan-600 dark:text-cyan-400 transition-colors hover:bg-cyan-500/15"
-            >
-              <Crosshair className="size-4" />
-            </Link>
-
-            <Link
-              href="/seo-spam-hunter"
-              title="SEO Spam & Backdoor Hunter Pipeline"
-              aria-label="SEO Spam & Backdoor Hunter Pipeline"
-              className="flex size-7 items-center justify-center rounded-md text-amber-600 dark:text-amber-400 transition-colors hover:bg-amber-500/15"
-            >
-              <ShieldAlert className="size-4" />
-            </Link>
-
-            <Link
-              href="/threat-feeds"
-              title="Threat Intel Feeds — CT Log Monitor · URLhaus · ThreatFox"
-              aria-label="Threat Intel Feeds"
-              className="relative flex size-7 items-center justify-center rounded-md text-violet-600 dark:text-violet-400 transition-colors hover:bg-violet-500/15"
-            >
-              <Rss className="size-4" />
-              <span className="absolute top-0.5 right-0.5 size-1.5 rounded-full bg-violet-500" aria-hidden="true" />
-            </Link>
-          </div>
+          <div className="flex shrink-0 items-center gap-1.5">
 
           <button
             onClick={toggleLanguage}

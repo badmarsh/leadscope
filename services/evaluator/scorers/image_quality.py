@@ -9,12 +9,44 @@ import datetime
 import json
 import logging
 import re
+import requests
+from typing import Optional
 
 import config
 import firecrawl_client
 import llm
 
 logger = logging.getLogger(__name__)
+
+def _crawler_scrape(url: str, force_playwright: bool = False) -> tuple[Optional[str], Optional[list]]:
+    """
+    Call the shared Crawl4AI crawler service.
+    Returns (markdown_text, images_list).
+    """
+    endpoint = f"{config.CRAWLER_ENDPOINT.rstrip('/')}/crawl"
+    try:
+        resp = requests.post(
+            endpoint,
+            json={
+                "url": url,
+                "extract_images": True,
+                "force_playwright": force_playwright,
+                "bypass_cache": False,
+                "timeout_ms": 30000,
+            },
+            timeout=45,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        if not data.get("success"):
+            logger.warning("Crawler returned success=false for %s: %s", url, data.get("error"))
+            return None, None
+        markdown = data.get("markdown") or ""
+        images = data.get("images") or []
+        return markdown if markdown else None, images
+    except Exception as exc:
+        logger.warning("Crawler request failed for %s: %s", url, exc)
+        return None, None
 
 SCORING_PROMPT = """
 You are evaluating an e-commerce website as a potential customer for a product
@@ -78,14 +110,74 @@ def score(candidate: dict, campaign: dict, icp: dict, few_shot: list[dict]) -> d
     """
     domain = candidate["domain"]
 
-    # Scrape product pages
-    product_paths = ["", "/products", "/shop", "/termekek", "/webshop", "/catalogue"]
-    pages = firecrawl_client.scrape_domain_pages(domain, paths=product_paths, include_html=True)
+    # Use _discover_product_paths from firecrawl_client to find likely paths
+    product_paths = firecrawl_client._discover_product_paths(domain)
     
-    # pages is {url: {"markdown": md, "html": html}}
-    # Extract markdown text for text-based analysis
-    pages_markdown = {url: data.get("markdown", "") for url, data in pages.items()}
+    pages_markdown = {}
+    all_images = []
     
+    # Try up to 3 paths until we find good images
+    for path in product_paths[:3]:
+        url = f"https://{domain}{path}"
+        # We use force_playwright=True for product grids because they are often JS rendered
+        md, imgs = _crawler_scrape(url, force_playwright=True)
+        if md:
+            pages_markdown[url] = md
+        if imgs:
+            # Prioritize extracted images using existing heuristic
+            imgs = [img.get("src") for img in imgs if isinstance(img, dict) and img.get("src")]
+            all_images.extend(imgs)
+
+    # Pre-process URLs
+    seen = set()
+    valid_urls = []
+    ignore_patterns = [
+        "bat.bing.com", "google-analytics.com", "facebook.com", "twitter.com", "instagram.com", 
+        "x.com", "linkedin.com", "youtube.com", "tiktok.com", "pinterest.com",
+        "pixel", "tracker", ".svg", "logo", "icon", "spinner", "loader", "social",
+        "badge", "trust", "support", "shipping", "payment", "secure", "guarantee", "return",
+        "header", "footer", "banner", "hero", "avatar", "profile", "menu",
+        "partner", "layout", "element", "blog", "gls", "packeta", "szepkartya",
+        "dpd", "mpl-", "foxpost", "cetelem", "mastercard", "visa", "barion", "simplepay",
+        "mastercard", "maestro", "paypal", "apple-pay", "google-pay", "alipay",
+        "slider", "brand", "carousel", "sponsor", "client", "thumb_brand", "swiper",
+        "data:image"
+    ]
+    for u in all_images:
+        if not u or not isinstance(u, str):
+            continue
+        if u.startswith("//"):
+            u = "https:" + u
+        elif u.startswith("/"):
+            u = f"https://{domain}{u}"
+            
+        u = u.replace("%7Bwidth%7D", "800").replace("{width}", "800")
+        is_tracking = any(pattern in u.lower() for pattern in ignore_patterns)
+        
+        if u not in seen and u.startswith("http") and not is_tracking:
+            seen.add(u)
+            valid_urls.append(u)
+
+    def score_url(url: str) -> int:
+        u = url.lower()
+        score = 0
+        if any(w in u for w in ["banner", "hero", "footer", "header", "bg", "background", "menu", "avatar", "profile"]):
+            score -= 50
+        if ".png" in u:
+            score -= 10
+        elif any(ext in u for ext in [".jpg", ".jpeg", ".webp"]):
+            score += 10
+        if any(w in u for w in ["upload", "media", "cdn.shopify.com/s/files", "gallery", "large", "zoom", "thumb"]):
+            score += 30
+        if any(w in u for w in ["product", "item", "shoe", "sneaker", "boot", "shop", "catalog"]):
+            score += 100
+        if "interior" in u or "storefront" in u or "store" in u:
+            score -= 20
+        return score
+
+    valid_urls.sort(key=score_url, reverse=True)
+    all_images = valid_urls[:5] # Keep top 5 images
+
     scraped = "\n\n---\n\n".join(
         f"### {url}\n{text[:1500]}" for url, text in list(pages_markdown.items())[:4]
     )
@@ -114,49 +206,14 @@ def score(candidate: dict, campaign: dict, icp: dict, few_shot: list[dict]) -> d
         return {
             "score": 0,
             "rationale": "Early exit: No social media links and copyright dates appear to be older than 2 years. Site is likely inactive.",
-            "evidence_urls": list(pages.keys()),
+            "evidence_urls": list(pages_markdown.keys()),
             "evidence_data": {"business_activity": "inactive", "photo_quality": "unknown", "tech_stack": tech_stack},
             "model_used": "rules-engine",
             "provider": "local",
             "tokens_in": 0, "tokens_out": 0,
         }
-
-    # Extract image URLs using Crawl4AI LLM Extraction for the first product-like page
-    all_images = []
-    
-    # Try to find a good product page URL first
-    product_url = None
-    for url in pages.keys():
-        if any(w in url.lower() for w in ["/products", "/termekek", "/shop", "/katalog", "/catalog"]):
-            product_url = url
-            break
-            
-    if not product_url and pages:
-        # Fallback to homepage
-        product_url = list(pages.keys())[0]
-
-    if product_url:
-        logger.info("Triggering LLM image extraction for %s", product_url)
-        all_images = firecrawl_client.extract_product_grid_images_via_crawler(product_url)
-        
-    if not all_images:
-        logger.warning("LLM extraction failed or returned 0 images. Falling back to HTML/Markdown extraction.")
-        for data in pages.values():
-            html_content = data.get("html", "")
-            if html_content:
-                html_images = firecrawl_client.extract_product_grid_images(html_content)
-                if html_images:
-                    all_images.extend(html_images)
-                    continue
-            all_images.extend(firecrawl_client.extract_image_urls(data.get("markdown", ""), evaluator_type="image_quality"))
-            
-    # Deduplicate and limit
-    seen = set()
-    images = []
-    for u in all_images:
-        if u not in seen and len(images) < 8:
-            seen.add(u)
-            images.append(u)
+    # Use the images we already selected and limited to top 5
+    images = all_images
 
     # Build few-shot
     few_shot_str = ""

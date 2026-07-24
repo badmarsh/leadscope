@@ -35,14 +35,14 @@ def calculate_wealth_index(domain: str) -> int:
     tld = domain.split('.')[-1].lower()
     if tld in ['lu', 'li', 'mc', 'ch']:
         return 40
-    elif tld in ['us', 'uk', 'co.uk', 'de', 'fr', 'no', 'dk', 'se', 'eu', 'sk', 'cz', 'pl', 'at', 'nl', 'be']:
+    elif tld in ['us', 'uk', 'co.uk', 'de', 'fr', 'no', 'dk', 'se', 'eu', 'sk', 'cz', 'pl', 'hu', 'at', 'nl', 'be']:
         return 30
     elif tld in ['ru', 'cn', 'in', 'br', 'xyz', 'top', 'tk', 'ml']:
         return -50
     return 0
 
 # ── WordPress paths to scan on suspected infected sites ───────────────────────
-WP_PATHS = ["", "/wp-content/", "/wp-includes/"]
+WP_PATHS = ["", "/wp-content/", "/wp-includes/", "/wp-admin/", "/xmlrpc.php"]
 
 SCORING_PROMPT = """
 You are a WordPress security analyst evaluating a website for active malware

@@ -1,6 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useState } from "react"
+import Link from "next/link"
 import { campaigns, type CampaignId, type Lead } from "@/lib/leads-data"
 import { DB_ID_TO_CAMPAIGN, CAMPAIGN_TO_DB_ID } from "@/lib/campaigns"  // M3: shared map
 import { useLeads } from "@/lib/hooks/useLeads"
@@ -18,6 +19,7 @@ import { DoNotContactModal } from "@/components/do-not-contact-modal"
 import { N8nModal } from "@/components/n8n-modal"
 import { LogViewer } from "@/components/LogViewer"
 import { useTranslation } from "@/lib/i18n"
+import { Crosshair, ShieldAlert, Rss } from "lucide-react"
 
 const DARK_MODE_KEY = "leadscope-dark-mode"
 
@@ -327,11 +329,37 @@ export function Dashboard() {
       />
 
       <main className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-6 lg:px-6">
-        <div>
-          <h1 className="text-lg font-semibold tracking-tight text-foreground">{campaign.name}</h1>
-          <p className="text-sm text-muted-foreground">
-            Review discovered leads and approve or reject them for outreach.
-          </p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-lg font-semibold tracking-tight text-foreground">{campaign.name}</h1>
+            <p className="text-sm text-muted-foreground">
+              Review discovered leads and approve or reject them for outreach.
+            </p>
+          </div>
+          <div className="flex items-center gap-2 rounded-md border border-border bg-card p-1">
+            <Link
+              href="/wp-hunter"
+              title="WP Compromise Hunter Pipeline"
+              className="flex size-8 items-center justify-center rounded-md text-cyan-600 dark:text-cyan-400 transition-colors hover:bg-cyan-500/15"
+            >
+              <Crosshair className="size-4" />
+            </Link>
+            <Link
+              href="/seo-spam-hunter"
+              title="SEO Spam & Backdoor Hunter Pipeline"
+              className="flex size-8 items-center justify-center rounded-md text-amber-600 dark:text-amber-400 transition-colors hover:bg-amber-500/15"
+            >
+              <ShieldAlert className="size-4" />
+            </Link>
+            <Link
+              href="/threat-feeds"
+              title="Threat Intel Feeds"
+              className="relative flex size-8 items-center justify-center rounded-md text-violet-600 dark:text-violet-400 transition-colors hover:bg-violet-500/15"
+            >
+              <Rss className="size-4" />
+              <span className="absolute top-1.5 right-1.5 size-1.5 rounded-full bg-violet-500" />
+            </Link>
+          </div>
         </div>
 
         <PipelineStatus campaignId={DB_CAMPAIGN_IDS[activeCampaign]} />

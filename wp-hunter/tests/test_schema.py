@@ -5,12 +5,20 @@ from pydantic import ValidationError
 from wp_hunter.schema import Campaign, freshness_gate, load_campaigns
 
 
-def test_schema_rejects_unresolved_placeholders():
-    bad_yaml = Path(__file__).parent / "fixtures" / "campaigns_bad.yaml"
-    with pytest.raises(ValidationError) as excinfo:
-        load_campaigns(bad_yaml, raise_on_invalid=True)
-    assert "unresolved placeholder" in str(excinfo.value)
-
+def test_freshness_gate_rejects_templates():
+    template_camp = Campaign(
+        id="template-camp",
+        name="Template Campaign",
+        family="Test",
+        added=date.today(),
+        stale_after_days=30,
+        source_url="https://example.com",
+        publicwww_query="{{KEYWORD}}",
+        location="html_body",
+    )
+    with pytest.raises(ValueError) as excinfo:
+        freshness_gate([template_camp], force_stale=False)
+    assert "Unresolved template variables" in str(excinfo.value)
 
 def test_campaign_staleness():
     camp = Campaign(
@@ -40,7 +48,7 @@ def test_freshness_gate_raises_on_stale():
     )
     with pytest.raises(ValueError) as excinfo:
         freshness_gate([stale_camp], force_stale=False)
-    assert "Expired campaigns present" in str(excinfo.value)
+    assert "One or more campaigns are STALE" in str(excinfo.value)
 
 
 def test_freshness_gate_bypassed_with_force():

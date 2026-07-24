@@ -161,6 +161,8 @@ services:
       context: ./services/stages
       dockerfile: Dockerfile
     restart: unless-stopped
+    healthcheck:
+      disable: true
     env_file:
       - .env
     environment:

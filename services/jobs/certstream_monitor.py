@@ -32,7 +32,7 @@ logger = logging.getLogger("certstream_monitor")
 HIGH_VALUE_TLDS = {
     ".com", ".co.uk", ".com.au", ".ca", ".de", ".fr", ".nl",
     ".ch", ".at", ".be", ".se", ".no", ".dk", ".fi", ".ie",
-    ".nz", ".sg", ".ae", ".lu", ".li", ".mc"
+    ".nz", ".sg", ".ae", ".lu", ".li", ".mc", ".sk", ".hu"
 }
 
 EXCLUDED_DOMAINS = {
