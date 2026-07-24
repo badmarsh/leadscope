@@ -24,15 +24,14 @@ def mock_db():
         yield m
 
 @patch("stage5.requests.get")
-@patch("w3lib.html.get_base_url", return_value="https://example.com", create=True)
-def test_extract_structured_data(mock_get_base_url, mock_get):
+def test_extract_structured_data(mock_get):
     mock_resp = MagicMock()
     mock_resp.status_code = 200
     mock_resp.text = "<html></html>"
     mock_resp.url = "https://example.com"
     mock_get.return_value = mock_resp
-    
-    mock_extruct.extract.return_value = {
+
+    test_data = {
         "json-ld": [
             {
                 "@type": "Organization",
@@ -40,39 +39,45 @@ def test_extract_structured_data(mock_get_base_url, mock_get):
                 "email": "test@test.com",
                 "telephone": "+123456789"
             }
-        ]
+        ],
+        "opengraph": []
     }
-    
-    res = stage5._extract_structured_data("example.com")
-    assert res["name"] == "Test Org"
-    assert res["email"] == "test@test.com"
+
+    mock_mod = MagicMock()
+    mock_mod.extract.return_value = test_data
+
+    mock_w3lib_html = MagicMock()
+    mock_w3lib_html.get_base_url.return_value = "https://example.com"
+
+    with patch.dict(sys.modules, {"extruct": mock_mod, "w3lib.html": mock_w3lib_html}):
+        res = stage5._extract_structured_data("example.com")
+        assert res["name"] == "Test Org"
+        assert res["email"] == "test@test.com"
 
 @patch.object(stage5.llm, "chat_json")
-def test_enrich_info(mock_chat_json, mock_db):
-    mock_chat_json.return_value = ({"report": "Test", "email": "a@b.com"}, 10, 20)
-    
-    res = stage5._enrich_info("example.com", "Test Corp", "Offer", "page text", {})
+def test_enrich_info(mock_chat, mock_db):
+    mock_chat.return_value = ({"report": "Test", "email": "a@b.com"}, 10, 5)
+    res, ti, to = stage5._enrich_info("example.com", None, "offer", "text", {})
     assert res["report"] == "Test"
+    assert ti == 10
+    assert to == 5
     assert res["email"] == "a@b.com"
 
 @patch.object(stage5, "_scrape_domain")
 @patch.object(stage5, "_extract_structured_data")
 @patch.object(stage5, "_enrich_info")
-def test_enrich_candidate_success(mock_enrich_info, mock_extruct, mock_scrape, mock_db):
+@patch.object(stage5, "cost_log")
+def test_enrich_candidate_success(mock_cost, mock_enrich, mock_extract, mock_scrape, mock_db):
     conn = mock_db.get_conn.return_value.__enter__.return_value
     candidate = {
-        "id": 1, "domain": "example.com", "campaign_id": 10,
-        "company_name": "Test", "status": "pending_review",
+        "id": 1, "domain": "example.com", "company_name": "Ex", "campaign_id": 10, 
         "enrichment_attempt_count": 0, "enrichment_attempted_at": None
     }
     
-    # First fetchone is DNC check (return None to pass)
-    # Inside _enrich_candidate it doesn't query cooldown if attempted_at is None
-    mock_db.fetchone.return_value = None
-    
-    mock_scrape.return_value = ("Page text", "https://example.com", ["img.jpg"])
-    mock_extruct.return_value = {"email": "hello@example.com"}
-    mock_enrich_info.return_value = {"report": "Hello"}
+    mock_db.fetchone.return_value = None  # DNC pass
+    mock_scrape.return_value = ("some html", "markdown text", ["img"])
+    mock_extract.return_value = {"email": "hello@example.com"}
+    mock_enrich.return_value = ({"report": "Slovak text", "email": "hello@example.com", "estimated_size": "10-50"}, 10, 5)
     
     res = stage5._enrich_candidate(candidate, {}, conn)
     assert res["outcome"] == "enriched"

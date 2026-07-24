@@ -120,13 +120,16 @@ def run(campaign_id: int) -> dict[str, Any]:
 
             required_keys = {"target_segments", "keywords_hu", "keywords_en", "disqualifiers"}
             missing = required_keys - icp.keys()
-            if missing:
-                raise ValueError(f"ICP JSON missing keys: {missing}. Got: {list(icp.keys())}")
+            for key in missing:
+                if key in {"keywords_hu", "keywords_en", "disqualifiers"}:
+                    icp[key] = []
+                else:
+                    icp[key] = {}
 
-            if not isinstance(icp["keywords_hu"], list) or len(icp["keywords_hu"]) == 0:
-                raise ValueError("keywords_hu must be a non-empty list")
-            if not isinstance(icp["keywords_en"], list) or len(icp["keywords_en"]) == 0:
-                raise ValueError("keywords_en must be a non-empty list")
+            if not isinstance(icp.get("keywords_hu", []), list):
+                raise ValueError("keywords_hu must be a list")
+            if not isinstance(icp.get("keywords_en", []), list):
+                raise ValueError("keywords_en must be a list")
 
             # ── 7. Insert icp_config row ──────────────────────────────────────────
             row = db.execute_returning(
@@ -158,7 +161,7 @@ def run(campaign_id: int) -> dict[str, Any]:
                 len(icp["keywords_en"]),
             )
 
-            return {
+            result = {
                 "campaign_id": campaign_id,
                 "icp_config_id": row["id"],
                 "version": row["version"],
@@ -168,8 +171,8 @@ def run(campaign_id: int) -> dict[str, Any]:
                 "disqualifiers": icp["disqualifiers"],
             }
 
+        db.set_stage_status(campaign_id, "stage1", "idle")
+        return result
     except Exception:
         db.set_stage_status(campaign_id, "stage1", "failed")
         raise
-    else:
-        db.set_stage_status(campaign_id, "stage1", "idle")

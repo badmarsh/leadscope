@@ -23,6 +23,7 @@ import json
 import logging
 import requests
 import concurrent.futures
+import secrets
 from typing import Optional
 
 try:
@@ -182,8 +183,8 @@ CRITICAL: "report" and "products_sold" MUST be written in Slovak language.
 """
 
 
-def _enrich_info(domain: str, company_name: Optional[str], offer_summary: str, page_text: str, pre_extracted: dict) -> dict:
-    """Use the LLM to fill enrichment gaps not covered by extruct."""
+def _enrich_info(domain: str, company_name: Optional[str], offer_summary: str, page_text: str, pre_extracted: dict) -> tuple[dict, int, int]:
+    """Use the LLM to fill enrichment gaps not covered by extruct. Returns (result, tokens_in, tokens_out)."""
     prompt = EXTRACT_PROMPT.format(
         domain=domain,
         company_name=company_name or domain,
@@ -194,15 +195,15 @@ def _enrich_info(domain: str, company_name: Optional[str], offer_summary: str, p
     try:
         result, ti, to = llm.chat_json(prompt, model=config.STAGE5_MODEL)
         if isinstance(result, dict) and "_raw" not in result:
-            return result
+            return result, ti, to
         # HARDENING: LLM returned non-JSON or parse failure
         logger.warning(
             "LLM enrichment returned non-JSON for %s. Returning empty dict.", domain
         )
-        return {}
+        return {}, ti, to
     except Exception as exc:
         logger.warning("LLM enrichment extraction failed for %s: %s", domain, exc)
-        return {}
+        return {}, 0, 0
 
 
 # ── Enrichment loop ────────────────────────────────────────────────────────────
@@ -273,7 +274,7 @@ def _enrich_candidate(candidate: dict, campaign: dict, conn, settings: dict | No
     if cached_pages:
         for path in CONTACT_PATHS:
             for cached_url, text in cached_pages.items():
-                if path in cached_url:
+                if cached_url.rstrip('/').endswith(path.rstrip('/')):
                     page_text = text
                     page_url = cached_url
                     break
@@ -324,8 +325,8 @@ def _enrich_candidate(candidate: dict, campaign: dict, conn, settings: dict | No
 
     # ── Step 3: LLM — fill gaps not covered by extruct ───────────────────────
     offer_summary = _get_offer_summary(campaign.get("business_brief"))
-    info = _enrich_info(domain, candidate.get("company_name"), offer_summary, page_text, pre_extracted)
-    cost_log.log_call(conn, "stage5", "gemini", campaign_id=campaign_id, query_count=1)
+    info, ti, to = _enrich_info(domain, candidate.get("company_name"), offer_summary, page_text, pre_extracted)
+    cost_log.log_call(conn, "stage5", "gemini", campaign_id=campaign_id, tokens_in=ti, tokens_out=to)
 
     # Merge: prefer extruct values for contact fields, LLM for semantic fields
     email = pre_extracted.get("email") or info.get("email")
@@ -342,8 +343,8 @@ def _enrich_candidate(candidate: dict, campaign: dict, conn, settings: dict | No
             cost_log.log_call(conn, "stage5", "crawler", campaign_id=campaign_id, query_count=1)
 
             if contact_text:
-                contact_info = _enrich_info(domain, candidate.get("company_name"), offer_summary, contact_text, {})
-                cost_log.log_call(conn, "stage5", "gemini", campaign_id=campaign_id, query_count=1)
+                contact_info, contact_ti, contact_to = _enrich_info(domain, candidate.get("company_name"), offer_summary, contact_text, {})
+                cost_log.log_call(conn, "stage5", "gemini", campaign_id=campaign_id, tokens_in=contact_ti, tokens_out=contact_to)
 
                 if contact_info.get("email") or contact_info.get("phone"):
                     email = contact_info.get("email") or email
@@ -429,11 +430,20 @@ def _enrich_candidate(candidate: dict, campaign: dict, conn, settings: dict | No
         )
 
 
+    # Generate Phase X audit_token
+    audit_token = secrets.token_hex(32)
+
     # STABILIZATION FIX (BUG-009): Update enrichment_attempted_at timestamp on candidate post-success
     db.execute(
         conn,
-        "UPDATE candidates SET enrichment_attempted_at = now() WHERE id = %s",
-        (candidate_id,),
+        """
+        UPDATE candidates SET 
+            enrichment_attempted_at = now(),
+            audit_token = COALESCE(audit_token, %s),
+            audit_token_created = COALESCE(audit_token_created, now())
+        WHERE id = %s
+        """,
+        (audit_token, candidate_id),
     )
 
     logger.info(
@@ -512,11 +522,16 @@ def run() -> dict:
         )
 
     campaign_ids = {c["campaign_id"] for c in approved}
+    locked_campaign_ids = set()
     logger.info("Stage 5: Fetched %d candidates across %d campaigns", len(approved), len(campaign_ids))
     for cid in campaign_ids:
         if not db.acquire_stage_lock(cid, "stage5"):
             logger.info("Stage 5 already running for campaign %s", cid)
             continue
+        locked_campaign_ids.add(cid)
+
+    # Only process candidates belonging to campaigns we successfully locked
+    approved = [c for c in approved if c["campaign_id"] in locked_campaign_ids]
 
     try:
         results = []
@@ -575,5 +590,5 @@ def run() -> dict:
         logger.info("Stage 5 run complete: %s", summary)
         return summary
     finally:
-        for cid in campaign_ids:
+        for cid in locked_campaign_ids:
             db.set_stage_status(cid, "stage5", "idle")

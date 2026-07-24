@@ -39,18 +39,46 @@ logger = logging.getLogger(__name__)
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
+# TLDs and domain patterns that are out-of-scope for the WP-remediation ICP.
+# These are non-English-market or government TLDs unlikely to buy cleanup services.
+_OUT_OF_SCOPE_TLDS = frozenset([
+    "cn", "ru", "jp", "kr", "vn", "th", "id", "pk", "bd",
+    "ir", "kz", "uz", "az", "ge", "am", "by", "md",
+    "gov",  # generic govt TLD
+])
+_OUT_OF_SCOPE_SLD_PATTERNS = [
+    ".gov.",   # gov.cn, gov.uk sub-domains, etc.
+    ".edu.",   # edu.cn, edu.ru, etc.
+    ".mil.",   # military domains
+]
+
+def _is_out_of_scope_domain(domain: str) -> bool:
+    """
+    Returns True if the domain is outside the ICP geographic/institutional scope.
+    Blocks .cn, .ru, .jp etc. and government/edu sub-domains.
+    """
+    domain_lower = domain.lower()
+    # Check country-code TLD (last label)
+    tld = domain_lower.rsplit(".", 1)[-1]
+    if tld in _OUT_OF_SCOPE_TLDS:
+        return True
+    # Check second-level domain patterns (e.g. gov.cn, edu.br)
+    for pattern in _OUT_OF_SCOPE_SLD_PATTERNS:
+        if pattern in domain_lower:
+            return True
+    return False
+
+
 def _extract_domain(url: str) -> Optional[str]:
-    """Extract apex domain from a URL. Returns None on failure."""
+    """Extract registered apex domain from a URL, stripping subdomains. Returns None on failure."""
     try:
         parsed = urlparse(url if url.startswith("http") else "https://" + url)
-        host = parsed.netloc or parsed.path
-        # Strip www.
-        host = re.sub(r"^www\.", "", host)
-        # Remove port
-        host = host.split(":")[0].strip()
-        # Ensure it looks like a valid domain (no spaces, quotes, brackets, or HTML tags)
-        if host and "." in host and not re.search(r"[<>\s\"'{}\(\)\[\]]", host):
-            return host
+        host = (parsed.netloc or parsed.path).split(":")[0].strip()
+        import tldextract
+        ext = tldextract.extract(host)
+        top_domain = getattr(ext, "top_domain_under_public_suffix", "") or getattr(ext, "registered_domain", "")
+        if top_domain and not re.search(r"[<>\s\"'{}\(\)\[\]]", top_domain):
+            return top_domain.lower()
         return None
     except Exception:
         return None
@@ -106,6 +134,25 @@ def _upsert_candidate(
         )
         return False
 
+    # Filter out subdomains using tldextract (e.g. discard "sub.example.com", keep "example.com")
+    import tldextract
+    ext = tldextract.extract(domain)
+    # The domain must just have domain and suffix. Subdomain must be empty or 'www'
+    if ext.subdomain and ext.subdomain != 'www':
+        logger.debug(
+            "Skipping %s — is a subdomain (source=%s campaign=%s)",
+            domain, source, campaign_id,
+        )
+        return False
+
+    # ICP geo pre-filter — reject out-of-scope TLDs before any DB write
+    if _is_out_of_scope_domain(domain):
+        logger.debug(
+            "Skipping %s — out-of-scope TLD/domain for ICP (source=%s campaign=%s)",
+            domain, source, campaign_id,
+        )
+        return False
+
     if _is_do_not_contact(conn, domain, campaign_id):
         logger.debug("Skipping %s — on do_not_contact list for campaign %s", domain, campaign_id)
         return False
@@ -121,7 +168,7 @@ def _upsert_candidate(
             reopen_count  = candidates.reopen_count + 1,
             evidence_data = EXCLUDED.evidence_data
         WHERE candidates.status = 'stale'
-          AND candidates.last_seen_at < now() - interval '%s days'
+          AND candidates.last_seen_at < now() - make_interval(days => %s)
         """,
         (
             campaign_id,
@@ -145,7 +192,7 @@ def _search_exa(query: str, conn, campaign_id: int) -> list[dict]:
     try:
         exa = Exa(api_key=config.EXA_API_KEY)
         # Assuming the SDK passes **kwargs to requests or supports timeout
-        results = exa.search_and_contents(query, type="auto", use_autoprompt=False, num_results=10, timeout=15)
+        results = exa.search_and_contents(query, type="auto", num_results=10)
         cost_log.log_call(conn, "stage2", "exa", campaign_id=campaign_id, query_count=1)
         return [
             {"url": r.url, "title": getattr(r, "title", ""), "snippet": getattr(r, "text", "")[:300]}
@@ -453,7 +500,7 @@ def _keyword_search(campaign_id: int, conn, cooldown_days: int = 30) -> dict:
         conn,
         """
         DELETE FROM search_queries_log
-        WHERE campaign_id = %s AND last_run_at < now() - interval '%s days'
+        WHERE campaign_id = %s AND last_run_at < now() - make_interval(days => %s)
         """,
         (campaign_id, cooldown_days * 2),
     )
@@ -506,12 +553,87 @@ def _keyword_search(campaign_id: int, conn, cooldown_days: int = 30) -> dict:
     }
 
 
-# ── Code-signature search (PublicWWW) ─────────────────────────────────────────
+# ── Code-signature search (PublicWWW & Fallback) ────────────────────────────────
+
+FALLBACK_FILTER_PROMPT = """
+You are a cybersecurity intelligence filter. Your job is to review search engine results for a malware signature query and filter out security blogs, news sites, malware analysis reports, and GitHub repositories discussing the malware.
+Your ONLY output should be a JSON array of domains that belong to ACTUAL INFECTED WEBSITES.
+
+CRITICAL DISQUALIFIERS - EXCLUDE THESE:
+1. ANY security vendor blog (Wordfence, Sucuri, Malwarebytes, Kaspersky, etc.)
+2. ANY news/tech reporting site (BleepingComputer, The Hacker News)
+3. ANY code repository or forum (GitHub, StackOverflow, Reddit)
+4. ANY site that looks like it is writing an article *about* the malware.
+
+INCLUDE:
+- Regular businesses (e-commerce, local businesses, non-tech companies) that appear to have accidentally exposed the malware snippet in their search snippet or URL.
+
+Results:
+{results_json}
+
+Return ONLY a valid JSON array of apex domains. No prose.
+Example: ["infected-bakery.com", "hacked-plumber.hu"]
+"""
+
+def _llm_filter_security_blogs(raw_results: list[dict], conn, campaign_id: int) -> list[str]:
+    if not raw_results:
+        return []
+    
+    unique_raw = []
+    seen_urls = set()
+    for r in raw_results:
+        url = r.get("url", "")
+        if url and url not in seen_urls:
+            seen_urls.add(url)
+            unique_raw.append(r)
+            
+    batch_size = 50
+    final_domains = []
+    
+    for i in range(0, len(unique_raw), batch_size):
+        batch = unique_raw[i:i + batch_size]
+        try:
+            parsed, ti, to = llm.chat_json(
+                FALLBACK_FILTER_PROMPT.format(results_json=json.dumps(batch, ensure_ascii=False)),
+                temperature=0.1,
+                model=config.STAGE2_DEDUP_MODEL,
+            )
+            cost_log.log_call(conn, "stage2", "gemini", campaign_id=campaign_id, model=config.STAGE2_DEDUP_MODEL, tokens_in=ti, tokens_out=to)
+            if isinstance(parsed, list):
+                final_domains.extend(parsed)
+        except Exception as exc:
+            logger.warning("LLM fallback filter failed: %s", exc)
+            
+    out = []
+    for d in final_domains:
+        if isinstance(d, str):
+            clean = _extract_domain(d)
+            if clean and clean not in out:
+                out.append(clean)
+    return out
+
+def _fallback_signature_search(snippet: str, conn, campaign_id: int) -> list[str]:
+    clean_snippet = snippet.replace('\n', ' ').replace('\r', '').strip()
+    query = f'"{clean_snippet[:50]}"'
+    
+    hits = []
+    hits.extend(_search_exa(query, conn, campaign_id))
+    hits.extend(_search_tavily(query, conn, campaign_id))
+    hits.extend(_search_serper(query, conn, campaign_id))
+    hits.extend(_search_brave(query, conn, campaign_id))
+    
+    domains = _llm_filter_security_blogs(hits, conn, campaign_id)
+    logger.info("Fallback search returned %d domains after filtering for snippet=%r", len(domains), clean_snippet[:50])
+    return domains
+
 
 def _publicwww_search(snippet: str) -> list[str]:
     """
     Query PublicWWW for websites containing snippet.
     Returns list of domain strings.
+
+    ALWAYS wraps snippet in double-quotes for exact phrase matching.
+    Unquoted searches return orders-of-magnitude more false positives.
 
     Uses pypublicwww which constructs the correct URL:
       https://publicwww.com/websites/{encoded_query}/?export=csvu&key={KEY}
@@ -522,17 +644,22 @@ def _publicwww_search(snippet: str) -> list[str]:
         logger.warning("PUBLICWWW_API_KEY not set — skipping signature search")
         return []
 
+    # SIGNAL QUALITY: Always use exact-phrase (quoted) search.
+    # Raw unquoted searches match substrings across token boundaries, causing
+    # massive false positives (e.g. every WP site matching a generic JS pattern).
+    quoted_snippet = f'"{snippet}"' if not snippet.startswith('"') else snippet
+
     try:
         from pypublicwww import PyPublicWWW
         api = PyPublicWWW(apikey=config.PUBLICWWW_API_KEY, timeout=30)
-        csv_text = api._search_websites(snippet, csv=True)
+        csv_text = api._search_websites(quoted_snippet, csv=True)
 
         # Guard: API returns a plain-text error on free/exhausted plans
         if not csv_text or "API available for paid" in csv_text or csv_text.startswith("<"):
             logger.warning(
                 "PublicWWW returned no usable data for snippet=%r (plan limit or HTML page). "
                 "Response preview: %r",
-                snippet[:60],
+                quoted_snippet[:60],
                 csv_text[:120] if csv_text else "",
             )
             return []
@@ -560,11 +687,21 @@ def _publicwww_search(snippet: str) -> list[str]:
                 if domain:
                     domains.append(domain)
 
-        logger.info("PublicWWW returned %d domains for snippet=%r", len(domains), snippet[:60])
+        raw_count = len(domains)
+        logger.info(
+            "PublicWWW returned %d raw domains for quoted snippet=%r",
+            raw_count, quoted_snippet[:70],
+        )
+        if raw_count > 2000:
+            logger.warning(
+                "PublicWWW returned %d results for %r — snippet may be too broad. "
+                "Consider narrowing it in malware_signatures.",
+                raw_count, quoted_snippet[:70],
+            )
         return domains
 
     except Exception as exc:
-        logger.error("PublicWWW query failed for snippet=%r: %s", snippet[:60], exc)
+        logger.error("PublicWWW query failed for snippet=%r: %s", quoted_snippet[:60], exc)
         return []
 
 
@@ -586,7 +723,7 @@ def _signature_search(campaign_id: int, conn) -> dict:
 
     signatures = db.fetchall(
         conn,
-        "SELECT id, snippet, malware_family, confidence FROM malware_signatures WHERE campaign_id = %s",
+        "SELECT id, snippet, malware_family, confidence, source_url FROM malware_signatures WHERE campaign_id = %s AND status = 'approved'",
         (campaign_id,),
     )
     if not signatures:
@@ -610,11 +747,27 @@ def _signature_search(campaign_id: int, conn) -> dict:
             logger.info("Stage 2 stopped via dashboard signal.")
             break
 
-        logger.info("Querying PublicWWW for signature id=%s family=%s", sig["id"], sig["malware_family"])
-        domains = _publicwww_search(sig["snippet"])
+        logger.info("Querying for signature id=%s family=%s", sig["id"], sig["malware_family"])
+        domains = []
+        if config.PUBLICWWW_API_KEY:
+            domains = _publicwww_search(sig["snippet"])
+            cost_log.log_call(conn, "stage2", "publicwww", campaign_id=campaign_id, query_count=1)
 
-        # Log the query regardless of hit count
-        cost_log.log_call(conn, "stage2", "publicwww", campaign_id=campaign_id, query_count=1)
+        # Fallback to browser scraper if API returned 0 results (or if no API key is set)
+        if not domains:
+            logger.info("API returned 0 domains (or no API key), falling back to browser scraper for %s", sig["snippet"][:60])
+            try:
+                import publicwww_scraper
+                markdown = publicwww_scraper.crawl_publicwww(sig["snippet"], page=1, use_quotes=True)
+                if markdown:
+                    domains = publicwww_scraper.parse_domains_from_markdown(markdown)
+                    logger.info("Scraper returned %d domains", len(domains))
+            except Exception as e:
+                logger.error("Scraper fallback failed: %s", e)
+            
+            if not domains:
+                domains = _fallback_signature_search(sig["snippet"], conn, campaign_id)
+
         signatures_checked += 1
 
         for domain in domains:
@@ -628,6 +781,7 @@ def _signature_search(campaign_id: int, conn) -> dict:
                         "snippet": sig["snippet"][:200],
                         "malware_family": sig["malware_family"],
                         "confidence": sig["confidence"],
+                        "source_url": sig.get("source_url"),
                     }
                 ]
             }
@@ -684,16 +838,30 @@ def run(campaign_id: int) -> dict:
             )
 
             if finder_type == "keyword_search":
-                return _keyword_search(campaign_id, conn, cooldown_days=cooldown_days)
+                result = _keyword_search(campaign_id, conn, cooldown_days=cooldown_days)
             elif finder_type == "code_signature_search":
-                return _signature_search(campaign_id, conn)
+                result = _signature_search(campaign_id, conn)
             else:
                 raise ValueError(f"Unknown finder_type: {finder_type!r}")
+
+            # D7: Garbage collect stale unreviewed candidates (TTL: 14 days)
+            rows_discarded = db.execute(
+                conn,
+                """
+                UPDATE candidates
+                SET status = 'discarded'
+                WHERE status = 'pending_review'
+                  AND created_at < now() - interval '14 days'
+                """
+            )
+            if rows_discarded > 0:
+                logger.info("Stage 2: Auto-discarded %d stale 'pending_review' candidates", rows_discarded)
+
+        db.set_stage_status(campaign_id, "stage2", "idle")
+        return result
     except Exception:
         db.set_stage_status(campaign_id, "stage2", "failed")
         raise
-    else:
-        db.set_stage_status(campaign_id, "stage2", "idle")
 
 
 def run_all() -> list[dict]:
