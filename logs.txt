@@ -1,0 +1,904 @@
+commit 2348d1b970bd5c8cbb116019dc06f0f4329e5061
+Author: Marek Jurkemik <mrkjrkmk@gmail.com>
+Date:   Fri Jul 24 09:56:27 2026 +0200
+
+    feat(task2): Display Firmographic Score in Lead Drawer
+
+M	components/lead-drawer.tsx
+
+commit 5d9471df8ba9a3e1a7424865312566f7077248c4
+Author: Marek Jurkemik <mrkjrkmk@gmail.com>
+Date:   Fri Jul 24 09:55:37 2026 +0200
+
+    feat(task2,task4): Implement skip_phase_x and expose firmographic score
+
+M	services/evaluator/harness.py
+M	services/evaluator/scorers/threat_intel.py
+
+commit a69e8b11c8c7bb850dafc8733b652a207dae77a4
+Author: Marek Jurkemik <mrkjrkmk@gmail.com>
+Date:   Fri Jul 24 09:54:26 2026 +0200
+
+    feat(task3): Rewrite exposure scanner with ThreadPoolExecutor
+
+M	services/evaluator/scorers/exposure_scanner.py
+
+commit 909b072f46e7674f30df8c801223a19e2e24bab8
+Author: Marek Jurkemik <mrkjrkmk@gmail.com>
+Date:   Fri Jul 24 09:53:28 2026 +0200
+
+    feat(task5): Add signature_defaults to pydantic schemas
+
+M	seo-spam-hunter/src/seo_spam_hunter/schema.py
+M	wp-hunter/src/wp_hunter/schema.py
+
+commit 7f88c6098e91baaaf757cc778ffdc0afb3eb1c72
+Author: Marek Jurkemik <mrkjrkmk@gmail.com>
+Date:   Fri Jul 24 09:52:49 2026 +0200
+
+    feat(task5): Add signature_defaults to YAML campaigns
+
+M	seo-spam-hunter/campaigns.yaml
+M	wp-hunter/campaigns.yaml
+
+commit 3db568ce313ec7f06544e131033a7b6665b16a12
+Author: Marek Jurkemik <mrkjrkmk@gmail.com>
+Date:   Fri Jul 24 09:52:23 2026 +0200
+
+    feat(task5): Add sneakiness_tier and proof_method to DB schema
+
+A	db/migrations/004_add_sneakiness_tier.sql
+
+commit 64f0ac2a267395e3fbb01118cfad8c3e94f156d8
+Author: Marek Jurkemik <mrkjrkmk@gmail.com>
+Date:   Fri Jul 24 09:50:49 2026 +0200
+
+    fix(task7): Cleanup root debug artifacts and ignore patterns
+
+M	.gitignore
+
+commit 3cab2e8e9f3a6a3d8c2f4361fe3f7c359dcb86c9
+Author: Marek Jurkemik <mrkjrkmk@gmail.com>
+Date:   Fri Jul 24 08:16:03 2026 +0200
+
+    docs: adjust docuengine prompt and update help-modal for Crawl4AI migration
+
+A	.agents/DOCUENGINE_PROMPT.md
+M	components/help-modal.tsx
+
+commit a86937cf96a13a54979d1cf63c8f47a73fa45e91
+Author: Marek Jurkemik <mrkjrkmk@gmail.com>
+Date:   Fri Jul 24 08:12:06 2026 +0200
+
+    fix: Pipeline audit and configuration optimization
+
+A	.agents/PIPELINE_SETTINGS_GUIDE.md
+M	components/dashboard.tsx
+M	components/top-nav.tsx
+M	docker-compose.yml
+M	lib/leads-data.ts
+M	seo-spam-hunter/campaigns.yaml
+M	seo-spam-hunter/src/seo_spam_hunter/schema.py
+M	seo-spam-hunter/tests/test_schema.py
+M	services/evaluator/scorers/image_quality.py
+M	services/evaluator/scorers/threat_intel.py
+M	services/jobs/certstream_monitor.py
+M	services/stages/stage2.py
+M	wp-hunter/src/wp_hunter/schema.py
+M	wp-hunter/tests/test_schema.py
+
+commit 6fbc10f6272e08a42b5d0e68fade00ce843fd385
+Author: Marek Jurkemik <mrkjrkmk@gmail.com>
+Date:   Fri Jul 24 07:57:59 2026 +0200
+
+    docs: expand ops audit prompt — add dedicated sections for JENEX, Shoes, Threat Feeds
+
+M	.agents/pipeline_ops_audit_prompt.md
+
+commit 1f27e3ea5d76063509702d7bee4008e09e2c8950
+Author: Marek Jurkemik <mrkjrkmk@gmail.com>
+Date:   Fri Jul 24 07:54:41 2026 +0200
+
+    docs: add pipeline ops audit prompt for all pipelines
+
+A	.agents/pipeline_ops_audit_prompt.md
+
+commit e18fad2d143375ea55ab0dd08538ef663e480a64
+Author: Marek Jurkemik <mrkjrkmk@gmail.com>
+Date:   Fri Jul 24 07:51:52 2026 +0200
+
+    chore: commit all local work — wp-hunter, seo-spam-hunter, threat-feeds, phase-x, certstream, new migrations, debug scripts
+
+M	.dockerignore
+M	Dockerfile.dashboard
+A	Zelena_domacnostiam/generate_pdf.py
+A	Zelena_domacnostiam/out.txt
+A	Zelena_domacnostiam/scraped_data/aktuality.md
+A	Zelena_domacnostiam/scraped_data/assets_documents_N%C3%A1vod_zmluva%20v%20zozname%20prij%C3%ADmate%C4%BEov%20a%20CRZ.pdf.md
+A	Zelena_domacnostiam/scraped_data/assets_documents_examples_Pripadova%20studia%20-%20odpady%20-%20online%20-%20all.pdf.md
+A	Zelena_domacnostiam/scraped_data/assets_documents_examples_Uk%C3%A1%C5%BEky%20spr%C3%A1vne%20vyhotovenej%20povinnej%20pr%C3%ADlohy%20k%20%C5%BDiadosti%20o%20platbu%20-FOTODOKUMENT%C3%81CIA-_final.pdf.md
+A	Zelena_domacnostiam/scraped_data/assets_documents_examples_V04-postup-na-prihlasovanie-slovensko-sk.pdf.md
+A	Zelena_domacnostiam/scraped_data/assets_documents_examples_VZOR_PpP_Ziadost_o_zmenu.docx.md
+A	Zelena_domacnostiam/scraped_data/assets_documents_examples_metodicky_postup_odpady_20230523_v2_komFM_20230601.pdf.md
+A	Zelena_domacnostiam/scraped_data/clanky.md
+A	Zelena_domacnostiam/scraped_data/cookies.md
+A	Zelena_domacnostiam/scraped_data/dokumenty.md
+A	Zelena_domacnostiam/scraped_data/dokumenty_vyzva-4.md
+A	Zelena_domacnostiam/scraped_data/home.md
+A	Zelena_domacnostiam/scraped_data/informacie-o-cookies.md
+A	Zelena_domacnostiam/scraped_data/kalkulacka-04_formular-4.md
+A	Zelena_domacnostiam/scraped_data/kalkulacka-05_formular-4.md
+A	Zelena_domacnostiam/scraped_data/kalkulacka-06_formular-4.md
+A	Zelena_domacnostiam/scraped_data/kalkulacka-opravnenosti-3.md
+A	Zelena_domacnostiam/scraped_data/kalkulacka.md
+A	Zelena_domacnostiam/scraped_data/kalkulacka_formular.md
+A	Zelena_domacnostiam/scraped_data/kalkulacka_rozcestnik.md
+A	Zelena_domacnostiam/scraped_data/kontakt.md
+A	Zelena_domacnostiam/scraped_data/kontakty.md
+A	Zelena_domacnostiam/scraped_data/media_%C5%BDoP_VZOR_PpP_Cestne_vyhlasenie_svojp.docx.md
+A	Zelena_domacnostiam/scraped_data/media_%C5%BDoP_VZOR_PpP_Preberaci_Protokol_doda.docx.md
+A	Zelena_domacnostiam/scraped_data/media_%C5%BDoP_VZOR_Vyjadrenie_odborne_sp%C3%B4sobil.docx.md
+A	Zelena_domacnostiam/scraped_data/media_%C5%BDoP_metodicky_postup_odpady_20230523.docx.md
+A	Zelena_domacnostiam/scraped_data/media_OD_mini_mini2_spolocne_dokumenty_REU_vsetky_OD_Mini_Prirucka_pre_prijimatela_1.pdf.md
+A	Zelena_domacnostiam/scraped_data/media_OD_mini_mini2_spolocne_dokumenty_REU_vsetky_OD_Mini_VZOR_Preberaci_protokol_dodavatel.docx.md
+A	Zelena_domacnostiam/scraped_data/media_OD_mini_mini2_spolocne_dokumenty_REU_vsetky_OD_Mini_VZOR_Ziadost_o_predlzenie_terminu_realizacie.docx.md
+A	Zelena_domacnostiam/scraped_data/media_OD_mini_mini2_spolocne_dokumenty_REU_vsetky_OD_Mini_Vzor_Fotodokumentacia.docx.md
+A	Zelena_domacnostiam/scraped_data/media_Sankcny_mechanizmus_SPO-V01-V04aV06_Rev2.0.xlsx.md
+A	Zelena_domacnostiam/scraped_data/media_gdpr_2024_11_29_IDO_k_ZOP.pdf.md
+A	Zelena_domacnostiam/scraped_data/media_gdpr_2024_11_29_IDO_k_ZOPPM.pdf.md
+A	Zelena_domacnostiam/scraped_data/media_gdpr_2024_11_29_IDO_k_ZOPPM_MINI.pdf.md
+A	Zelena_domacnostiam/scraped_data/media_gdpr_2024_11_29_IDO_kontakt-form.pdf.md
+A	Zelena_domacnostiam/scraped_data/media_mini-plus_20260715_Kalkulacka_obnovdom_miniplus_2.xlsx.md
+A	Zelena_domacnostiam/scraped_data/media_mini-plus_26-MFOD-V01_Ekvivalentna_skala_infografika_v2.1.pdf.md
+A	Zelena_domacnostiam/scraped_data/media_mini-plus_26-MFOD-V01_Ekvivalentna_skala_vysvetlenie_v2.0.pdf.md
+A	Zelena_domacnostiam/scraped_data/media_mini-plus_26-MFOD-V01_Informacia_kotol_biomasa.pdf.md
+A	Zelena_domacnostiam/scraped_data/media_mini-plus_26-MFOD-V01_Informacia_pre_ziadatela_v3.3.pdf.md
+A	Zelena_domacnostiam/scraped_data/media_mini-plus_26-MFOD-V01_Kontrolny_zoznam_prilohy.pdf.md
+A	Zelena_domacnostiam/scraped_data/media_mini-plus_26-MFOD-V01_Navod_ziadost_o_prispevok_krok%20za%20krokom_Rev1.0.pdf.md
+A	Zelena_domacnostiam/scraped_data/media_mini-plus_26-MFOD-V01_Potvrdenie_obce_Rev1.0.docx.md
+A	Zelena_domacnostiam/scraped_data/media_mini-plus_26-MFOD-V01_Usmernenie_stavebny_odpad_Rev1.0.pdf.md
+A	Zelena_domacnostiam/scraped_data/media_mini-plus_26-MFOD-V01_VZOR_Spatvzatie_Ziadost_Rev.1.0.docx.md
+A	Zelena_domacnostiam/scraped_data/media_mini-plus_26-MFOD-V01_VZOR_plnomocenstvo_kontaktna_osoba_Rev.1.0.docx.md
+A	Zelena_domacnostiam/scraped_data/media_mini-plus_26-MFOD-V01_VZOR_plnomocenstvo_spoluvlastnik_Rev.1.docx.md
+A	Zelena_domacnostiam/scraped_data/media_mini-plus_26-MFOD-V01_Vyzva%20V01-1.pdf.md
+A	Zelena_domacnostiam/scraped_data/media_mini-plus_26-MFOD-V01_Vyzva%20V01-1_Priloha_1_Prirucka.pdf.md
+A	Zelena_domacnostiam/scraped_data/media_mini-plus_26-MFOD-V01_Vzor_formulara_ziadosti_Rev1.2.pdf.md
+A	Zelena_domacnostiam/scraped_data/media_mini-plus_Informacia_pre_ziadatelov_potvrdenie_obce.pdf.md
+A	Zelena_domacnostiam/scraped_data/media_vyzva1_Piloty_Prirucka_pre_prijimatela_v.1.4_20240808.pdf.md
+A	Zelena_domacnostiam/scraped_data/media_vyzva3_V03_Prirucka_pre_prijimatela_v.1.3_20240809.pdf.md
+A	Zelena_domacnostiam/scraped_data/media_vyzva4_V04_Prirucka_pre_prijimatela_v.1.2_20240809.pdf.md
+A	Zelena_domacnostiam/scraped_data/media_vyzva5_V05_Prirucka_pre_prijimatela_v.1.1_20240808.pdf.md
+A	Zelena_domacnostiam/scraped_data/media_vyzva6_%C5%BDoP%20dokumenty_V06_Prirucka_pre_prijimatela_v_1.0_20250414.pdf.md
+A	Zelena_domacnostiam/scraped_data/media_vyzva7_Zmluva_V07_Prirucka_pre_prijimatela_v_1.pdf.md
+A	Zelena_domacnostiam/scraped_data/mini-plus_dokumenty.md
+A	Zelena_domacnostiam/scraped_data/mini-plus_opatrenia.md
+A	Zelena_domacnostiam/scraped_data/mini-plus_pre-koho-je-vyzva-urcena.md
+A	Zelena_domacnostiam/scraped_data/mini-plus_pripravte-sa-na-vyzvu.md
+A	Zelena_domacnostiam/scraped_data/mini-plus_ziadost.md
+A	Zelena_domacnostiam/scraped_data/o-projekte.md
+A	Zelena_domacnostiam/scraped_data/obnov-dom-mini-plus.md
+A	Zelena_domacnostiam/scraped_data/obnov-dom-mini.md
+A	Zelena_domacnostiam/scraped_data/ochrana-osobnych-udajov.md
+A	Zelena_domacnostiam/scraped_data/otazky-a-odpovede.md
+A	Zelena_domacnostiam/scraped_data/regionalne-kancelarie.md
+A	Zelena_domacnostiam/scraped_data/stavebne-truhlice.md
+A	Zelena_domacnostiam/scraped_data/udalosti.md
+A	Zelena_domacnostiam/scraped_data/ukazka.md
+A	Zelena_domacnostiam/scraped_data/vyhlasenie-o-pristupnosti.md
+A	Zelena_domacnostiam/scraped_data/vyhodnotenie-vyziev.md
+A	Zelena_domacnostiam/scraped_data/vyzva-5.md
+A	Zelena_domacnostiam/scraped_data/vyzva-6.md
+A	Zelena_domacnostiam/scraped_data/vyzvy.md
+A	Zelena_domacnostiam/scraped_data/www.obnovdom.sk.md
+A	Zelena_domacnostiam/scraped_data/www.slovensko.sk.md
+A	Zelena_domacnostiam/scraped_data/ziadost-o-platbu.md
+A	Zelena_domacnostiam/scraped_data/zop_doklady-potvrdzujuce-ukoncenie-obnovy.md
+A	Zelena_domacnostiam/scraped_data/zop_energeticky-certifikat-po-obnove.md
+A	Zelena_domacnostiam/scraped_data/zop_farebne-fotografie.md
+A	Zelena_domacnostiam/scraped_data/zop_nie-ste-si-isty-spravnostou-dokladov.md
+A	Zelena_domacnostiam/scraped_data/zop_obnov-dom-mini_doklady-potvrdzujuce-ukoncenie-obnovy.md
+A	Zelena_domacnostiam/scraped_data/zop_obnov-dom-mini_formular-ziadosti-o-platbu-vytlacte-podpiste-a-poslite.md
+A	Zelena_domacnostiam/scraped_data/zop_obnov-dom-mini_fotodokumentacia.md
+A	Zelena_domacnostiam/scraped_data/zop_obnov-dom-mini_nie-ste-si-isty-spravnostou-dokladov.md
+A	Zelena_domacnostiam/scraped_data/zop_obnov-dom-mini_potvrdenie-o-nakladani-so-stavebnymi-odpadmi.md
+A	Zelena_domacnostiam/scraped_data/zop_obnov-dom-mini_ucinna-zmluva.md
+A	Zelena_domacnostiam/scraped_data/zop_obnov-dom-mini_ukoncena-obnova-rodinneho-domu.md
+A	Zelena_domacnostiam/scraped_data/zop_obnov-dom-mini_vyplnte-online-formular-ziadosti-o-platbu.md
+A	Zelena_domacnostiam/scraped_data/zop_potvrdenie-o-nakladani-so-stavebnymi-odpadmi.md
+A	Zelena_domacnostiam/scraped_data/zop_ucinna-zmluva.md
+A	Zelena_domacnostiam/scraped_data/zop_ukoncena-obnova-rodinneho-domu.md
+A	Zelena_domacnostiam/scraped_data/zop_vyplneny-online-formular-ziadosti-vytlacte-podpiste-a-poslite.md
+A	Zelena_domacnostiam/scraped_data/zop_vyplnte-online-formular-ziadosti-o-platbu.md
+A	Zelena_domacnostiam/scraped_data/zoznam-terennych-pracovnikov-3-kolo.md
+A	Zelena_domacnostiam/scraped_data/zoznam-terennych-pracovnikov.md
+A	Zelena_domacnostiam/ziadost_obnovdom_miniplus.html
+A	Zelena_domacnostiam/ziadost_obnovdom_miniplus.pdf
+M	app/api/action/route.ts
+A	app/api/admin/kb-ingest/route.ts
+A	app/api/audit/[token]/route.ts
+A	app/api/campaigns/[id]/dnc/route.ts
+M	app/api/leads/route.ts
+A	app/api/n8n/mainwp-callback/route.ts
+M	app/api/n8n/workflows/route.ts
+M	app/api/screenshot/route.ts
+A	app/api/seo-spam-hunter/campaigns/[id]/route.ts
+A	app/api/seo-spam-hunter/campaigns/route.ts
+A	app/api/seo-spam-hunter/findings/route.ts
+A	app/api/seo-spam-hunter/reports/route.ts
+A	app/api/seo-spam-hunter/run/route.ts
+A	app/api/wp-hunter/campaigns/[id]/route.ts
+A	app/api/wp-hunter/campaigns/route.ts
+A	app/api/wp-hunter/findings/route.ts
+A	app/api/wp-hunter/reports/route.ts
+A	app/api/wp-hunter/run/route.ts
+A	app/audit/[token]/page.tsx
+A	app/seo-spam-hunter/page.tsx
+A	app/threat-feeds/page.tsx
+A	app/wp-hunter/page.tsx
+A	claude_fable_prompt.md
+A	clean_subdomains.py
+M	components/dashboard.tsx
+A	components/do-not-contact-modal.tsx
+M	components/knowledge-base-modal.tsx
+M	components/lead-drawer.tsx
+A	components/pipeline-dashboard/CampaignCard.tsx
+A	components/pipeline-dashboard/CampaignDetailDrawer.tsx
+A	components/pipeline-dashboard/CtTickerWidget.tsx
+A	components/pipeline-dashboard/ExecutionTerminal.tsx
+A	components/pipeline-dashboard/FindingsTable.tsx
+A	components/pipeline-dashboard/ReportViewer.tsx
+A	components/pipeline-dashboard/SourceLegend.tsx
+M	conftest.py
+A	db/migrations/0003_phase_x.sql
+A	db/migrations/0004_threat_intel.sql
+A	db/migrations/0005_add_wordfence_source.sql
+A	db/migrations/0006_seed_ioc_signatures.sql
+M	db/schema.sql
+M	docker-compose.yml
+A	hunt_prompt_shodan.md
+A	hunt_prompt_urlhaus.md
+M	lib/rate-limit.ts
+M	lib/status.ts
+M	middleware.ts
+A	n8n_workflows/kb_ingest_schedule.json
+M	package-lock.json
+M	package.json
+M	pnpm-lock.yaml
+A	run_dbg.py
+A	run_dbg2.py
+M	scripts/reset-db.sh
+M	scripts/run_tests.sh
+A	scripts/seed_threat_sources.py
+M	scripts/setup.sh
+R088	.coverage	seo-spam-hunter/.coverage
+A	seo-spam-hunter/.env.example
+A	seo-spam-hunter/.gitignore
+A	seo-spam-hunter/README.md
+A	seo-spam-hunter/campaigns.yaml
+A	seo-spam-hunter/pyproject.toml
+A	seo-spam-hunter/src/seo_spam_hunter/__init__.py
+A	seo-spam-hunter/src/seo_spam_hunter/cli.py
+A	seo-spam-hunter/src/seo_spam_hunter/cluster.py
+A	seo-spam-hunter/src/seo_spam_hunter/ingest.py
+A	seo-spam-hunter/src/seo_spam_hunter/ingest_abusech.py
+A	seo-spam-hunter/src/seo_spam_hunter/merge.py
+A	seo-spam-hunter/src/seo_spam_hunter/pivot_urlscan.py
+A	seo-spam-hunter/src/seo_spam_hunter/pivot_vt.py
+A	seo-spam-hunter/src/seo_spam_hunter/pivot_wayback.py
+A	seo-spam-hunter/src/seo_spam_hunter/report.py
+A	seo-spam-hunter/src/seo_spam_hunter/schema.py
+A	seo-spam-hunter/src/seo_spam_hunter/stage0_ct.py
+A	seo-spam-hunter/tests/__init__.py
+A	seo-spam-hunter/tests/fixtures/campaigns_bad.yaml
+A	seo-spam-hunter/tests/fixtures/publicwww_csv.csv
+A	seo-spam-hunter/tests/fixtures/publicwww_paste.txt
+A	seo-spam-hunter/tests/test_cli.py
+A	seo-spam-hunter/tests/test_cluster.py
+A	seo-spam-hunter/tests/test_ingest.py
+A	seo-spam-hunter/tests/test_ingest_abusech.py
+A	seo-spam-hunter/tests/test_merge.py
+A	seo-spam-hunter/tests/test_pivot_urlscan.py
+A	seo-spam-hunter/tests/test_pivot_vt.py
+A	seo-spam-hunter/tests/test_pivot_wayback.py
+A	seo-spam-hunter/tests/test_report.py
+A	seo-spam-hunter/tests/test_schema.py
+A	seo-spam-hunter/tests/test_stage0_ct.py
+M	services/crawler/main.py
+M	services/evaluator/auth.py
+M	services/evaluator/config.py
+M	services/evaluator/db.py
+A	services/evaluator/debug_harness.py
+A	services/evaluator/find_malware.py
+M	services/evaluator/firecrawl_client.py
+M	services/evaluator/harness.py
+M	services/evaluator/icp_drift.py
+M	services/evaluator/llm.py
+M	services/evaluator/main.py
+D	services/evaluator/pytest.ini
+A	services/evaluator/scorers/exposure_scanner.py
+M	services/evaluator/scorers/image_quality.py
+A	services/evaluator/scorers/proof_engine.py
+M	services/evaluator/scorers/threat_intel.py
+A	services/evaluator/seed_more_sigs.py
+A	services/evaluator/stage2_seo_backlinks_test.py
+M	services/evaluator/tests/test_harness.py
+A	services/evaluator/tests/test_icp_drift.py
+R090	tests/unit/test_scoring_thresholds.py	services/evaluator/tests/test_scoring_thresholds.py
+M	services/evaluator/tests/test_threat_intel.py
+M	services/jobs/budget_monitor.py
+A	services/jobs/certstream_monitor.py
+A	services/jobs/discovery_helpers.py
+A	services/jobs/urlhaus_monitor.py
+A	services/jobs/urlscan_monitor.py
+A	services/postgres/insert_intel.sql
+M	services/stages/auth.py
+M	services/stages/config.py
+M	services/stages/db.py
+M	services/stages/kb_ingest.py
+M	services/stages/llm.py
+M	services/stages/main.py
+A	services/stages/publicwww_intel_scraper.py
+M	services/stages/publicwww_scraper.py
+D	services/stages/pytest.ini
+D	services/stages/query_scratch.py
+M	services/stages/requirements.txt
+M	services/stages/signature_ingestion.py
+M	services/stages/stage2.py
+A	services/stages/stage2_pdns.py
+A	services/stages/stage2_seo_backlinks.py
+M	services/stages/stage5.py
+A	services/stages/test_blog_post.md
+A	services/stages/tests/test_kb_ingest.py
+A	services/stages/tests/test_publicwww_scraper.py
+M	services/stages/tests/test_stage2.py
+R096	tests/unit/test_stage2_helpers.py	services/stages/tests/test_stage2_helpers.py
+M	services/stages/tests/test_stage5_retry_logic.py
+M	services/stages/watchdog.py
+A	temp.json
+A	test.jpg
+M	tests/integration/test_evaluator_api.py
+M	tests/integration/test_pipeline.py
+D	tests/unit/test_stage5_retry_logic.py
+A	verify_dashboard.py
+A	wp-hunter/.coverage
+A	wp-hunter/.env.example
+A	wp-hunter/.gitignore
+A	wp-hunter/README.md
+A	wp-hunter/campaigns.yaml
+A	wp-hunter/pyproject.toml
+A	wp-hunter/src/wp_hunter/__init__.py
+A	wp-hunter/src/wp_hunter/cli.py
+A	wp-hunter/src/wp_hunter/ingest.py
+A	wp-hunter/src/wp_hunter/ingest_abusech.py
+A	wp-hunter/src/wp_hunter/merge.py
+A	wp-hunter/src/wp_hunter/pivot_urlscan.py
+A	wp-hunter/src/wp_hunter/pivot_vt.py
+A	wp-hunter/src/wp_hunter/report.py
+A	wp-hunter/src/wp_hunter/schema.py
+A	wp-hunter/tests/__init__.py
+A	wp-hunter/tests/fixtures/campaigns_bad.yaml
+A	wp-hunter/tests/fixtures/publicwww_csv.csv
+A	wp-hunter/tests/fixtures/publicwww_paste.txt
+A	wp-hunter/tests/test_cli.py
+A	wp-hunter/tests/test_ingest.py
+A	wp-hunter/tests/test_ingest_abusech.py
+A	wp-hunter/tests/test_merge.py
+A	wp-hunter/tests/test_pivot_urlscan.py
+A	wp-hunter/tests/test_pivot_vt.py
+A	wp-hunter/tests/test_report.py
+A	wp-hunter/tests/test_schema.py
+A	wp-hunter/tests/test_vt_graph.py
+
+commit 25bcb08e8f743f69ec5b383ff0d60ce4f56d91ec
+Author: Marek Jurkemik <mrkjrkmk@gmail.com>
+Date:   Fri Jul 24 07:48:20 2026 +0200
+
+    fix: restore Jenex/Shoes campaigns, compress topbar, migrate Stage 3 from Firecrawl to Crawl4AI, remove hardcoded JENEX preamble
+
+M	components/top-nav.tsx
+M	lib/leads-data.ts
+M	services/evaluator/scorers/content_relevance.py
+
+commit 5ce373c9d391c284876f7fa5aa77744a74879556
+Author: Marek Jurkemik <mrkjrkmk@gmail.com>
+Date:   Fri Jul 24 07:16:46 2026 +0200
+
+    Fix llm.chat_json unpacking bug returning 3 elements instead of 5
+
+M	services/stages/stage1.py
+M	services/stages/stage2.py
+M	services/stages/stage5.py
+A	services/stages/tests/test_stage1.py
+M	services/stages/tests/test_stage5.py
+
+commit cdd82cf6715ba40e0b8254cebaf4706483043878
+Author: Marek Jurkemik <mrkjrkmk@gmail.com>
+Date:   Thu Jul 23 05:21:27 2026 +0200
+
+    fix(dashboard): remove optimistic locking which sabotaged backend locking
+
+M	app/api/campaigns/[id]/pipeline/route.ts
+
+commit 48dd09131daee37d03d81d9e5dd080af950f0590
+Author: Marek Jurkemik <mrkjrkmk@gmail.com>
+Date:   Thu Jul 23 05:17:47 2026 +0200
+
+    fix(n8n): allow INTERNAL_API_TOKEN in expressions
+
+M	docker-compose.yml
+
+commit e9e6b9a081b1be85237f09b627aed83da00de07b
+Author: Marek Jurkemik <mrkjrkmk@gmail.com>
+Date:   Thu Jul 23 04:48:17 2026 +0200
+
+    fix(auth): pass X-Internal-Token header for internal API calls in dashboard and n8n
+
+M	app/api/campaigns/[id]/pipeline/route.ts
+M	docker-compose.yml
+M	n8n_workflows/stage1_icp_definer.json
+M	n8n_workflows/stage2_target_finder.json
+M	n8n_workflows/stage3_trigger.json
+M	n8n_workflows/stage5_enrichment.json
+M	next-env.d.ts
+M	services/stages/requirements.txt
+A	update_n8n.py
+
+commit dda659fc14b618694e320796a79d2a91f499107e
+Author: Marek Jurkemik <mrkjrkmk@gmail.com>
+Date:   Thu Jul 23 04:04:34 2026 +0200
+
+    docs: update architecture and help modal to reflect crawler and wp hardening
+
+M	README.md
+M	components/help-modal.tsx
+
+commit c5ab043af58fca293b19449d16393c5ccdd000ce
+Author: Marek Jurkemik <mrkjrkmk@gmail.com>
+Date:   Thu Jul 23 03:58:50 2026 +0200
+
+    feat(ui): make logo and text in header link to homepage
+
+M	components/top-nav.tsx
+
+commit a4ec9ea8df40de75f772a5e56ee2ad620ce0aa60
+Author: Marek Jurkemik <mrkjrkmk@gmail.com>
+Date:   Thu Jul 23 03:52:19 2026 +0200
+
+    fix(evaluator): remove redundant json import shadowing module
+
+M	services/evaluator/harness.py
+
+commit 83e46fc92c3e8ad401e95299a32157d11f415048
+Author: Marek Jurkemik <mrkjrkmk@gmail.com>
+Date:   Thu Jul 23 03:49:46 2026 +0200
+
+    fix: sync pnpm lockfile to match package.json
+
+M	pnpm-lock.yaml
+
+commit 228af4cd4d3c74a6809723c29b30f77d40cbc682
+Author: Marek Jurkemik <mrkjrkmk@gmail.com>
+Date:   Thu Jul 23 02:59:48 2026 +0200
+
+    Complete Feature 6.11 Cognitive Continuity Harness implementation
+
+M	services/evaluator/config.py
+M	services/evaluator/harness.py
+M	services/evaluator/llm.py
+M	services/evaluator/scorers/content_relevance.py
+M	services/evaluator/scorers/image_quality.py
+M	services/evaluator/scorers/threat_intel.py
+
+commit 9fe925ce8fed21d095284f948d29ca6e74f540f3
+Author: Marek Jurkemik <mrkjrkmk@gmail.com>
+Date:   Thu Jul 23 02:50:37 2026 +0200
+
+    Implement P0 and P1 systemic hardening fixes
+
+A	app/admin/health/page.tsx
+M	app/api/action/route.ts
+A	app/api/admin/health/route.ts
+A	db/migrations/0002_performance_and_features.sql
+M	package-lock.json
+M	package.json
+M	services/evaluator/db.py
+M	services/evaluator/harness.py
+A	services/evaluator/icp_drift.py
+M	services/evaluator/llm.py
+M	services/evaluator/scorers/content_relevance.py
+M	services/evaluator/scorers/image_quality.py
+M	services/evaluator/scorers/threat_intel.py
+M	services/stages/db.py
+A	services/stages/email_validator.py
+M	services/stages/stage1.py
+M	services/stages/stage2.py
+M	services/stages/stage5.py
+A	services/stages/tests/test_stage5_recovery.py
+
+commit ee69ab6d0946c5348baf239f29d996788dce95d3
+Author: Marek Jurkemik <mrkjrkmk@gmail.com>
+Date:   Thu Jul 23 02:19:48 2026 +0200
+
+    fix: image extraction fallback and test mock
+
+M	services/evaluator/scorers/image_quality.py
+M	services/evaluator/tests/test_image_quality.py
+
+commit 86aed04059755795dcaca9ff16162d9c65b141a7
+Author: Marek Jurkemik <mrkjrkmk@gmail.com>
+Date:   Thu Jul 23 01:59:35 2026 +0200
+
+    feat: phase 2 hardening — vertical filtering, wp versions, recency, few-shot balance
+
+M	app/api/leads/draft/route.ts
+M	services/evaluator/firecrawl_client.py
+M	services/evaluator/harness.py
+M	services/evaluator/scorers/threat_intel.py
+
+commit 28c56246b79e7278f5e89bcb7e611c7a7f97251c
+Author: Marek Jurkemik <mrkjrkmk@gmail.com>
+Date:   Thu Jul 23 01:45:17 2026 +0200
+
+    fix: apply hardening megaprompt
+
+A	.coverage
+M	app/api/action/bulk/route.ts
+M	app/api/leads/draft/route.ts
+M	conftest.py
+M	lib/leads-data.ts
+M	lib/rate-limit.ts
+M	services/crawler/main.py
+A	services/crawler/tests/test_crawler_main.py
+M	services/evaluator/firecrawl_client.py
+M	services/evaluator/harness.py
+M	services/evaluator/llm.py
+A	services/evaluator/pytest.ini
+M	services/evaluator/requirements.txt
+M	services/evaluator/scorers/image_quality.py
+A	services/evaluator/tests/test_firecrawl_client.py
+M	services/evaluator/tests/test_harness.py
+M	services/evaluator/tests/test_image_quality.py
+M	services/evaluator/tests/test_llm_proxy.py
+M	services/stages/llm.py
+A	services/stages/pytest.ini
+R100	services/stages/test_query.py	services/stages/query_scratch.py
+M	services/stages/stage2.py
+M	services/stages/stage5.py
+A	services/stages/tests/test_cost_log.py
+M	services/stages/tests/test_crawler_client.py
+A	services/stages/tests/test_stage2.py
+A	services/stages/tests/test_stage2_filtering.py
+M	services/stages/tests/test_stage5.py
+A	temp_images.csv
+A	test_fc.py
+M	tests/e2e/dashboard.spec.ts
+A	tests/unit/bulk-route.test.ts
+A	tests/unit/draft-route.test.ts
+M	tests/unit/lead-drawer.test.tsx
+M	tests/unit/leads-table.test.tsx
+
+commit 5feb4759f64fc4ca138de186dad94a177de6933a
+Author: Marek Jurkemik <mrkjrkmk@gmail.com>
+Date:   Wed Jul 22 22:53:35 2026 +0200
+
+    feat: replace manual Target Finder blacklist with ruthless LLM filtering prompt
+
+M	services/stages/stage2.py
+
+commit f3bf0c9126b6fc99474a33f64902c703c73f076f
+Author: Marek Jurkemik <mrkjrkmk@gmail.com>
+Date:   Wed Jul 22 22:51:30 2026 +0200
+
+    fix: aggressively filter global marketplaces and social media domains from Target Finder
+
+M	services/stages/stage2.py
+
+commit bcc8047558dfe7f35132793e1bfcfad22d77c969
+Author: Marek Jurkemik <mrkjrkmk@gmail.com>
+Date:   Wed Jul 22 22:46:06 2026 +0200
+
+    feat: auto-approve passing candidates for immediate enrichment
+
+M	services/evaluator/harness.py
+M	tests/unit/test_scoring_thresholds.py
+
+commit 8a947e55b64ee3cf3e32ff0538fbed6b64d4a69c
+Author: Marek Jurkemik <mrkjrkmk@gmail.com>
+Date:   Wed Jul 22 22:24:06 2026 +0200
+
+    fix: aggressively prioritize real product photos in scraper heuristics
+
+M	services/evaluator/firecrawl_client.py
+
+commit af3746cd60370bde2208e1ff37a8c9b7d4382309
+Author: Marek Jurkemik <mrkjrkmk@gmail.com>
+Date:   Wed Jul 22 22:17:12 2026 +0200
+
+    fix: filter trust badges from image extraction
+
+M	services/evaluator/firecrawl_client.py
+
+commit 4c409281264d3f01f3ac858a45b4505ea2879003
+Author: Marek Jurkemik <mrkjrkmk@gmail.com>
+Date:   Wed Jul 22 22:14:49 2026 +0200
+
+    chore: remove Draft label from WP Remediation campaign and include all stabilization fixes
+
+R100	leadgen-platform-coding-agent-megaprompt.md	.agents/coding-agent-megaprompt-v1.md
+R100	leadgen-platform-v0-gui-prompt.md	.agents/gui-prompt-v0.md
+M	.env.example
+A	.github/workflows/ci.yml
+A	CONTRIBUTING.md
+M	Dockerfile.dashboard
+M	README.md
+M	app/api/action/bulk/route.ts
+M	app/api/action/route.ts
+M	app/api/campaigns/[id]/pipeline/route.ts
+M	app/api/leads/draft/route.ts
+A	app/api/leads/export/crm/route.ts
+M	app/api/leads/export/route.ts
+M	app/api/leads/route.ts
+M	app/api/login/route.ts
+A	app/api/n8n/workflows/route.ts
+M	app/layout.tsx
+M	components/LogViewer.tsx
+A	components/__tests__/top-nav.test.tsx
+M	components/dashboard.tsx
+A	components/help-modal.tsx
+M	components/knowledge-base-modal.tsx
+M	components/lead-drawer.tsx
+M	components/leads-table.tsx
+A	components/n8n-modal.tsx
+M	components/settings-modal.tsx
+M	components/stats-row.tsx
+M	components/top-nav.tsx
+A	conftest.py
+A	db/alembic.ini
+A	db/migrations/0001_stabilization.sql
+A	db/migrations/env.py
+A	db/migrations/v2_improvements.sql
+A	db/migrations/versions/0001_initial_schema.py
+M	db/schema.sql
+M	docker-compose.yml
+D	firecrawl_scrape.py
+D	firecrawl_scrape_api.py
+D	firecrawl_scrape_auth.py
+D	firecrawl_scrape_getting_started.py
+D	firecrawl_scrape_root.py
+M	lib/db.ts
+A	lib/hooks/useLeads.ts
+A	lib/hooks/useUsage.ts
+A	lib/i18n.tsx
+A	lib/llm.ts
+A	lib/rate-limit.ts
+M	lib/session.ts
+A	locales/en.json
+A	locales/sk.json
+M	middleware.ts
+D	mock_blog.txt
+D	new_proxy.py
+M	next-env.d.ts
+M	next.config.mjs
+A	package-lock.json
+M	package.json
+M	playwright.config.ts
+D	proxy.py
+A	pytest.ini
+A	scripts/README.md
+A	scripts/reset-db.sh
+A	scripts/run_tests.sh
+A	scripts/setup.sh
+A	services/crawler/Dockerfile
+A	services/crawler/main.py
+A	services/crawler/requirements.txt
+M	services/evaluator/Dockerfile
+A	services/evaluator/Dockerfile.test
+A	services/evaluator/auth.py
+M	services/evaluator/config.py
+M	services/evaluator/db.py
+M	services/evaluator/firecrawl_client.py
+M	services/evaluator/harness.py
+M	services/evaluator/llm.py
+M	services/evaluator/main.py
+M	services/evaluator/scorers/content_relevance.py
+M	services/evaluator/scorers/image_quality.py
+M	services/evaluator/scorers/threat_intel.py
+M	services/evaluator/tests/test_content_relevance.py
+A	services/evaluator/tests/test_harness.py
+A	services/evaluator/tests/test_image_quality.py
+M	services/evaluator/tests/test_llm_proxy.py
+A	services/evaluator/tests/test_threat_intel.py
+M	services/stages/Dockerfile
+A	services/stages/Dockerfile.test
+A	services/stages/auth.py
+M	services/stages/config.py
+M	services/stages/cost_log.py
+A	services/stages/crawler_client.py
+M	services/stages/kb_ingest.py
+M	services/stages/llm.py
+M	services/stages/main.py
+A	services/stages/publicwww_scraper.py
+A	services/stages/requirements-dev.txt
+M	services/stages/requirements.txt
+M	services/stages/signature_ingestion.py
+M	services/stages/stage2.py
+M	services/stages/stage5.py
+A	services/stages/tests/test_crawler_client.py
+M	services/stages/tests/test_db.py
+M	services/stages/tests/test_stage5.py
+A	services/stages/tests/test_stage5_retry_logic.py
+A	services/stages/watchdog.py
+A	test_pipeline.py
+D	test_proxy_8046.py
+D	test_proxy_snippet.py
+D	test_pwd.js
+D	test_query2.py
+M	tests/e2e/dashboard.spec.ts
+A	tests/integration/test_api_leads.py
+A	tests/integration/test_evaluator_api.py
+M	tests/integration/test_pipeline.py
+A	tests/unit/export-route.test.ts
+M	tests/unit/leads-table.test.tsx
+A	tests/unit/llm.test.ts
+M	tests/unit/login-route.test.ts
+A	tests/unit/rate-limit.test.ts
+A	tests/unit/test_scoring_thresholds.py
+A	tests/unit/test_stage2_helpers.py
+A	tests/unit/test_stage5_retry_logic.py
+M	vitest.config.ts
+M	vitest.setup.ts
+
+commit 1ef0814fce6706687e9dab3ce6f95e16d42c5a7c
+Author: Marek Jurkemik <mrkjrkmk@gmail.com>
+Date:   Wed Jul 22 22:14:19 2026 +0200
+
+    chore: remove Draft label from WP Remediation campaign
+
+M	lib/leads-data.ts
+
+commit 9f7c9aa33b7fe0aaad3a75e65d71b71503da22d3
+Author: Marek Jurkemik <mrkjrkmk@gmail.com>
+Date:   Wed Jul 22 04:09:31 2026 +0200
+
+    feat: initial commit — Jenex AI lead generation platform
+
+A	.agents/AGENTS.md
+A	.dockerignore
+A	.env.example
+A	.gitignore
+A	Dockerfile.dashboard
+A	README.md
+A	app/api/action/bulk/route.ts
+A	app/api/action/route.ts
+A	app/api/campaigns/[id]/kb/route.ts
+A	app/api/campaigns/[id]/pipeline/route.ts
+A	app/api/campaigns/[id]/settings/route.ts
+A	app/api/campaigns/[id]/status/route.ts
+A	app/api/leads/draft/route.ts
+A	app/api/leads/export/route.ts
+A	app/api/leads/route.ts
+A	app/api/login/route.ts
+A	app/api/logout/route.ts
+A	app/api/logs/route.ts
+A	app/api/screenshot/route.ts
+A	app/api/session/route.ts
+A	app/api/usage/route.ts
+A	app/error.tsx
+A	app/globals.css
+A	app/layout.tsx
+A	app/loading.tsx
+A	app/page.tsx
+A	components.json
+A	components/LogViewer.tsx
+A	components/dashboard.tsx
+A	components/knowledge-base-modal.tsx
+A	components/lead-drawer.tsx
+A	components/leads-table.tsx
+A	components/login-screen.tsx
+A	components/pipeline-status.tsx
+A	components/settings-modal.tsx
+A	components/stats-row.tsx
+A	components/top-nav.tsx
+A	components/ui/button.tsx
+A	db/schema.sql
+A	db/seed.sql
+A	db/validate_part1.sql
+A	db/validate_part2.py
+A	db/validate_part3.py
+A	db/validate_part4.py
+A	db/validate_part5.py
+A	db/validate_part6.py
+A	docker-compose.yml
+A	firecrawl_scrape.py
+A	firecrawl_scrape_api.py
+A	firecrawl_scrape_auth.py
+A	firecrawl_scrape_getting_started.py
+A	firecrawl_scrape_root.py
+A	leadgen-platform-coding-agent-megaprompt.md
+A	leadgen-platform-v0-gui-prompt.md
+A	lib/campaigns.ts
+A	lib/db.ts
+A	lib/leads-data.ts
+A	lib/session.ts
+A	lib/status.ts
+A	lib/utils.ts
+A	librefang_api_reference.md
+A	librefang_getting_started.md
+A	middleware.ts
+A	mock_blog.txt
+A	n8n_workflows/stage1_icp_definer.json
+A	n8n_workflows/stage2_target_finder.json
+A	n8n_workflows/stage3_trigger.json
+A	n8n_workflows/stage5_enrichment.json
+A	new_proxy.py
+A	next-env.d.ts
+A	next.config.mjs
+A	nginx.conf
+A	package.json
+A	playwright.config.ts
+A	pnpm-lock.yaml
+A	postcss.config.mjs
+A	proxy.py
+A	public/apple-icon.png
+A	public/icon-dark-32x32.png
+A	public/icon-light-32x32.png
+A	public/icon.svg
+A	public/placeholder-logo.png
+A	public/placeholder-logo.svg
+A	public/placeholder-user.jpg
+A	public/placeholder.jpg
+A	public/placeholder.svg
+A	public/shoes/shoe-1.png
+A	public/shoes/shoe-2.png
+A	public/shoes/shoe-3.png
+A	public/shoes/shoe-4.png
+A	services/evaluator/Dockerfile
+A	services/evaluator/config.py
+A	services/evaluator/db.py
+A	services/evaluator/firecrawl_client.py
+A	services/evaluator/harness.py
+A	services/evaluator/llm.py
+A	services/evaluator/main.py
+A	services/evaluator/requirements.txt
+A	services/evaluator/scorers/__init__.py
+A	services/evaluator/scorers/content_relevance.py
+A	services/evaluator/scorers/image_quality.py
+A	services/evaluator/scorers/threat_intel.py
+A	services/evaluator/tests/test_content_relevance.py
+A	services/evaluator/tests/test_llm_proxy.py
+A	services/jobs/budget_monitor.py
+A	services/jobs/golden_regression.py
+A	services/jobs/rescore_icp.py
+A	services/jobs/reverify_wp.py
+A	services/stages/Dockerfile
+A	services/stages/config.py
+A	services/stages/cost_log.py
+A	services/stages/db.py
+A	services/stages/kb_ingest.py
+A	services/stages/llm.py
+A	services/stages/main.py
+A	services/stages/requirements.txt
+A	services/stages/signature_ingestion.py
+A	services/stages/stage1.py
+A	services/stages/stage2.py
+A	services/stages/stage5.py
+A	services/stages/test_query.py
+A	services/stages/tests/test_db.py
+A	services/stages/tests/test_stage5.py
+A	test_proxy_8046.py
+A	test_proxy_snippet.py
+A	test_pwd.js
+A	test_query2.py
+A	tests/__init__.py
+A	tests/e2e/dashboard.spec.ts
+A	tests/e2e_dry_run.py
+A	tests/integration/__init__.py
+A	tests/integration/test_pipeline.py
+A	tests/unit/lead-drawer.test.tsx
+A	tests/unit/leads-table.test.tsx
+A	tests/unit/login-route.test.ts
+A	tests/unit/middleware.test.ts
+A	tests/unit/status.test.ts
+A	tsconfig.json
+A	vitest.config.ts
+A	vitest.setup.ts

@@ -77,3 +77,44 @@ def test_ignore_paused_campaigns(mock_db):
     assert len(calls) > 0
     query = calls[0][0][1]
     assert "camp.status = 'active'" in query
+
+@patch("harness._select_scorer")
+@patch("harness.db")
+def test_score_candidate_dnc(mock_db, mock_scorer):
+    from harness import score_candidate
+    mock_db.fetchone.side_effect = [
+        {"id": 1, "domain": "dnc.com", "campaign_id": 1, "source": "test", "query_used": "", "evidence_data": "{}", "status": "new", "company_name": "dnc"}, # candidate
+        {"id": 1, "evaluator_type": "threat_intel", "slug": "test", "name": "test", "business_brief": "test"}, # campaign
+        {"1": 1} # is_dnc = True
+    ]
+    conn_mock = MagicMock()
+    mock_db.get_conn.return_value.__enter__.return_value = conn_mock
+    
+    result = score_candidate(1)
+    
+    assert result["score"] == 0
+    assert "Do Not Contact" in result["rationale"]
+    mock_db.execute.assert_called_with(conn_mock, "UPDATE candidates SET status = 'discarded' WHERE id = %s", (1,))
+
+@patch("harness._select_scorer")
+@patch("harness.db")
+def test_score_candidate_duplicate(mock_db, mock_scorer):
+    from harness import score_candidate
+    mock_db.fetchone.side_effect = [
+        {"id": 1, "domain": "dup.com", "campaign_id": 1, "source": "test", "query_used": "", "evidence_data": "{}", "status": "new", "company_name": "dup"}, # candidate
+        {"id": 1, "evaluator_type": "threat_intel", "slug": "test", "name": "test", "business_brief": "test"}, # campaign
+        None, # is_dnc = False
+        {"id": 42} # dup
+    ]
+    conn_mock = MagicMock()
+    mock_db.get_conn.return_value.__enter__.return_value = conn_mock
+    
+    result = score_candidate(1)
+    
+    assert result["score"] == 0
+    assert "Duplicate" in result["rationale"]
+    mock_db.execute.assert_called_with(
+        conn_mock, 
+        "UPDATE candidates SET status = 'duplicate', duplicate_of_candidate_id = %s WHERE id = %s", 
+        (42, 1)
+    )

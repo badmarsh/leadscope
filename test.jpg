@@ -1,8 +1,0 @@
-HTTP/1.1 400 Bad Request
-Content-Type: text/plain; charset=UTF-8
-Date: Thu, 23 Jul 2026 19:32:47 GMT
-Connection: keep-alive
-Keep-Alive: timeout=5
-Transfer-Encoding: chunked
-
-Couldn't parse JSON body

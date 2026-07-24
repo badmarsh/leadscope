@@ -49,6 +49,15 @@ def test_snippet_present_multiple_patterns():
     assert present is True
     assert len(found) == 1
 
+def test_snippet_present_base64_decode():
+    import base64
+    payload = "eval(base64_decode('QWxhZGRpbg=='))"
+    b64 = base64.b64encode(payload.encode()).decode()
+    html = f"<html><body><script>var x = '{b64}';</script></body></html>"
+    present, found = _check_snippet_present(html, ["eval(base64_decode("])
+    assert present is True
+    assert len(found) == 1
+
 
 # ── score() — Crawl4AI path ───────────────────────────────────────────────────
 
@@ -162,7 +171,31 @@ def test_score_clamps_to_0_100():
     with patch("scorers.threat_intel._crawl4ai_scrape", return_value="content"), \
          patch("scorers.threat_intel._check_safe_browsing", return_value={}), \
          patch("scorers.threat_intel._check_virustotal", return_value={}), \
+         patch("scorers.threat_intel.scan_exposures", return_value={}), \
          patch("scorers.threat_intel.llm") as mock_llm:
         mock_llm.chat_json.return_value = ({"score": 9999}, 5, 3, "gemini-2.5-flash", "gemini")
         result = score(CANDIDATE_WITH_SIG, CAMPAIGN, ICP, [])
         assert 0 <= result["score"] <= 100
+
+@patch("scorers.threat_intel.calculate_wealth_index", return_value=-50)
+@patch("scorers.threat_intel.scan_exposures", return_value={})
+def test_score_firmographic_penalty(mock_scan, mock_wealth):
+    """Firmographic penalty should reduce score."""
+    with patch("scorers.threat_intel._crawl4ai_scrape", return_value="content"), \
+         patch("scorers.threat_intel._check_safe_browsing", return_value={}), \
+         patch("scorers.threat_intel._check_virustotal", return_value={}), \
+         patch("scorers.threat_intel.llm") as mock_llm:
+        mock_llm.chat_json.return_value = ({"score": 90}, 5, 3, "gemini-2.5-flash", "gemini")
+        result = score(CANDIDATE_WITH_SIG, CAMPAIGN, ICP, [])
+        assert result["score"] == 40  # 90 - 50
+
+def test_score_warm_lead_cleanup():
+    """Warm lead check (recent snapshot)."""
+    with patch("scorers.threat_intel._crawl4ai_scrape", return_value="clean"), \
+         patch("scorers.threat_intel._check_safe_browsing", return_value={}), \
+         patch("scorers.threat_intel._check_virustotal", return_value={}), \
+         patch("scorers.threat_intel.scan_exposures", return_value={}), \
+         patch("scorers.threat_intel.llm") as mock_llm:
+        mock_llm.chat_json.return_value = ({"score": 60, "recommendation": "warm_lead_cleanup_in_progress"}, 5, 3, "gemini", "gemini")
+        result = score(CANDIDATE_WITH_SIG, CAMPAIGN, ICP, [])
+        assert result["evidence_data"]["recommendation"] == "warm_lead_cleanup_in_progress"
