@@ -64,3 +64,19 @@ campaigns:
         - "e9756e2338f84746007235e4cab7a70d5b3ca47f"
       domains: []
     notes: "Do NOT build a PublicWWW query for this entry. Pipeline should route campaigns with fit=not_suitable_for_publicwww straight to stage B and skip stage A."
+
+  - id: parrot-tds
+    name: "Parrot TDS — Injected JS Redirector"
+    family: "Parrot TDS"
+    added: 2026-07-24
+    stale_after_days: 21
+    source_url: "https://blog.sucuri.net/2023/04/parrot-tds-a-large-scale-operation-targeting-wordpress.html"
+    publicwww_query: '"ndsj" OR "ndsw" filetype:js depth:all'
+    location: js_file
+    urlscan_pivot:
+      - 'page.string:"ndsj"'
+    virustotal_pivot:
+      hashes: []
+      domains:
+        - "dns.nextdns.io"
+    notes: "Overlaps with SocGholish var names; distinguish by C2 pattern. Rotates monthly."
