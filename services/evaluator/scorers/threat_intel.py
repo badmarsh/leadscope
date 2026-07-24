@@ -550,8 +550,15 @@ def score(candidate: dict, campaign: dict, icp: dict, few_shot: list[dict]) -> d
             "tokens_out": to,
         }
     # ── Phase X: Compound Lead Score Calculation ─────────────────────────────
-    proof_data = generate_proof(domain, matched_sigs)
-    exposure_data = scan_exposures(domain)
+    campaign_settings = candidate.get("_campaign_settings", {})
+    skip_phase_x = campaign_settings.get("skip_phase_x", False)
+
+    if not skip_phase_x:
+        proof_data = generate_proof(domain, matched_sigs)
+        exposure_data = scan_exposures(domain)
+    else:
+        proof_data = None
+        exposure_data = {}
     
     proof_bonus = 0
     if proof_data:
@@ -561,7 +568,11 @@ def score(candidate: dict, campaign: dict, icp: dict, few_shot: list[dict]) -> d
         proof_bonus += 15
         logger.info(f"Phase X: Critical exposure found for {domain}")
 
-    firmographic_score = calculate_wealth_index(domain)
+    wealth_override = campaign_settings.get("wealth_index_override")
+    if wealth_override is not None:
+        firmographic_score = int(wealth_override)
+    else:
+        firmographic_score = calculate_wealth_index(domain)
     
     max_sneakiness_bonus = 0
     for sig in matched_sigs:
@@ -617,6 +628,8 @@ def score(candidate: dict, campaign: dict, icp: dict, few_shot: list[dict]) -> d
             "wp_version": wp_version_info,
             "proof_data": proof_data,
             "exposure_scan": exposure_data,
+            "firmographic_score": firmographic_score,
+            "wealth_index_tld": domain.split('.')[-1].lower(),
             "source_post_url": source_url,
             "source_post_title": source_title,
         },

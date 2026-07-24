@@ -18,10 +18,19 @@ logger = logging.getLogger(__name__)
 # ── Scorer registry keyed by campaigns.evaluator_type ──────────────────────────
 # NOTE (v3 judgment call from spec): three hardcoded strategies, not a DB-driven
 # prompt system. The dict itself is the extension point if a fourth ever shows up.
+def _threat_intel_fast(candidate, campaign, icp, few_shot):
+    candidate = dict(candidate)
+    candidate["_campaign_settings"] = {
+        **(candidate.get("_campaign_settings") or {}),
+        "skip_phase_x": True
+    }
+    return threat_intel.score(candidate, campaign, icp, few_shot)
+
 SCORER_REGISTRY = {
     "content_relevance": content_relevance.score,
     "image_quality": image_quality.score,
     "threat_intel": threat_intel.score,
+    "threat_intel_fast": _threat_intel_fast,
 }
 
 
@@ -193,6 +202,8 @@ def score_candidate(candidate_id: int) -> dict[str, Any]:
         few_shot = _load_few_shot(conn, campaign["id"])
 
         # 5. Dispatch to the matching scorer
+        settings = json.loads(campaign.get("settings") or "{}") if isinstance(campaign.get("settings"), str) else (campaign.get("settings") or {})
+        candidate["_campaign_settings"] = settings
         logger.info(
             "Scoring candidate %s (domain=%s) with %s scorer (icp v%s, %d few-shot)",
             candidate_id, candidate["domain"], evaluator_type, icp_version, len(few_shot),
