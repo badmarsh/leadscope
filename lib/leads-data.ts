@@ -34,6 +34,22 @@ export interface WpEvidence {
 
 export type Evidence = JenexEvidence | ShoeEvidence | WpEvidence
 
+export interface PhaseXProof {
+  proof_type: "google_serp_spam" | "cloaked_redirect"
+  evidence_text: string
+  indexed_spam_pages?: number
+  example_url?: string
+  example_title?: string
+  example_snippet?: string
+  redirect_destination?: string
+  network_trace?: string[]
+}
+
+export interface PhaseXExposure {
+  critical_found: boolean
+  exposures: Array<{ url: string; severity: string; snippet?: string }>
+}
+
 export interface Lead {
   id: string
   campaignId: CampaignId
@@ -44,6 +60,7 @@ export interface Lead {
   dateFound: string
   rationale: string
   evidence: Evidence
+  evidence_data?: Record<string, unknown>
   note?: string
   contact_email?: string
   contact_phone?: string
@@ -55,6 +72,11 @@ export interface Lead {
   estimated_size?: string
   estimated_revenue?: string
   estimated_traffic?: string
+  // Phase X fields
+  audit_token?: string
+  mainwp_webhook_token?: string
+  proof_data?: PhaseXProof | null
+  exposure_scan?: PhaseXExposure | null
 }
 
 export interface CampaignUsage {
@@ -64,9 +86,9 @@ export interface CampaignUsage {
 }
 
 export const campaigns: Campaign[] = [
-  { id: "jenex", name: "JENEX HVAC (Hungary)", shortName: "JENEX HVAC", status: "active" },
-  { id: "shoe-photo", name: "Shoe Photo Upgrade", shortName: "Shoe Photo Upgrade", status: "active" },
-  { id: "wp-remediation", name: "WP Remediation", shortName: "WP Remediation", status: "active" },
+  { id: "jenex", name: "JENEX HVAC Hungary", shortName: "JENEX", status: "paused" },
+  { id: "shoe-photo", name: "Shoe Photo Upgrade", shortName: "Shoes", status: "paused" },
+  { id: "wp-remediation", name: "WP Malware Remediation", shortName: "WP Remediation", status: "active" },
 ]
 
 export const campaignUsage: Record<CampaignId, CampaignUsage> = {
@@ -395,7 +417,7 @@ export function rowToLead(row: Record<string, unknown>): Lead {
         title: (evidenceData.source_post_title as string) ?? "Security intelligence source",
         url: (evidenceData.source_post_url as string) ?? "#",
       },
-      lastConfirmed: (evidenceData.last_confirmed as string) ?? null,
+      lastConfirmed: (evidenceData.last_confirmed as string) ?? row.created_at,
     }
   } else {
     evidence = {
