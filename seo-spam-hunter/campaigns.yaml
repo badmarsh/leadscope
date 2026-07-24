@@ -67,9 +67,25 @@ campaigns:
     added: 2026-07-23
     stale_after_days: 14
     source_url: "https://blog.sucuri.net/2021/06/wordpress-seo-spam-link-injection.html"
-    publicwww_query: '"{{ANCHOR_TEXT_KEYWORD}}" filetype:html depth:all'
+    publicwww_query: '"buy cheap essay" filetype:html depth:all'
     location: html_body
     urlscan_pivot:
-      - 'page.body:"{{ANCHOR_TEXT_KEYWORD}}"'
+      - 'page.body:"buy cheap essay"'
     virustotal_pivot: { hashes: [], domains: [] }
     wayback_pivot: { enabled: false }
+
+  - id: turkish-keyword-hack
+    name: "Turkish Keyword Hack — Casino/Betting Slug Injection"
+    family: "SEO Keyword Hack"
+    added: 2026-07-24
+    stale_after_days: 45
+    source_url: "https://blog.sucuri.net/2023/03/casino-spam-seo-poisoning.html"
+    publicwww_query: '"casino siteleri" OR "bahis siteleri" filetype:html depth:all'
+    location: html_body
+    urlscan_pivot:
+      - 'page.title:"casino siteleri"'
+    virustotal_pivot: { hashes: [], domains: [] }
+    wayback_pivot:
+      enabled: true
+      match_mime: "text/html"
+    notes: "Similar attack vector to Japanese hack but targets .com/.net with Turkish gambling content. High volume in .sk/.hu too."

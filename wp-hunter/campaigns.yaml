@@ -37,12 +37,12 @@ campaigns:
     added: 2026-07-23
     stale_after_days: 14           # plugin masquerade names rotate fast - keep this short
     source_url: "https://www.scworld.com/brief/thousands-of-wordpress-sites-impacted-by-balada-injector-campaign"
-    publicwww_query: '"/wp-content/plugins/{{FAKE_PLUGIN_SLUG}}/" depth:all'
+    publicwww_query: '"/wp-content/plugins/wp-zexit/" depth:all'
     location: plugin_path
     urlscan_pivot:
       - 'page.domain:/0.*/ AND filename:"sub2"'   # structural pivot, source: Sucuri
     virustotal_pivot: { hashes: [], domains: [] }
-    notes: "Replace {{FAKE_PLUGIN_SLUG}} from this week's Sucuri/Wordfence post before running. This is a template entry, not a live query - the pipeline should refuse to run it unquestioningly if the placeholder is still present."
+    notes: "Replace wp-zexit from this week's Sucuri/Wordfence post before running. This is a template entry, not a live query - the pipeline should refuse to run it unquestioningly if the placeholder is still present."
 
   - id: wp2shell-cve-2026-63030
     name: "wp2shell (CVE-2026-63030 / CVE-2026-60137)"
@@ -80,3 +80,36 @@ campaigns:
       domains:
         - "dns.nextdns.io"
     notes: "Overlaps with SocGholish var names; distinguish by C2 pattern. Rotates monthly."
+
+  - id: sign1-random-js
+    name: "Sign1 — Randomized JS Injection via Custom HTML Widget"
+    family: "Sign1"
+    added: 2026-07-24
+    stale_after_days: 14
+    source_url: "https://blog.sucuri.net/2024/03/sign1-malware-analysis-remediation.html"
+    publicwww_query: '"sigsegv1.pw" depth:all'
+    location: html_body
+    urlscan_pivot:
+      - 'page.url:"sigsegv1.pw"'
+    virustotal_pivot:
+      hashes: []
+      domains:
+        - "sigsegv1.pw"
+    notes: "Uses XOR encoding + time-based triggers. Domain rotates fast — check VT graph."
+
+  - id: dessky-cc-skimmer
+    name: "Dessky Snippets — PHP Credit Card Skimmer"
+    family: "Magecart-style"
+    added: 2026-07-24
+    stale_after_days: 21
+    source_url: "https://blog.sucuri.net/2024/05/credit-card-skimmer-malware-targeting-wordpress-checkout-pages.html"
+    publicwww_query: null
+    fit: "not_suitable_for_publicwww"
+    location: server_side
+    urlscan_pivot:
+      - 'page.url:"/wp-json/wp/v2/snippets"'
+    virustotal_pivot:
+      hashes:
+        - "e3b0c44298fc1c149afb4c8996fb92427ae41e4649b934ca495991b7852b855"
+      domains: []
+    notes: "Injected via Dessky Snippets plugin. Skims POST data from WooCommerce checkout. Skip stage A."
