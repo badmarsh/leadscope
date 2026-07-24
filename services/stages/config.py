@@ -49,6 +49,7 @@ URLSCAN_API_KEY: str = os.environ.get("URLSCAN_API_KEY", "")
 NETLAS_API_KEY: str = os.environ.get("NETLAS_API_KEY", "")
 AHREFS_API_KEY: str = os.environ.get("AHREFS_API_KEY", "")
 VIRUSTOTAL_API_KEY: str = os.environ.get("VIRUSTOTAL_API_KEY", "")
+HUNTER_API_KEY: str = os.environ.get("HUNTER_API_KEY", "")
 
 # ── Tuning constants ──────────────────────────────────────────────────────────
 MAX_ENRICHMENT_ATTEMPTS: int = int(os.environ.get("MAX_ENRICHMENT_ATTEMPTS", "3"))

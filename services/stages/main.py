@@ -14,6 +14,7 @@ from pydantic import BaseModel
 import db
 import stage1
 import stage2
+import stage4
 import stage5
 import kb_ingest
 from auth import require_internal_token
@@ -134,6 +135,25 @@ def run_stage2_all(background_tasks: BackgroundTasks, background: bool = False):
     except Exception as exc:
         logger.exception("Stage 2 run-all execution failed")
         raise HTTPException(status_code=500, detail="Stage 2 run-all processing failed")
+
+
+# ── Stage 4: Contact Discovery ────────────────────────────────────────────────
+
+@app.post("/stage4/run", dependencies=[Depends(require_internal_token)])
+def run_stage4(background_tasks: BackgroundTasks, background: bool = False):
+    """
+    Run Stage 4 (Contact Discovery) — polls approved candidates for contacts.
+    """
+    try:
+        if background:
+            background_tasks.add_task(stage4.run)
+            return {"ok": True, "message": "Stage 4 started in background"}
+        else:
+            result = stage4.run()
+            return {"ok": True, "result": result}
+    except Exception as exc:
+        logger.exception("Stage 4 execution failed")
+        raise HTTPException(status_code=500, detail="Stage 4 processing failed")
 
 
 # ── Stage 5: Enrichment ────────────────────────────────────────────────────────
