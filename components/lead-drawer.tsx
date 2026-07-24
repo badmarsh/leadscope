@@ -434,12 +434,27 @@ export function LeadDrawer({ lead, onClose, onDecision, onReopen, onNavigate, ha
             const proof = (lead.proof_data ?? ed?.proof_data ?? null) as PhaseXProof | null
             const exposure = (lead.exposure_scan ?? ed?.exposure_scan ?? null) as PhaseXExposure | null
             const auditUrl = lead.audit_token ? `${typeof window !== "undefined" ? window.location.origin : ""}/audit/${lead.audit_token}` : null
-            const hasPhaseX = proof || exposure?.critical_found || auditUrl
+            const firmographicScore = ed?.firmographic_score as number | undefined
+            const wealthTld = ed?.wealth_index_tld as string | undefined
+            const hasPhaseX = proof || exposure?.critical_found || auditUrl || firmographicScore !== undefined
             if (!hasPhaseX) return null
             return (
               <section aria-label="Phase X Intel" className="mt-6 border-t border-border pt-6">
                 <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">Threat Intelligence</h3>
                 <div className="flex flex-col gap-3">
+                  {firmographicScore !== undefined && (
+                    <div className="rounded-md border border-blue-500/30 bg-blue-500/5 p-3">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-xs font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-wide">
+                          Firmographic Score
+                        </span>
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Score: <span className="font-semibold text-foreground">+{firmographicScore}</span>
+                        {wealthTld && ` (derived from .${wealthTld})`}
+                      </p>
+                    </div>
+                  )}
                   {proof && (
                     <div className="rounded-md border border-red-500/30 bg-red-500/5 p-3">
                       <div className="flex items-center gap-2 mb-1">
