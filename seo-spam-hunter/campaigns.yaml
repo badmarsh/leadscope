@@ -5,6 +5,10 @@ campaigns:
     added: 2026-07-23
     stale_after_days: 45
     source_url: "https://blog.sucuri.net/2019/01/japanese-seo-spam-wordpress.html"
+    signature_defaults:
+      sneakiness_tier: "A"
+      proof_method: "google_serp_check"
+      confidence: "high"
     publicwww_query: '"wordpress" "site:*.jp" filetype:html depth:all'
     location: html_body
     urlscan_pivot:

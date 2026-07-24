@@ -5,6 +5,10 @@ campaigns:
     added: 2026-07-23
     stale_after_days: 30          # pipeline should warn, not silently trust, past this
     source_url: "https://malcure.com/blog/malware-removal-guides/socgholish-malware-wordpress/"
+    signature_defaults:
+      sneakiness_tier: "A"        # S=cloaked redirect, A=SEO/DB spam, B=file/admin, C=basic
+      proof_method: "google_serp_check"
+      confidence: "high"
     publicwww_query: '"if(ndsw===undefined)" filetype:js depth:all'
     location: js_file              # js_file | html_body | plugin_path
     urlscan_pivot:
