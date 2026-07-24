@@ -14,6 +14,7 @@ import { LeadDrawer } from "@/components/lead-drawer"
 import { SettingsModal } from "@/components/settings-modal"
 import { KnowledgeBaseModal } from "@/components/knowledge-base-modal"
 import { HelpModal } from "@/components/help-modal"
+import { DoNotContactModal } from "@/components/do-not-contact-modal"
 import { N8nModal } from "@/components/n8n-modal"
 import { LogViewer } from "@/components/LogViewer"
 import { useTranslation } from "@/lib/i18n"
@@ -71,6 +72,7 @@ function rowToLead(row: Record<string, unknown>): Lead {
     dateFound: new Date(row.created_at as string).toLocaleDateString("en-CA"),
     rationale: (row.rationale as string) ?? "",
     evidence,
+    evidence_data: evidenceData,
     note: (row.note as string) ?? undefined,
     contact_email: (row.contact_email as string) ?? undefined,
     contact_phone: (row.contact_phone as string) ?? undefined,
@@ -82,18 +84,23 @@ function rowToLead(row: Record<string, unknown>): Lead {
     estimated_size: (row.estimated_size as string) ?? undefined,
     estimated_revenue: (row.estimated_revenue as string) ?? undefined,
     estimated_traffic: (row.estimated_traffic as string) ?? undefined,
+    // Phase X fields
+    audit_token: (row.audit_token as string) ?? undefined,
+    mainwp_webhook_token: (row.mainwp_webhook_token as string) ?? undefined,
+    proof_data: (evidenceData.proof_data as import("@/lib/leads-data").PhaseXProof) ?? undefined,
+    exposure_scan: (evidenceData.exposure_scan as import("@/lib/leads-data").PhaseXExposure) ?? undefined,
   }
 }
 
 function activeCampaignIdForRow(dbCampaignId: number): CampaignId {
-  return DB_ID_TO_CAMPAIGN[dbCampaignId] ?? "jenex"  // M3: use shared map
+  return DB_ID_TO_CAMPAIGN[dbCampaignId] ?? "wp-remediation"  // M3: use shared map
 }
 
 const DB_CAMPAIGN_IDS: Record<CampaignId, number> = CAMPAIGN_TO_DB_ID  // M3: use shared map
 
 export function Dashboard() {
   const [loggedIn, setLoggedIn] = useState<boolean | null>(null) // null = loading
-  const [activeCampaign, setActiveCampaign] = useState<CampaignId>("jenex")
+  const [activeCampaign, setActiveCampaign] = useState<CampaignId>("wp-remediation")
   const [leads, setLeads] = useState<Lead[]>([])
   const [filteredLeads, setFilteredLeads] = useState<Lead[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -101,6 +108,7 @@ export function Dashboard() {
   const [loading, setLoading] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [kbOpen, setKbOpen] = useState(false)
+  const [dncOpen, setDncOpen] = useState(false)
   const [isHelpOpen, setIsHelpOpen] = useState(false)
   const [isN8nOpen, setIsN8nOpen] = useState(false)
   const [page, setPage] = useState(1)
@@ -313,6 +321,7 @@ export function Dashboard() {
         onLogout={handleLogout}
         onSettingsOpen={() => setSettingsOpen(true)}
         onKbOpen={() => setKbOpen(true)}
+        onDncOpen={() => setDncOpen(true)}
         onHelpOpen={() => setIsHelpOpen(true)}
         onN8nOpen={() => setIsN8nOpen(true)}
       />
@@ -391,6 +400,12 @@ export function Dashboard() {
         open={kbOpen}
         campaignDbId={DB_CAMPAIGN_IDS[activeCampaign]}
         onClose={() => setKbOpen(false)}
+      />
+
+      <DoNotContactModal
+        open={dncOpen}
+        campaignDbId={DB_CAMPAIGN_IDS[activeCampaign]}
+        onClose={() => setDncOpen(false)}
       />
 
       <HelpModal

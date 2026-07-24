@@ -27,13 +27,14 @@ def check_stuck_stages():
             stuck = db.fetchall(
                 conn,
                 """
-                SELECT id, slug, stage1_status, stage2_status, stage3_status, stage5_status,
-                       stage5_last_run
+                SELECT id, slug, stage1_status, stage2_status, stage3_status, stage5_status
                 FROM campaigns
-                WHERE 'running' IN (stage1_status, stage2_status, stage3_status, stage5_status)
-                  AND COALESCE(stage5_last_run, now() - interval '1 hour') < now() - make_interval(mins => %s)
+                WHERE (stage1_status = 'running' AND COALESCE(stage1_last_run, '1970-01-01'::timestamp) < now() - make_interval(mins => %s))
+                   OR (stage2_status = 'running' AND COALESCE(stage2_last_run, '1970-01-01'::timestamp) < now() - make_interval(mins => %s))
+                   OR (stage3_status = 'running' AND COALESCE(stage3_last_run, '1970-01-01'::timestamp) < now() - make_interval(mins => %s))
+                   OR (stage5_status = 'running' AND COALESCE(stage5_last_run, '1970-01-01'::timestamp) < now() - make_interval(mins => %s))
                 """,
-                (WATCHDOG_TIMEOUT_MINUTES,),
+                (WATCHDOG_TIMEOUT_MINUTES, WATCHDOG_TIMEOUT_MINUTES, WATCHDOG_TIMEOUT_MINUTES, WATCHDOG_TIMEOUT_MINUTES),
             )
 
         if not stuck:

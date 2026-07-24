@@ -1,18 +1,28 @@
 # conftest.py — repo root
-# HARDENING: This file intentionally does NOT add service directories to
-# sys.path. Each service must be tested in isolation:
-#   python -m pytest services/stages
-#   python -m pytest services/evaluator
-# Running `pytest` from the repo root only collects non-service tests
-# (e.g. integration tests in /tests/).
+# This file provides global fixtures.
 import sys
 import os
+import pytest
+from unittest.mock import MagicMock, patch
 
-# Explicitly REMOVE any service directory from sys.path to prevent
-# namespace collisions between services/stages/config.py and
-# services/evaluator/config.py.
-_repo_root = os.path.dirname(__file__)
-for _service_dir in ["services/stages", "services/evaluator", "services/crawler"]:
-    _abs = os.path.join(_repo_root, _service_dir)
-    if _abs in sys.path:
-        sys.path.remove(_abs)
+import pytest
+from unittest.mock import MagicMock, patch
+
+@pytest.fixture
+def mock_env():
+    """Provides a standard set of mock environment variables for testing."""
+    env = {
+        "DATABASE_URL": "postgresql://mock:mock@localhost/mock",
+        "EVALUATOR_URL": "http://evaluator:8001",
+        "STAGES_URL": "http://stages:8002",
+        "DASHBOARD_URL": "http://dashboard:3000",
+        "OPENAI_API_KEY": "sk-mock",
+        "ANTHROPIC_API_KEY": "sk-mock"
+    }
+    with patch.dict(os.environ, env, clear=False):
+        yield env
+
+@pytest.fixture
+def mock_db_conn():
+    """Provides a MagicMock database connection commonly used in tests."""
+    return MagicMock()

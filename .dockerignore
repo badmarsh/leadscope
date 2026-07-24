@@ -7,3 +7,16 @@ services/
 *.log
 .env.local
 .env.*.local
+beton-ai/
+mira/
+OpenOutreach/
+soyuz/
+run_dbg*.py
+temp*.json
+temp*.csv
+test*.jpg
+scratch/
+.pytest_cache/
+.mypy_cache/
+.coverage
+

@@ -44,6 +44,7 @@ CRAWLER_ENDPOINT: str = os.environ.get("CRAWLER_ENDPOINT", "http://crawler:8003"
 # ── Reputation APIs (optional secondary corroboration for threat_intel) ────────
 SAFE_BROWSING_API_KEY: str = os.environ.get("SAFE_BROWSING_API_KEY", "")
 VIRUSTOTAL_API_KEY: str = os.environ.get("VIRUSTOTAL_API_KEY", "")
+URLHAUS_AUTH_KEY: str = os.environ.get("URLHAUS_AUTH_KEY", "")
 
 # ── Few-shot ──────────────────────────────────────────────────────────────────
 # Max number of past feedback decisions to include as few-shot examples

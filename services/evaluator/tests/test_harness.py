@@ -20,7 +20,7 @@ def test_auto_reject_shitty_jenex(mock_db, mock_score):
     mock_db.fetchall.return_value = [
         {"id": 1, "campaign_id": 1, "domain": "jenex.sk", "company_name": "Jenex"}
     ]
-    mock_db.fetchone.return_value = {"settings": "{}"}
+    mock_db.fetchone.return_value = {"settings": '{"blocked_domain_terms": ["jenex"]}'}
     mock_db.check_stop_signal.return_value = False
     
     mock_score.return_value = {
@@ -63,3 +63,17 @@ def test_auto_approve_high_score(mock_db, mock_score):
     calls = mock_db.execute.call_args_list
     query = calls[0][0][1]
     assert "UPDATE candidates SET status = 'pending_review'" in query
+
+
+@patch("harness.db")
+def test_ignore_paused_campaigns(mock_db):
+    conn_mock = MagicMock()
+    mock_db.get_conn.return_value.__enter__.return_value = conn_mock
+    mock_db.fetchall.return_value = []
+    
+    trigger_scoring()
+    
+    calls = mock_db.fetchall.call_args_list
+    assert len(calls) > 0
+    query = calls[0][0][1]
+    assert "camp.status = 'active'" in query

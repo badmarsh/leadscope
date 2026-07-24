@@ -1,6 +1,9 @@
 import os
 import sys
 import json
+# DEPRECATED: This file is superseded by services/stages/kb_ingest.py
+# It can be safely deleted after the new kb_ingest.py is validated in production.
+
 import logging
 import requests
 import psycopg2
@@ -27,6 +30,9 @@ class Signature(BaseModel):
     snippet: str
     malware_family: Optional[str]
     confidence: str
+    proof_method: Optional[str]
+    outreach_hook: Optional[str]
+    outbreak_scope: str = "global"
 
 class ExtractionResult(BaseModel):
     signatures: List[Signature]
@@ -81,6 +87,9 @@ def extract_signatures(markdown: str) -> tuple[List[Signature], int, int]:
     - 'snippet': the exact malicious code block. Must be actual code, not prose.
     - 'malware_family': the name of the malware or vulnerability (if mentioned), else null.
     - 'confidence': 'high' (obvious malware), 'medium', or 'low'.
+    - 'proof_method': The best way to gather undeniable proof of this infection (e.g., 'google_serp_spam', 'cloaked_redirect', 'exposure_scan').
+    - 'outreach_hook': A compelling 1-sentence hook to use in cold email (e.g., "Your customers are being redirected to scam sites.").
+    - 'outbreak_scope': The scope of this malware campaign (e.g., 'global', 'targeted', 'emerging').
     
     Respond in JSON matching this schema:
     {ExtractionResult.model_json_schema()}
@@ -146,13 +155,17 @@ def ingest_url(url: str):
             continue
         db_url = url.replace("file://", "http://") if url.startswith("file://") else url
         cur.execute("""
-            INSERT INTO malware_signatures (campaign_id, snippet, malware_family, source_url, confidence)
-            VALUES (%s, %s, %s, %s, %s)
-            ON CONFLICT (campaign_id, snippet) DO NOTHING
-        """, (campaign_id, sig.snippet, sig.malware_family, db_url, sig.confidence))
+            INSERT INTO malware_signatures (campaign_id, snippet, malware_family, source_url, confidence, sneakiness_tier, proof_method, outreach_hook, outbreak_scope)
+            VALUES (%s, %s, %s, %s, %s, 'S', %s, %s, %s)
+            ON CONFLICT (campaign_id, snippet) DO UPDATE 
+            SET sneakiness_tier = 'S', 
+                proof_method = EXCLUDED.proof_method, 
+                outreach_hook = EXCLUDED.outreach_hook, 
+                outbreak_scope = EXCLUDED.outbreak_scope
+        """, (campaign_id, sig.snippet, sig.malware_family, db_url, sig.confidence, sig.proof_method, sig.outreach_hook, sig.outbreak_scope))
         if cur.rowcount > 0:
             inserted_count += 1
-            logger.info("  + Inserted snippet (family: %s)", sig.malware_family)
+            logger.info("  + Inserted snippet (family: %s, tier: S)", sig.malware_family)
 
     cost = (tokens_in / 1_000_000 * 0.10) + (tokens_out / 1_000_000 * 0.40)
     
@@ -162,6 +175,7 @@ def ingest_url(url: str):
     """, (campaign_id, tokens_in, tokens_out, cost))
 
     logger.info("Done. Extracted %s total, inserted %s new. Logged API call (%s in / %s out).", len(signatures), inserted_count, tokens_in, tokens_out)
+    conn.commit()
     conn.close()
 
 if __name__ == "__main__":

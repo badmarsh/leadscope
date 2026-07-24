@@ -1,0 +1,11 @@
+campaigns:
+  - id: balada-fake-plugin-template
+    name: "Balada Injector - fake plugin masquerade (TEMPLATE)"
+    family: "Balada Injector"
+    added: 2026-07-23
+    stale_after_days: 14
+    source_url: "https://example.com"
+    publicwww_query: '"/wp-content/plugins/{{FAKE_PLUGIN_SLUG}}/" depth:all'
+    location: plugin_path
+    urlscan_pivot: []
+    virustotal_pivot: { hashes: [], domains: [] }

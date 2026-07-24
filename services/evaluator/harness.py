@@ -33,16 +33,11 @@ def _status_from_score(score: int, min_score: int = 20, is_shitty: bool = False)
 
 
 def _select_scorer(campaign: dict):
-    if campaign.get("campaign_type") == "wp_remediation":  # HARDENING: removed magic id==3
-        return SCORER_REGISTRY["threat_intel"]
     eval_type = campaign.get("evaluator_type")
-    if not eval_type:
-        ctype = campaign.get("campaign_type", "")
-        if "shoe" in ctype or "photo" in ctype:
-            eval_type = "image_quality"
-        else:
-            eval_type = "content_relevance"
-    return SCORER_REGISTRY.get(eval_type, SCORER_REGISTRY["content_relevance"])
+    if eval_type in SCORER_REGISTRY:
+        return SCORER_REGISTRY[eval_type]
+    logger.warning("Unrecognized or missing evaluator_type %r for campaign %s. Defaulting to content_relevance.", eval_type, campaign.get("id"))
+    return SCORER_REGISTRY["content_relevance"]
 
 
 def _load_icp(conn, campaign_id: int) -> tuple[dict, int]:
@@ -76,14 +71,12 @@ def _load_icp(conn, campaign_id: int) -> tuple[dict, int]:
 
 def _load_few_shot(conn, campaign_id: int, k: int = None) -> list[dict]:
     """
-    Retrieve the k most recent feedback decisions for this campaign,
-    balanced 50/50 between approved and rejected to prevent LLM score drift.
+    Retrieve the k most recent feedback decisions for this campaign.
+    Only includes 'approved' decisions to prevent LLM score drift from mistaken rejections.
     Few-shot pools must never cross campaigns (spec requirement).
     """
     if k is None:
         k = config.FEW_SHOT_K
-
-    half = max(1, k // 2)
 
     approved_rows = db.fetchall(
         conn,
@@ -95,28 +88,9 @@ def _load_few_shot(conn, campaign_id: int, k: int = None) -> list[dict]:
         ORDER BY f.created_at DESC
         LIMIT %s
         """,
-        (campaign_id, half),
+        (campaign_id, k),
     )
-    rejected_rows = db.fetchall(
-        conn,
-        """
-        SELECT f.decision, f.note, c.domain, c.company_name
-        FROM feedback f
-        JOIN candidates c ON c.id = f.candidate_id
-        WHERE c.campaign_id = %s AND f.decision = 'rejected'
-        ORDER BY f.created_at DESC
-        LIMIT %s
-        """,
-        (campaign_id, half),
-    )
-    # Interleave: approved[0], rejected[0], approved[1], rejected[1]...
-    combined = []
-    for pair in zip(approved_rows, rejected_rows):
-        combined.extend(pair)
-    # Append any leftovers if one pool is smaller than the other
-    combined.extend(approved_rows[len(rejected_rows):])
-    combined.extend(rejected_rows[len(approved_rows):])
-    return combined[:k]
+    return approved_rows
 
 
 def _log_call(conn, campaign_id: int, provider: str, model: str, tokens_in: int, tokens_out: int) -> None:
@@ -173,8 +147,8 @@ def score_candidate(candidate_id: int) -> dict[str, Any]:
         if not campaign:
             raise ValueError(f"Campaign {candidate['campaign_id']} not found")
 
-        evaluator_type = campaign["evaluator_type"]
-        scorer_fn = SCORER_REGISTRY.get(evaluator_type)
+        evaluator_type = campaign.get("evaluator_type", "content_relevance")
+        scorer_fn = _select_scorer(campaign)
         if not scorer_fn:
             raise ValueError(f"Unknown evaluator_type: {evaluator_type!r}")
 
@@ -205,11 +179,10 @@ def score_candidate(candidate_id: int) -> dict[str, Any]:
             (candidate["domain"], candidate["campaign_id"], candidate_id)
         )
         if dup:
-            dup_id_json = json.dumps(int(dup["id"]))
             db.execute(
                 conn, 
                 "UPDATE candidates SET status = 'duplicate', duplicate_of_candidate_id = %s WHERE id = %s",
-                (dup_id_json, candidate_id)
+                (int(dup["id"]), candidate_id)
             )
             return {"candidate_id": candidate_id, "score": 0, "rationale": f"Duplicate of candidate {dup['id']} within 30 days."}
 
@@ -234,7 +207,7 @@ def score_candidate(candidate_id: int) -> dict[str, Any]:
             )
             db.execute(
                 conn,
-                "UPDATE candidates SET status = 'new' WHERE id = %s",
+                "UPDATE candidates SET status = 'new', created_at = NOW() WHERE id = %s",
                 (candidate_id,),
             )
             return {"candidate_id": candidate_id, "score": 0, "rationale": "LLM cognitive failure — will retry."}
@@ -315,10 +288,11 @@ def trigger_scoring(campaign_id: int | None = None) -> dict:
             new_candidates = db.fetchall(
                 conn,
                 """
-                SELECT id, campaign_id, domain, company_name
-                FROM candidates
-                WHERE status = 'new'
-                ORDER BY created_at ASC
+                SELECT c.id, c.campaign_id, c.domain, c.company_name
+                FROM candidates c
+                JOIN campaigns camp ON c.campaign_id = camp.id
+                WHERE c.status = 'new' AND camp.status = 'active'
+                ORDER BY c.created_at ASC
                 LIMIT 50
                 """
             )
@@ -415,7 +389,7 @@ def trigger_scoring(campaign_id: int | None = None) -> dict:
                 logger.error("Harness failed for candidate %s: %s", cand["id"], exc)
                 return {"candidate_id": cand["id"], "status": "error", "error": str(exc)}
 
-        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
             for res in executor.map(process_cand, new_candidates):
                 if res is None:
                     break
@@ -431,5 +405,5 @@ def trigger_scoring(campaign_id: int | None = None) -> dict:
             "details": results
         }
     finally:
-        for cid in campaign_ids:
+        for cid in locked_campaign_ids:
             db.set_stage_status(cid, "stage3", "idle")

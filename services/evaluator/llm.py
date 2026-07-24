@@ -33,6 +33,7 @@ def _get_openrouter() -> OpenAI:
         _or_client = OpenAI(
             api_key=config.OPENROUTER_API_KEY,
             base_url=config.OPENROUTER_BASE_URL,
+            timeout=30.0,
         )
     return _or_client
 
@@ -43,6 +44,7 @@ def _get_proxy() -> OpenAI:
         _proxy_client = OpenAI(
             api_key=config.GEMINI_PROXY_API_KEY,
             base_url=f"{config.GEMINI_PROXY_ENDPOINT.rstrip('/')}/v1",
+            timeout=30.0,
         )
     return _proxy_client
 
@@ -241,13 +243,18 @@ def chat_vision(
         try:
             # Try to fetch the image ourselves, handling redirects and preventing LLM fetching errors
             headers = {
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
                 "Accept": "image/webp,image/apng,image/*,*/*;q=0.8",
                 "Accept-Language": "en-US,en;q=0.9",
             }
             resp = requests.get(url, timeout=10, allow_redirects=True, headers=headers)
             if resp.status_code == 200 and len(resp.content) > 0:
                 content_type = resp.headers.get('Content-Type', '').lower()
+                # Strip parameters like charset and normalize jpg to jpeg
+                content_type = content_type.split(';')[0].strip()
+                if content_type == 'image/jpg':
+                    content_type = 'image/jpeg'
+
                 # Only process supported image formats (Gemini does not support SVG)
                 allowed_types = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
                 if content_type in allowed_types:

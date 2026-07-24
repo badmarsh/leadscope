@@ -48,14 +48,19 @@ export async function GET(request: NextRequest) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         url: targetUrl,
+        bestAttempt: true,
+        gotoOptions: {
+          waitUntil: "domcontentloaded",
+          timeout: 15000
+        },
         options: { type: "jpeg", quality: 70, fullPage: false },
         viewport: { width: 1280, height: 800 }
       })
     })
 
     if (!response.ok) {
-      console.error(`Browserless error: ${response.status} ${response.statusText}`)
-      return NextResponse.json({ error: "Failed to generate screenshot" }, { status: response.status })
+      console.warn(`Browserless warning for ${targetUrl}: ${response.status} ${response.statusText}`)
+      return NextResponse.json({ error: "Failed to generate screenshot" }, { status: response.status >= 500 ? 502 : response.status })
     }
 
     const arrayBuffer = await response.arrayBuffer()

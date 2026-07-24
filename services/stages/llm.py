@@ -36,12 +36,14 @@ def _get_client() -> OpenAI:
             _client = OpenAI(
                 api_key=config.GEMINI_PROXY_API_KEY,
                 base_url=f"{config.GEMINI_PROXY_ENDPOINT.rstrip('/')}/v1",
+                timeout=30.0,
             )
         elif config.OPENROUTER_API_KEY:
             logger.info("LLM client: OpenRouter (local proxy not configured)")
             _client = OpenAI(
                 api_key=config.OPENROUTER_API_KEY,
                 base_url="https://openrouter.ai/api/v1",
+                timeout=30.0,
             )
         else:
             raise RuntimeError("No LLM backend configured: set GEMINI_PROXY_ENDPOINT or OPENROUTER_API_KEY")
@@ -82,6 +84,24 @@ def chat_text(
                 temperature=temperature,
                 max_tokens=max_tokens,
             )
+            
+            if not resp or not resp.choices:
+                raise LLMSafetyFilterError("LLM returned no choices (possible safety filter block)")
+
+            text = resp.choices[0].message.content or ""
+            finish_reason = getattr(resp.choices[0], "finish_reason", "unknown")
+
+            if not text.strip():
+                if finish_reason in ("safety", "recitation", "FILTERED", "block"):
+                    logger.warning("LLM response blocked by safety filter: finish_reason=%s", finish_reason)
+                    raise LLMSafetyFilterError(f"LLM content blocked by safety filter ({finish_reason})")
+                else:
+                    if attempt == max_retries - 1:
+                        raise RuntimeError(f"LLM returned empty response repeatedly. Last finish_reason: {finish_reason}")
+                    logger.warning(f"LLM returned empty response (finish_reason={finish_reason}). Retrying {attempt + 1}/{max_retries}...")
+                    time.sleep(2 ** attempt)
+                    continue
+
             break
         except (RateLimitError, APIStatusError) as e:
             if attempt == max_retries - 1:
@@ -89,15 +109,6 @@ def chat_text(
                 raise
             logger.warning(f"LLM API Error: {e}. Retrying {attempt + 1}/{max_retries}...")
             time.sleep(2 ** attempt)
-
-    if not resp or not resp.choices:
-        raise LLMSafetyFilterError("LLM returned no choices (possible safety filter block)")
-
-    text = resp.choices[0].message.content or ""
-    # STABILIZATION FIX: Detect empty content caused by Gemini safety blocks when scanning malware text
-    if not text.strip() and resp.choices[0].finish_reason in ("safety", "recitation", "FILTERED"):
-        logger.warning("LLM response blocked by safety filter: finish_reason=%s", resp.choices[0].finish_reason)
-        raise LLMSafetyFilterError(f"LLM content blocked by safety filter ({resp.choices[0].finish_reason})")
 
     tokens_in  = resp.usage.prompt_tokens if resp.usage else 0
     tokens_out = resp.usage.completion_tokens if resp.usage else 0

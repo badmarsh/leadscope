@@ -309,8 +309,23 @@ def extract_product_grid_images_via_crawler(url: str) -> list[str]:
         if data.get("success") and data.get("extracted_data"):
             urls = data["extracted_data"].get("urls", [])
             if isinstance(urls, list):
-                # Clean up any malformed URLs
-                return [u if u.startswith("http") else "https:" + u for u in urls if u]
+                valid = []
+                for u in urls:
+                    if not u:
+                        continue
+                    u = u if u.startswith("http") else "https:" + u
+                    u_lower = u.lower()
+                    
+                    # Heuristic to reject obvious non-images
+                    if u_lower.endswith(".com/") or u_lower.endswith(".com") or u_lower.endswith("/products"):
+                        continue
+                        
+                    if not any(ext in u_lower for ext in [".jpg", ".jpeg", ".png", ".webp", ".avif"]):
+                        if not any(cdn in u_lower for cdn in ["cdn", "image", "media", "upload"]):
+                            continue
+                            
+                    valid.append(u)
+                return valid
     except Exception as exc:
         logger.warning("Crawler LLM extraction failed for %s: %s", url, exc)
     return []

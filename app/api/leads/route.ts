@@ -48,8 +48,19 @@ export async function GET(request: NextRequest) {
   const offset = (page - 1) * limit
 
   const cursorParam = searchParams.get("cursor")
-  const cursorId = cursorParam ? parseInt(cursorParam, 10) : null
-  const cursorCondition = cursorId ? `AND c.id < ${cursorId}` : ""
+  const parsedCursor = cursorParam ? parseInt(cursorParam, 10) : null
+  const cursorId = parsedCursor !== null && !isNaN(parsedCursor) ? parsedCursor : null
+
+  const queryValues = [...values]
+  let cursorCondition = ""
+  if (cursorId !== null) {
+    queryValues.push(cursorId)
+    cursorCondition = `AND c.id < $${queryValues.length}`
+  }
+
+  const limitParamIdx = queryValues.length + 1
+  const offsetParamIdx = queryValues.length + 2
+  queryValues.push(limit, offset)
 
   // Count total matching leads (must include the joins to filter by l.estimated_size)
   const countRow = await query<{ count: string }>(
@@ -89,6 +100,8 @@ export async function GET(request: NextRequest) {
     estimated_size: string | null
     estimated_revenue: string | null
     estimated_traffic: string | null
+    audit_token: string | null
+    mainwp_webhook_token: string | null
   }>(
     `
     SELECT
@@ -116,7 +129,9 @@ export async function GET(request: NextRequest) {
       l.draft_email,
       l.estimated_size,
       l.estimated_revenue,
-      l.estimated_traffic
+      l.estimated_traffic,
+      c.audit_token,
+      l.mainwp_webhook_token
     FROM candidates c
     LEFT JOIN LATERAL (
       SELECT * FROM evaluations WHERE candidate_id = c.id
@@ -131,9 +146,9 @@ export async function GET(request: NextRequest) {
     ${statusCondition}
     ${cursorCondition}
     ORDER BY e.score DESC NULLS LAST, c.id DESC
-    LIMIT $${values.length + 1} OFFSET $${values.length + 2}
+    LIMIT $${limitParamIdx} OFFSET $${offsetParamIdx}
     `,
-    [...values, limit, offset],
+    queryValues,
   )
 
   const nextCursor = rows.length === limit ? rows[rows.length - 1].id : null

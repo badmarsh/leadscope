@@ -46,7 +46,7 @@ services:
       dockerfile: Dockerfile
     restart: unless-stopped
     ports:
-      - "8001:8001"
+      - "127.0.0.1:8001:8001"
     env_file:
       - .env
     environment:
@@ -58,6 +58,12 @@ services:
         condition: service_healthy
     volumes:
       - app_logs:/var/log/app
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
   stages:
     build:
@@ -65,7 +71,7 @@ services:
       dockerfile: Dockerfile
     restart: unless-stopped
     ports:
-      - "8002:8002"
+      - "127.0.0.1:8002:8002"
     env_file:
       - .env
     environment:
@@ -81,13 +87,19 @@ services:
         condition: service_healthy
     volumes:
       - app_logs:/var/log/app
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8002/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
   crawler:
     build:
       context: ./services/crawler
       dockerfile: Dockerfile
     restart: unless-stopped
     ports:
-      - "8003:8003"
+      - "127.0.0.1:8003:8003"
     env_file:
       - .env
     environment:
@@ -138,6 +150,30 @@ services:
       postgres:
         condition: service_healthy
 
+  certstream-server:
+    image: 0rickyy0/certstream-server-go:latest
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+
+  certstream:
+    build:
+      context: ./services/stages
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-leadscope}:${POSTGRES_PASSWORD:-leadscope_dev}@postgres:5432/${POSTGRES_DB:-leadscope}
+    volumes:
+      - ./services/jobs:/app/jobs
+    command: ["python", "/app/jobs/certstream_monitor.py", "--check-wp"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      certstream-server:
+        condition: service_started
+
   job-rescore-icp:
     build:
       context: ./services/stages
@@ -164,6 +200,8 @@ services:
     environment:
       - CONNECTION_TIMEOUT=300000
       - MAX_CONCURRENT_SESSIONS=10
+      - DEFAULT_IGNORE_HTTPS_ERRORS=true
+      - TIMEOUT=60000
 
 
 

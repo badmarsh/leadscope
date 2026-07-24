@@ -1,0 +1,71 @@
+campaigns:
+  - id: japanese-keyword-hack
+    name: "Japanese Keyword Hack — Gibberish Slug Injection"
+    family: "SEO Keyword Hack"
+    added: 2026-07-23
+    stale_after_days: 45
+    source_url: "https://blog.sucuri.net/2019/01/japanese-seo-spam-wordpress.html"
+    publicwww_query: '"wordpress" "site:*.jp" filetype:html depth:all'
+    location: html_body
+    urlscan_pivot:
+      - 'page.title:"viagra" OR page.title:"cialis" OR page.title:"薬"'
+    virustotal_pivot:
+      hashes: []
+      domains: []
+    wayback_pivot:
+      enabled: true
+      match_mime: "text/html"
+    notes: >
+      Attackers inject thousands of fake Japanese-language pages at gibberish slug paths.
+      Wayback pivot will check historical mime-types and status codes to find when the root
+      domain started exhibiting spammy subpage structures.
+
+  - id: pharma-hack-hidden-links
+    name: "Classic Pharma Hack — Hidden Link Injection"
+    family: "SEO Pharma Hack"
+    added: 2026-07-23
+    stale_after_days: 30
+    source_url: "https://blog.sucuri.net/2023/11/wordpress-pharma-hack.html"
+    publicwww_query: '"buy cheap viagra" OR "cialis online" filetype:html depth:all'
+    location: html_body
+    urlscan_pivot:
+      - 'page.body:"buy cheap viagra"'
+    virustotal_pivot:
+      hashes: []
+      domains: []
+    wayback_pivot:
+      enabled: false
+    notes: >
+      Hidden via CSS. urlscan domHash clustering is highly effective here because attackers
+      often reuse the exact same injected HTML/CSS scaffolding across thousands of sites.
+
+  - id: wp-vcd-backdoor
+    name: "WP-VCD Backdoor — functions.php Injection"
+    family: "WP-VCD"
+    added: 2026-07-23
+    stale_after_days: 21
+    source_url: "https://blog.sucuri.net/2024/02/wp-vcd-wordpress-malware.html"
+    publicwww_query: null
+    fit: "not_suitable_for_publicwww"
+    location: server_side
+    urlscan_pivot:
+      - 'filename:"class.theme-modules.php"'
+    virustotal_pivot:
+      hashes:
+        - "a7f8c3d2e1b4f5a6c7d8e9f0a1b2c3d4e5f6a7b8" 
+      domains: []
+    wayback_pivot:
+      enabled: false
+
+  - id: spam-link-network-template
+    name: "Spam Link Network (TEMPLATE)"
+    family: "Link Farm / PBN"
+    added: 2026-07-23
+    stale_after_days: 14
+    source_url: "https://blog.sucuri.net/2021/06/wordpress-seo-spam-link-injection.html"
+    publicwww_query: '"{{ANCHOR_TEXT_KEYWORD}}" filetype:html depth:all'
+    location: html_body
+    urlscan_pivot:
+      - 'page.body:"{{ANCHOR_TEXT_KEYWORD}}"'
+    virustotal_pivot: { hashes: [], domains: [] }
+    wayback_pivot: { enabled: true }

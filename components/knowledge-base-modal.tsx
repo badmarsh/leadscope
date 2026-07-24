@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
-import { Database, Plus, Trash2, Edit2, Save, X } from "lucide-react"
+import { Database, Plus, Trash2, Edit2, Save, X, RefreshCw } from "lucide-react"
 import { useTranslation } from "@/lib/i18n"
 import { cn } from "@/lib/utils"
 
@@ -125,6 +125,24 @@ export function KnowledgeBaseModal({ open, campaignDbId, onClose }: KnowledgeBas
     }
   }
 
+  const [ingestLoading, setIngestLoading] = useState(false)
+
+  const handleRunIngest = async () => {
+    setIngestLoading(true)
+    setError(null)
+    try {
+      const r = await fetch(`/api/admin/kb-ingest`, { method: "POST" })
+      const data = await r.json()
+      if (!r.ok || data.error) throw new Error(data.error || "Failed to trigger KB ingestion")
+      // Ingestion runs in the background, but we can poll/refresh after a short delay
+      setTimeout(fetchSignatures, 3000)
+    } catch (e: any) {
+      setError(e.message)
+    } finally {
+      setIngestLoading(false)
+    }
+  }
+
   if (!open) return null
 
   return (
@@ -135,7 +153,7 @@ export function KnowledgeBaseModal({ open, campaignDbId, onClose }: KnowledgeBas
       aria-modal="true"
       role="dialog"
     >
-      <div className="flex h-full max-h-[90vh] w-full max-w-5xl flex-col bg-background shadow-2xl rounded-xl overflow-hidden border border-border">
+      <div className="flex h-full max-h-[90vh] w-full max-w-7xl flex-col bg-background shadow-2xl rounded-xl overflow-hidden border border-border">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-border px-6 py-4 bg-muted/30">
           <div className="flex items-center gap-2">
@@ -164,12 +182,21 @@ export function KnowledgeBaseModal({ open, campaignDbId, onClose }: KnowledgeBas
 
           <div className="mb-4 flex justify-between items-center">
             <h3 className="text-sm font-medium">Signatures ({signatures.length})</h3>
-            <button
-              onClick={() => setAdding(!adding)}
-              className="flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
-            >
-              <Plus className="size-4" /> Add Signature
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleRunIngest}
+                disabled={ingestLoading}
+                className="flex items-center gap-1.5 rounded-md bg-secondary px-3 py-1.5 text-sm font-medium text-secondary-foreground hover:bg-secondary/80 transition-colors disabled:opacity-50"
+              >
+                <RefreshCw className={cn("size-4", ingestLoading && "animate-spin")} /> Auto-Ingest
+              </button>
+              <button
+                onClick={() => setAdding(!adding)}
+                className="flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
+              >
+                <Plus className="size-4" /> Add Signature
+              </button>
+            </div>
           </div>
 
           <div className="rounded-md border border-border overflow-hidden">

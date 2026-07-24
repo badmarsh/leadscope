@@ -2,6 +2,8 @@
 db.py — Thread-safe psycopg2 connection pool for the evaluator service.
 Same pattern as services/stages/db.py.
 """
+import time
+import logging
 import psycopg2
 import psycopg2.extras
 from psycopg2 import pool as pg_pool
@@ -9,32 +11,53 @@ from contextlib import contextmanager
 
 import config
 
+logger = logging.getLogger(__name__)
+
 _pool: pg_pool.ThreadedConnectionPool | None = None
 
 
 def get_pool() -> pg_pool.ThreadedConnectionPool:
     global _pool
     if _pool is None:
-        _pool = pg_pool.ThreadedConnectionPool(
-            minconn=2,
-            maxconn=10,
-            dsn=config.DATABASE_URL,
-        )
+        retries = 10
+        for i in range(retries):
+            try:
+                _pool = pg_pool.ThreadedConnectionPool(
+                    minconn=2,
+                    maxconn=25,
+                    dsn=config.DATABASE_URL,
+                )
+                break
+            except psycopg2.OperationalError as e:
+                if i < retries - 1:
+                    logger.warning("Database connection failed (%s), retrying in 3 seconds...", str(e).strip())
+                    time.sleep(3)
+                else:
+                    logger.error("Could not connect to database after %d retries.", retries)
+                    raise
     return _pool
 
 
 @contextmanager
 def get_conn():
-    conn = get_pool().getconn()
+    conn = None
+    retries = 5
+    for attempt in range(retries):
+        try:
+            conn = get_pool().getconn()
+            break
+        except pg_pool.PoolError:
+            if attempt < retries - 1:
+                time.sleep(0.1)
+            else:
+                logger.error("Postgres connection pool exhausted after %d retries", retries)
+                raise
     try:
-        conn.autocommit = False
+        conn.autocommit = True
         yield conn
-        conn.commit()
-    except Exception:
-        conn.rollback()
-        raise
     finally:
-        get_pool().putconn(conn)
+        if conn:
+            get_pool().putconn(conn)
 
 
 def fetchone(conn, sql, params=()) -> dict | None:
@@ -69,6 +92,7 @@ logger = logging.getLogger(__name__)
 
 # Allowlist of valid stage identifiers — prevents f-string SQL injection
 _VALID_STAGES = frozenset({"stage1", "stage2", "stage3", "stage5"})
+_VALID_STATUSES = frozenset({"idle", "running", "stopping", "failed"})
 
 
 def _validate_stage(stage: str) -> str:
@@ -82,7 +106,7 @@ def set_stage_status(campaign_id: int, stage: str, status: str):
     """
     Helper to update the pipeline status (and last_run) for a campaign.
     Requires its own temporary connection so statuses update instantly and survive rollbacks.
-    Stage is validated against allowlist to prevent SQL injection.
+    Stage and status are validated against allowlists to prevent SQL injection.
     """
     _validate_stage(stage)  # allowlist check before f-string interpolation
     conn = get_pool().getconn()
@@ -96,8 +120,10 @@ def set_stage_status(campaign_id: int, stage: str, status: str):
                     f"UPDATE campaigns SET {stage}_status = 'idle', {stage}_last_run = now() WHERE id = %s",
                     (campaign_id,),
                 )
-            else:
+            elif status in _VALID_STATUSES:
                 cur.execute(f"UPDATE campaigns SET {stage}_status = %s WHERE id = %s", (status, campaign_id))
+            else:
+                raise ValueError(f"Invalid status: {status!r}")
     except Exception as exc:
         logger.warning("set_stage_status failed (non-fatal): %s", exc)
     finally:

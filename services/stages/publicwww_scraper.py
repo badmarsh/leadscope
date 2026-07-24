@@ -62,8 +62,8 @@ def get_campaign_id(conn) -> int:
 def get_signatures(conn, campaign_id: int) -> list[dict]:
     with conn.cursor() as cur:
         cur.execute(
-            "SELECT id, snippet, malware_family, confidence FROM malware_signatures "
-            "WHERE campaign_id = %s ORDER BY confidence DESC",
+            "SELECT id, snippet, malware_family, confidence, source_url FROM malware_signatures "
+            "WHERE campaign_id = %s AND status = 'approved' ORDER BY confidence DESC",
             (campaign_id,),
         )
         return cur.fetchall()
@@ -85,6 +85,11 @@ def is_do_not_contact(conn, domain: str, campaign_id: int) -> bool:
 
 def upsert_candidate(conn, *, campaign_id: int, domain: str, evidence: dict) -> bool:
     """Insert or reopen candidate. Returns True if row was written."""
+    import tldextract
+    ext = tldextract.extract(domain)
+    if ext.subdomain and ext.subdomain != 'www':
+        return False
+
     if is_do_not_contact(conn, domain, campaign_id):
         return False
     with conn.cursor() as cur:
@@ -112,36 +117,39 @@ def upsert_candidate(conn, *, campaign_id: int, domain: str, evidence: dict) -> 
 # ── Parsing helpers ───────────────────────────────────────────────────────────
 
 def extract_domain(url: str) -> str | None:
-    """Extract apex domain from URL string."""
+    """Extract apex domain from URL string, stripping subdomains."""
     try:
         if not url.startswith("http"):
             url = "https://" + url
         parsed = urlparse(url)
-        host = parsed.netloc or parsed.path
-        host = re.sub(r"^www\.", "", host).split(":")[0].strip()
-        return host if host and "." in host else None
+        host = (parsed.netloc or parsed.path).split(":")[0].strip()
+        import tldextract
+        ext = tldextract.extract(host)
+        top_domain = getattr(ext, "top_domain_under_public_suffix", "") or getattr(ext, "registered_domain", "")
+        if top_domain:
+            return top_domain.lower()
+        return None
     except Exception:
         return None
 
 
-def parse_domains_from_markdown(markdown: str) -> list[str]:
+def parse_results_from_markdown(markdown: str) -> list[dict]:
     """
-    Extract result URLs from PublicWWW markdown table rows.
-    Row format: |  rank  |  [](https://domain/) https://domain/  |  snippet  |
-    We match only the URLs inside the Url column (between rank and snippet cells).
+    Extract result URLs AND code snippet context from PublicWWW markdown table rows.
+    Row format: |  rank  |  [](https://domain/) https://domain/  |  snippet context  |
+    Returns list of dicts: {domain, context}
     """
-    domains = []
+    results = []
     seen = set()
 
-    # Match the canonical URL that appears after the [](url) anchor in the Url column.
-    # Pattern: [](<url>) <url>  — the second occurrence is the plain-text canonical URL.
-    # We pick the plain-text one (after the closing paren+space).
+    # Capture: URL column + everything up to the next pipe (the Snippets column)
     row_pattern = re.compile(
-        r'\[\]\(https?://[^)]+\)\s+(https?://[^\s|]+)',
+        r'\[\]\(https?://[^)]+\)\s+(https?://[^\s|]+)[^|]*\|([^|\n]+)',
         re.IGNORECASE,
     )
     for match in row_pattern.finditer(markdown):
         raw_url = match.group(1).rstrip("/")
+        context = match.group(2).strip() if match.group(2) else ""
         domain = extract_domain(raw_url)
         if (
             domain
@@ -150,9 +158,14 @@ def parse_domains_from_markdown(markdown: str) -> list[str]:
             and domain not in seen
         ):
             seen.add(domain)
-            domains.append(domain)
+            results.append({"domain": domain, "context": context})
 
-    return domains
+    return results
+
+
+def parse_domains_from_markdown(markdown: str) -> list[str]:
+    """Backwards-compat wrapper — returns just domain strings."""
+    return [r["domain"] for r in parse_results_from_markdown(markdown)]
 
 
 # ── Crawler call ──────────────────────────────────────────────────────────────
@@ -163,13 +176,15 @@ def crawl_publicwww(snippet: str, page: int = 1, use_quotes: bool = True) -> str
     Returns markdown text or None on failure.
     Always uses quoted phrase search for precision (avoids false positives).
     """
-    # Always wrap in quotes for exact phrase match
-    search_term = f'"{snippet}"' if use_quotes else snippet
+    # The user has explicitly noted that wrapping the query in quotes breaks the +depth:all
+    # modifier for complex queries like `base64_decode(str_rot13(`.
+    search_term = snippet
     encoded = quote(search_term, safe="")
     
     # PublicWWW pagination: ?from=N (0-based, 10 results per page)
     offset = (page - 1) * 10
-    url = f"https://publicwww.com/websites/{encoded}/"
+    # Append +depth:all to do an internal pages search (yields more unredacted results)
+    url = f"https://publicwww.com/websites/{encoded}+depth:all/"
     if offset > 0:
         url += f"?from={offset}"
 
@@ -181,10 +196,11 @@ def crawl_publicwww(snippet: str, page: int = 1, use_quotes: bool = True) -> str
             json={
                 "url": url,
                 "force_playwright": True,
-                "timeout_ms": 30000,
+                "magic": True,
+                "timeout_ms": 40000,
                 "bypass_cache": True,
             },
-            timeout=45,
+            timeout=55,
         )
         resp.raise_for_status()
         data = resp.json()
@@ -224,8 +240,9 @@ def scrape_signature(
     family = sig["malware_family"] or "Unknown"
     confidence = sig["confidence"]
     
-    # Always use quoted search for precision (avoids false positives from partial matches)
-    use_quotes = True
+    # PublicWWW's phrase matching breaks if we wrap complex PHP snippets (with their own quotes) in double quotes.
+    # We'll rely on the raw snippet for now, which the user verified works.
+    use_quotes = False
     
     logger.info(
         "=== Signature #%s | %s | confidence=%s | quoted=%s ===",
@@ -249,19 +266,21 @@ def scrape_signature(
                 logger.info("No results for this signature — skipping")
                 break
 
-        domains = parse_domains_from_markdown(markdown)
-        
-        if not domains:
+        results = parse_results_from_markdown(markdown)
+
+        if not results:
             logger.info("Page %d: no new domains found — stopping pagination", page)
             break
             
-        logger.info("Page %d: found %d domains", page, len(domains))
-        
-        for domain in domains:
+        logger.info("Page %d: found %d domains", page, len(results))
+
+        for result in results:
+            domain = result["domain"]
+            context = result.get("context", "")
             all_domains.append(domain)
-            
+
             if dry_run:
-                logger.info("  [DRY RUN] Would insert: %s", domain)
+                logger.info("  [DRY RUN] Would insert: %s (context: %s)", domain, context[:80])
                 inserted += 1
                 continue
 
@@ -272,9 +291,10 @@ def scrape_signature(
                     "malware_family": family,
                     "confidence": confidence,
                     "source": "publicwww_scrape",
+                    "publicwww_context": context[:500],  # The actual code snippet from the site
                 }]
             }
-            
+
             ok = upsert_candidate(
                 conn,
                 campaign_id=campaign_id,
@@ -283,16 +303,16 @@ def scrape_signature(
             )
             if ok:
                 inserted += 1
-                logger.info("  ✓ Inserted: %s", domain)
+                logger.info("  ✓ Inserted: %s | context: %s", domain, context[:80])
             else:
                 skipped += 1
+
+        if not dry_run:
+            conn.commit()
 
         # Polite delay between pages
         if page < max_pages:
             time.sleep(3)
-
-    if not dry_run:
-        conn.commit()
 
     return {
         "signature_id": sig["id"],

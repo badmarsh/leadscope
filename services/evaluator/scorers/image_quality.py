@@ -5,8 +5,10 @@ Firecrawl scrapes product pages, extracts image URLs,
 a vision-capable LLM scores against a rubric. Score is an OPPORTUNITY
 score: high = poor photos + active business = great lead.
 """
+import datetime
 import json
 import logging
+import re
 
 import config
 import firecrawl_client
@@ -93,26 +95,20 @@ def score(candidate: dict, campaign: dict, icp: dict, few_shot: list[dict]) -> d
     # Tech stack detection
     tech_stack = firecrawl_client.detect_tech_stack(pages_markdown)
 
-    # Early "Dead site" filter
-    import re, datetime
+    # Early "Dead site" filter — track max copyright year across ALL pages
     current_year = datetime.datetime.now().year
     has_socials = False
-    has_recent_copyright = True
-    copyright_found = False
+    all_copyright_years = []
 
     for text in pages_markdown.values():
         text_lower = text.lower()
         if any(p in text_lower for p in ["facebook.com", "instagram.com", "tiktok.com", "twitter.com", "x.com"]):
             has_socials = True
-            
-        years = re.findall(r'(?:copyright|©).*?(20\d\d)', text_lower)
-        if years:
-            copyright_found = True
-            max_year = max(int(y) for y in years)
-            if max_year >= current_year - 2:
-                has_recent_copyright = True
-            else:
-                has_recent_copyright = False
+        years = re.findall(r'(?:copyright|\xa9).*?(20\d\d)', text_lower)
+        all_copyright_years.extend(int(y) for y in years)
+
+    copyright_found = bool(all_copyright_years)
+    has_recent_copyright = copyright_found and max(all_copyright_years) >= current_year - 2
 
     if not has_socials and copyright_found and not has_recent_copyright:
         return {
@@ -183,7 +179,7 @@ def score(candidate: dict, campaign: dict, icp: dict, few_shot: list[dict]) -> d
         image_count=len(images),
     )
 
-    req_fields = ["score", "rationale", "cold_email_hook", "photo_quality", "product_type", "evidence_urls"]
+    req_fields = ["score", "rationale", "cold_email_hook", "photo_quality", "product_type"]
     # Use vision model if we have images, otherwise text-only
     if images:
         result, ti, to, model, provider = llm.chat_vision(

@@ -191,7 +191,6 @@ def _search_exa(query: str, conn, campaign_id: int) -> list[dict]:
         return []
     try:
         exa = Exa(api_key=config.EXA_API_KEY)
-        # Assuming the SDK passes **kwargs to requests or supports timeout
         results = exa.search_and_contents(query, type="auto", num_results=10)
         cost_log.log_call(conn, "stage2", "exa", campaign_id=campaign_id, query_count=1)
         return [
@@ -199,7 +198,10 @@ def _search_exa(query: str, conn, campaign_id: int) -> list[dict]:
             for r in results.results
         ]
     except Exception as exc:
-        logger.warning("Exa search failed for query=%r: %s", query, exc)
+        if "429" in str(exc) or "rate" in str(exc).lower():
+            logger.error("Exa RATE LIMIT EXCEEDED for query=%r: %s", query, exc)
+        else:
+            logger.warning("Exa search failed for query=%r: %s", query, exc)
         return []
 
 
@@ -216,7 +218,10 @@ def _search_tavily(query: str, conn, campaign_id: int) -> list[dict]:
             for r in resp.get("results", [])
         ]
     except Exception as exc:
-        logger.warning("Tavily search failed for query=%r: %s", query, exc)
+        if "429" in str(exc) or "rate" in str(exc).lower():
+            logger.error("Tavily RATE LIMIT EXCEEDED for query=%r: %s", query, exc)
+        else:
+            logger.warning("Tavily search failed for query=%r: %s", query, exc)
         return []
 
 
@@ -231,6 +236,9 @@ def _search_serper(query: str, conn, campaign_id: int) -> list[dict]:
             json={"q": query, "num": 10},
             timeout=15,
         )
+        if resp.status_code == 429:
+            logger.error("Serper RATE LIMIT EXCEEDED (429) for query=%r", query)
+            return []
         resp.raise_for_status()
         cost_log.log_call(conn, "stage2", "serper", campaign_id=campaign_id, query_count=1)
         return [
@@ -252,6 +260,9 @@ def _search_serpapi(query: str, conn, campaign_id: int) -> list[dict]:
             params={"q": query, "api_key": config.SERPAPI_API_KEY, "engine": "google", "num": 10},
             timeout=15,
         )
+        if resp.status_code == 429:
+            logger.error("SerpAPI RATE LIMIT EXCEEDED (429) for query=%r", query)
+            return []
         resp.raise_for_status()
         cost_log.log_call(conn, "stage2", "serpapi", campaign_id=campaign_id, query_count=1)
         return [
@@ -278,6 +289,9 @@ def _search_brave(query: str, conn, campaign_id: int) -> list[dict]:
             },
             timeout=15,
         )
+        if resp.status_code == 429 or resp.headers.get("x-ratelimit-remaining") == "0":
+            logger.error("Brave RATE LIMIT EXCEEDED (429/quota) for query=%r", query)
+            return []
         resp.raise_for_status()
         cost_log.log_call(conn, "stage2", "brave", campaign_id=campaign_id, query_count=1)
         web = resp.json().get("web", {}).get("results", [])
@@ -477,11 +491,11 @@ def _keyword_search(campaign_id: int, conn, cooldown_days: int = 30) -> dict:
         db.execute(
             conn,
             """
-            INSERT INTO search_queries_log (campaign_id, query)
-            VALUES (%s, %s)
-            ON CONFLICT (campaign_id, query) DO UPDATE SET last_run_at = now()
+            INSERT INTO search_queries_log (campaign_id, query, query_yield_count)
+            VALUES (%s, %s, %s)
+            ON CONFLICT (campaign_id, query) DO UPDATE SET last_run_at = now(), query_yield_count = EXCLUDED.query_yield_count
             """,
-            (campaign_id, query),
+            (campaign_id, query, len(hits)),
         )
 
     # Run HU keywords

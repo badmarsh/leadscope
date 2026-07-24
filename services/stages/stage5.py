@@ -51,6 +51,28 @@ def _screenshot_url(domain: str) -> str:
     return f"/api/screenshot?url={encoded}"
 
 
+CF_PATTERNS = ["just a moment", "checking your browser", "ddos-guard", "enable javascript", "attention required!"]
+
+
+def _is_bot_challenge(text: Optional[str]) -> bool:
+    if not text:
+        return False
+    lower_text = text.lower()[:500]
+    return any(p in lower_text for p in CF_PATTERNS)
+
+
+def _has_valid_mx(domain: Optional[str]) -> Optional[bool]:
+    """Check if the domain has valid MX DNS records."""
+    if not domain:
+        return None
+    try:
+        import dns.resolver
+        answers = dns.resolver.resolve(domain, 'MX')
+        return bool(answers)
+    except Exception:
+        return False
+
+
 def _scrape_domain(domain: str) -> tuple[Optional[str], str, Optional[list]]:
     """
     Try homepage with Crawl4AI. Returns (markdown_text, page_url, images_list).
@@ -59,13 +81,13 @@ def _scrape_domain(domain: str) -> tuple[Optional[str], str, Optional[list]]:
     base = f"https://{domain}"
     # Try fast path first (trafilatura), then Playwright if needed
     text, images = _crawler_scrape(base, force_playwright=False)
-    if text and len(text) > 200:
+    if text and len(text) > 200 and not _is_bot_challenge(text):
         return text, base, images
 
     # Force Playwright for potentially JS-heavy sites
-    logger.info("Retrying %s with forced Playwright (SPA suspected)...", base)
+    logger.info("Retrying %s with forced Playwright (SPA or bot challenge suspected)...", base)
     text, images = _crawler_scrape(base, force_playwright=True)
-    if text:
+    if text and not _is_bot_challenge(text):
         return text, base, images
 
     logger.warning("Crawler failed on homepage %s. Aborting subpaths to save time.", base)
@@ -359,6 +381,11 @@ def _enrich_candidate(candidate: dict, campaign: dict, conn, settings: dict | No
     est_rev = info.get("estimated_revenue")
     est_traffic = info.get("estimated_traffic")
 
+    # HARDENING: Zero-data guard — do not insert empty lead records that lock candidates out of retries
+    if not email and not phone and not report and not products_sold:
+        logger.warning("Stage 5: zero enrichment data extracted for %s — skipping lead insert to allow retry", domain)
+        return {"candidate_id": candidate_id, "outcome": "zero_data_retry"}
+
     # ── Merge tech stack from evaluation evidence ─────────────────────────────
     firmographics = info.get("firmographics") or {}
     buying_power_signals = info.get("buying_power_signals") or []
@@ -372,6 +399,8 @@ def _enrich_candidate(candidate: dict, campaign: dict, conn, settings: dict | No
     merged_images = list(dict.fromkeys(existing_evidence_images + (crawl_images or [])))[:20]
 
     email_quality = email_validator.classify_email(email) if email else None
+    email_domain = email.split("@")[-1] if email and "@" in email else None
+    mx_valid = _has_valid_mx(email_domain) if email_domain else None
 
     # ── Insert into leads ─────────────────────────────────────────────────────
     db.execute(
@@ -381,9 +410,9 @@ def _enrich_candidate(candidate: dict, campaign: dict, conn, settings: dict | No
             candidate_id, campaign_id, contact_email, contact_name,
             contact_phone, screenshot_url, products_sold, enrichment_report,
             estimated_size, estimated_revenue, estimated_traffic,
-            firmographics, buying_power_signals, tech_stack, cold_email_hook, email_quality
+            firmographics, buying_power_signals, tech_stack, cold_email_hook, email_quality, mx_valid
         )
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         ON CONFLICT (candidate_id) DO UPDATE SET
             contact_email     = COALESCE(EXCLUDED.contact_email,     leads.contact_email),
             contact_name      = COALESCE(EXCLUDED.contact_name,      leads.contact_name),
@@ -402,10 +431,11 @@ def _enrich_candidate(candidate: dict, campaign: dict, conn, settings: dict | No
                                      THEN EXCLUDED.tech_stack ELSE leads.tech_stack END,
             cold_email_hook   = COALESCE(EXCLUDED.cold_email_hook,   leads.cold_email_hook),
             email_quality     = COALESCE(EXCLUDED.email_quality,     leads.email_quality),
+            mx_valid          = COALESCE(EXCLUDED.mx_valid,          leads.mx_valid),
             enriched_at       = now()
         """,
         (candidate_id, campaign_id, email, contact_name, phone, screenshot_url, products_sold, report,
-         est_size, est_rev, est_traffic, json.dumps(firmographics), buying_power_signals, combined_tech_stack, cold_email_hook, email_quality),
+         est_size, est_rev, est_traffic, json.dumps(firmographics), buying_power_signals, combined_tech_stack, cold_email_hook, email_quality, mx_valid),
     )
 
     # Update evaluations evidence with merged product images for dashboard display

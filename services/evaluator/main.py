@@ -74,7 +74,8 @@ def trigger_scoring(background_tasks: BackgroundTasks, background: bool = False)
             result = harness.trigger_scoring()
             return {"ok": True, "result": result}
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Trigger failed: {exc}")
+        logger.exception("Scoring trigger failed")
+        raise HTTPException(status_code=500, detail="Trigger failed")
 
 
 @app.post("/score/{candidate_id}", dependencies=[Depends(require_internal_token)])
@@ -89,4 +90,5 @@ def score_candidate(candidate_id: int):
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Scoring failed: {exc}")
+        logger.exception("Candidate scoring failed for ID %s", candidate_id)
+        raise HTTPException(status_code=500, detail="Scoring failed")

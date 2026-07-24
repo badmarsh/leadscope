@@ -87,13 +87,19 @@ def analyze_drift(campaign_id: int) -> dict[str, Any] | None:
             if len(feedbacks) < 10:
                 return None
                 
-            # Fetch current ICP
+            # Fetch current ICP from icp_config table
             icp_row = db.fetchone(
                 conn,
-                "SELECT icp_config FROM campaigns WHERE id = %s",
+                """
+                SELECT target_segments, disqualifiers
+                FROM icp_config
+                WHERE campaign_id = %s
+                ORDER BY version DESC
+                LIMIT 1
+                """,
                 (campaign_id,)
             )
-            icp = json.loads(icp_row["icp_config"]) if icp_row and icp_row.get("icp_config") else {}
+            icp = icp_row if icp_row else {}
 
         # Prepare LLM prompt
         prompt = DRIFT_PROMPT.format(
@@ -107,7 +113,11 @@ def analyze_drift(campaign_id: int) -> dict[str, Any] | None:
             logger.warning("ICP drift analysis failed: LLM returned non-JSON")
             return None
             
-        # Update campaign with result
+        # Update campaign with result and set drift_alert flag in settings if high-confidence drift detected
+        drift_detected = bool(result.get("drift_detected"))
+        confidence = str(result.get("confidence", "")).lower()
+        has_alert = drift_detected and confidence == "high"
+
         with db.get_conn() as conn:
             db.execute(
                 conn,
@@ -115,10 +125,14 @@ def analyze_drift(campaign_id: int) -> dict[str, Any] | None:
                 UPDATE campaigns 
                 SET icp_drift_suggestion = %s,
                     icp_drift_analyzed_at = NOW(),
-                    icp_drift_decisions_at_analysis = %s
+                    icp_drift_decisions_at_analysis = %s,
+                    settings = CASE 
+                        WHEN %s::boolean THEN jsonb_set(COALESCE(settings, '{}'::jsonb), '{drift_alert}', 'true'::jsonb)
+                        ELSE jsonb_set(COALESCE(settings, '{}'::jsonb), '{drift_alert}', 'false'::jsonb)
+                    END
                 WHERE id = %s
                 """,
-                (json.dumps(result) if result.get("drift_detected") else None, total_feedback, campaign_id)
+                (json.dumps(result) if drift_detected else None, total_feedback, has_alert, campaign_id)
             )
                 
         return result

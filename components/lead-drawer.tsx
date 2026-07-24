@@ -1,9 +1,9 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
-import { Check, Copy, ExternalLink, ImageOff, RotateCcw, ShieldAlert, X, Users, Euro, Activity, ChevronLeft, ChevronRight } from "lucide-react"
+import { Check, Copy, ExternalLink, ImageOff, RotateCcw, ShieldAlert, X, Users, Euro, Activity, ChevronLeft, ChevronRight, AlertTriangle, Link2 } from "lucide-react"
 import Image from "next/image"
-import type { Lead } from "@/lib/leads-data"
+import type { Lead, PhaseXProof, PhaseXExposure } from "@/lib/leads-data"
 import { formatTimestamp, scoreColorClasses, statusBadgeClasses, statusLabels } from "@/lib/status"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -26,6 +26,7 @@ export function LeadDrawer({ lead, onClose, onDecision, onReopen, onNavigate, ha
   const [copiedEmail, setCopiedEmail] = useState(false)
   const [copiedPhone, setCopiedPhone] = useState(false)
   const [copiedDraft, setCopiedDraft] = useState(false)
+  const [copiedAudit, setCopiedAudit] = useState(false)
   const [isGeneratingDraft, setIsGeneratingDraft] = useState(false)
   const { t } = useTranslation()
   const noteRef = useRef("")
@@ -426,6 +427,83 @@ export function LeadDrawer({ lead, onClose, onDecision, onReopen, onNavigate, ha
               </div>
             )}
           </section>
+
+          {/* Phase X — Threat Intel Panel */}
+          {(() => {
+            const ed = lead.evidence_data as Record<string, unknown> | undefined
+            const proof = (lead.proof_data ?? ed?.proof_data ?? null) as PhaseXProof | null
+            const exposure = (lead.exposure_scan ?? ed?.exposure_scan ?? null) as PhaseXExposure | null
+            const auditUrl = lead.audit_token ? `${typeof window !== "undefined" ? window.location.origin : ""}/audit/${lead.audit_token}` : null
+            const hasPhaseX = proof || exposure?.critical_found || auditUrl
+            if (!hasPhaseX) return null
+            return (
+              <section aria-label="Phase X Intel" className="mt-6 border-t border-border pt-6">
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">Threat Intelligence</h3>
+                <div className="flex flex-col gap-3">
+                  {proof && (
+                    <div className="rounded-md border border-red-500/30 bg-red-500/5 p-3">
+                      <div className="flex items-center gap-2 mb-1">
+                        <ShieldAlert className="size-3.5 text-red-500" />
+                        <span className="text-xs font-semibold text-red-600 dark:text-red-400 uppercase tracking-wide">
+                          {proof.proof_type === "google_serp_spam" ? "SEO Spam Indexed" : "Cloaked Redirect"}
+                        </span>
+                      </div>
+                      <p className="text-xs text-muted-foreground">{proof.evidence_text}</p>
+                      {proof.proof_type === "google_serp_spam" && proof.example_url && (
+                        <a href={proof.example_url} target="_blank" rel="noopener noreferrer"
+                          className="mt-2 inline-flex items-center gap-1 text-xs text-blue-500 hover:underline">
+                          <ExternalLink className="size-3" />
+                          {proof.example_title || proof.example_url}
+                        </a>
+                      )}
+                    </div>
+                  )}
+                  {exposure?.critical_found && (
+                    <div className="rounded-md border border-orange-500/30 bg-orange-500/5 p-3">
+                      <div className="flex items-center gap-2 mb-1">
+                        <AlertTriangle className="size-3.5 text-orange-500" />
+                        <span className="text-xs font-semibold text-orange-600 dark:text-orange-400 uppercase tracking-wide">Critical Exposure</span>
+                      </div>
+                      <ul className="mt-1 flex flex-col gap-1">
+                        {exposure.exposures.map((exp, i) => (
+                          <li key={i} className="font-mono text-xs text-muted-foreground">{exp.url}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {auditUrl && (
+                    <div className="rounded-md border border-border bg-card p-3">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Link2 className="size-3.5 text-muted-foreground" />
+                        <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Shadow Audit URL</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <code className="flex-1 truncate rounded bg-muted px-2 py-1 font-mono text-[10px] text-muted-foreground">
+                          /audit/{lead.audit_token?.slice(0, 16)}…
+                        </code>
+                        <button
+                          onClick={() => {
+                            navigator.clipboard.writeText(auditUrl).then(() => {
+                              setCopiedAudit(true)
+                              setTimeout(() => setCopiedAudit(false), 1500)
+                            })
+                          }}
+                          className="flex size-7 shrink-0 items-center justify-center rounded border border-border text-muted-foreground hover:bg-accent hover:text-foreground"
+                          title="Copy audit URL"
+                        >
+                          {copiedAudit ? <Check className="size-3 text-emerald-600" /> : <Copy className="size-3" />}
+                        </button>
+                        <a href={auditUrl} target="_blank" rel="noopener noreferrer"
+                          className="flex size-7 shrink-0 items-center justify-center rounded border border-border text-muted-foreground hover:bg-accent hover:text-foreground">
+                          <ExternalLink className="size-3" />
+                        </a>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </section>
+            )
+          })()}
 
           {lead.status === "approved" && (
             <section aria-label="Draft Email" className="mt-6 border-t border-border pt-6">

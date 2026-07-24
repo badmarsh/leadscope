@@ -1,0 +1,3 @@
+infected-blog.com, 2500, if(ndsw===undefined)
+***redacted-site.org, 9999, Upgrade to view
+wordpress-test.net

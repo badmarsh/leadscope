@@ -1,0 +1,62 @@
+campaigns:
+  - id: socgholish-ndsw
+    name: "SocGholish - NDSW/NDSX"
+    family: SocGholish
+    added: 2026-07-23
+    stale_after_days: 30          # pipeline should warn, not silently trust, past this
+    source_url: "https://malcure.com/blog/malware-removal-guides/socgholish-malware-wordpress/"
+    publicwww_query: '"if(ndsw===undefined)" filetype:js depth:all'
+    location: js_file              # js_file | html_body | plugin_path
+    urlscan_pivot:
+      - 'page.string:"ndsw"'
+    virustotal_pivot:
+      hashes: []                   # fill in as sha1/sha256 IOCs are published
+      domains: []
+    notes: "Var name is stable long-term; C2 domains rotate weekly, ignore any hardcoded here."
+
+  - id: socgholish-khutmhpx
+    name: "SocGholish - khutmhpx"
+    family: SocGholish
+    added: 2026-07-23
+    stale_after_days: 30
+    source_url: "https://malcure.com/blog/malware-removal-guides/socgholish-malware-wordpress/"
+    publicwww_query: '"khutmhpx" depth:all'
+    location: html_body
+    urlscan_pivot:
+      - 'page.string:"khutmhpx"'
+    virustotal_pivot: { hashes: [], domains: [] }
+    notes: "No filetype: operator - lives in page HTML, not a separate JS asset."
+
+  - id: balada-fake-plugin-template
+    name: "Balada Injector - fake plugin masquerade (TEMPLATE)"
+    family: "Balada Injector"
+    added: 2026-07-23
+    stale_after_days: 14           # plugin masquerade names rotate fast - keep this short
+    source_url: "https://www.scworld.com/brief/thousands-of-wordpress-sites-impacted-by-balada-injector-campaign"
+    publicwww_query: '"/wp-content/plugins/{{FAKE_PLUGIN_SLUG}}/" depth:all'
+    location: plugin_path
+    urlscan_pivot:
+      - 'page.domain:/0.*/ AND filename:"sub2"'   # structural pivot, source: Sucuri
+    virustotal_pivot: { hashes: [], domains: [] }
+    notes: "Replace {{FAKE_PLUGIN_SLUG}} from this week's Sucuri/Wordfence post before running. This is a template entry, not a live query - the pipeline should refuse to run it unquestioningly if the placeholder is still present."
+
+  - id: wp2shell-cve-2026-63030
+    name: "wp2shell (CVE-2026-63030 / CVE-2026-60137)"
+    family: "wp2shell"
+    added: 2026-07-23
+    stale_after_days: 21
+    source_url: "https://www.wiz.io/blog/wp2shell-cve-2026-63030-cve-2026-60137"
+    publicwww_query: null          # deliberately null: see `fit` field
+    fit: "not_suitable_for_publicwww"   # backend RCE/webshell, not reflected in crawled page source
+    location: server_side
+    urlscan_pivot:
+      - 'page.url:"/wp-json/batch/v1"'   # exposure-hunting, not compromise-confirmation
+    virustotal_pivot:
+      hashes:
+        - "2a1410d8e2a8337ac2171cedea8c0fdc47c647a0"
+        - "58eca847e9eae9e6b08cc211f1559817b71bc4cc"
+        - "ebea44890f434d5d67ede22009a3f4bb5cac33f8"
+        - "d9a220c8039f1c4d72cae7ccb8b3a33dec8815be"
+        - "e9756e2338f84746007235e4cab7a70d5b3ca47f"
+      domains: []
+    notes: "Do NOT build a PublicWWW query for this entry. Pipeline should route campaigns with fit=not_suitable_for_publicwww straight to stage B and skip stage A."

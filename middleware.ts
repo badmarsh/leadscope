@@ -7,7 +7,7 @@ import { getIronSession } from "iron-session"
 import { sessionOptions, type SessionData } from "@/lib/session"
 
 // Routes that don't require a session
-const PUBLIC_PATHS = ["/", "/api/login", "/api/session", "/_next", "/favicon.ico"]
+const PUBLIC_PATHS = ["/", "/audit", "/api/audit", "/seo-spam-hunter", "/api/seo-spam-hunter", "/wp-hunter", "/api/wp-hunter", "/threat-feeds", "/login", "/api/login", "/api/session", "/_next", "/favicon.ico"]
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
@@ -17,18 +17,18 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next()
   }
 
-  // Check session
-  const cookieHeader = request.cookies.get(sessionOptions.cookieName)
+  // Check and cryptographically unseal session in middleware
+  const response = NextResponse.next()
+  const session = await getIronSession<SessionData>(request, response, sessionOptions)
 
-  if (!cookieHeader?.value) {
-    // API calls get 401; page navigation gets redirect to login page
+  if (!session.loggedIn) {
     if (pathname.startsWith("/api/")) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
     return NextResponse.redirect(new URL("/login", request.url))
   }
 
-  return NextResponse.next()
+  return response
 }
 
 export const config = {

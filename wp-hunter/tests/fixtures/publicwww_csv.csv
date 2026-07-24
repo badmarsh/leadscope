@@ -1,0 +1,6 @@
+domain,rank,snippet
+example.com,1234,if(ndsw===undefined)
+***hidden.com,99999,Upgrade to view
+victim-site.org,4321,if(ndsw===undefined)
+***another-masked.net,100000,Upgrade to view
+clean-domain.io,5555,if(ndsw===undefined)

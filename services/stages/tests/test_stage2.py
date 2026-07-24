@@ -27,7 +27,7 @@ def mock_cost_log():
 def test_extract_domain():
     assert stage2._extract_domain("https://www.example.com/path?q=1") == "example.com"
     assert stage2._extract_domain("example.com") == "example.com"
-    assert stage2._extract_domain("http://sub.example.com:8080/foo") == "sub.example.com"
+    assert stage2._extract_domain("http://sub.example.com:8080/foo") == "example.com"
     assert stage2._extract_domain("invalid_domain") is None
 
 def test_is_do_not_contact(mock_db):
@@ -142,7 +142,8 @@ def test_run_routing(mock_db):
         "id": 1, "slug": "test", "status": "active", "finder_type": "keyword_search", "settings": {}
     }
     
-    with patch("stage2._keyword_search") as mock_kw:
+    with patch("stage2._keyword_search") as mock_kw, \
+         patch("stage2.db.execute", return_value=1):
         mock_kw.return_value = {"status": "ok"}
         res = stage2.run(1)
         assert res == {"status": "ok"}

@@ -1,8 +1,12 @@
 import os
+import logging
 import psycopg2
 from dotenv import load_dotenv
 
 load_dotenv()
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s — %(message)s")
+logger = logging.getLogger("budget_monitor")
 
 DATABASE_URL = os.environ.get("DATABASE_URL")
 
@@ -12,7 +16,7 @@ def get_db():
     return conn
 
 def monitor_budgets():
-    print("Running Budget Monitor...")
+    logger.info("Running Budget Monitor...")
     conn = get_db()
     cur = conn.cursor()
 
@@ -34,15 +38,15 @@ def monitor_budgets():
         percent = (used / quota) * 100
         
         if percent >= 100:
-            print(f"[CRITICAL] Provider '{provider}' has exhausted its monthly quota! ({used}/{quota})")
+            logger.critical("Provider '%s' has exhausted its monthly quota! (%s/%s)", provider, used, quota)
             warnings += 1
         elif percent >= 80:
-            print(f"[WARNING] Provider '{provider}' is near its monthly quota limit! ({used}/{quota} - {percent:.1f}%)")
+            logger.warning("Provider '%s' is near its monthly quota limit! (%s/%s - %.1f%%)", provider, used, quota, percent)
             warnings += 1
         else:
-            print(f"[OK] Provider '{provider}' usage is healthy. ({used}/{quota} - {percent:.1f}%)")
+            logger.info("Provider '%s' usage is healthy. (%s/%s - %.1f%%)", provider, used, quota, percent)
 
-    print(f"Budget Monitor Complete. {warnings} warnings issued.")
+    logger.info("Budget Monitor Complete. %d warnings issued.", warnings)
     conn.close()
 
 if __name__ == "__main__":

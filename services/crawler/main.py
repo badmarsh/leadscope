@@ -140,7 +140,7 @@ async def crawl(req: CrawlRequest):
             import httpx
             import json
             try:
-                system_prompt = "You are an AI that extracts product images from e-commerce product grids. Extract exactly 4 high-quality product image URLs. Return ONLY actual physical products. Do not extract site logos, UI layout elements, shipping partner logos (like GLS, Packeta), payment icons, or blog banners. Return ONLY valid JSON in this format: {\"urls\": [\"url1\", \"url2\", \"url3\", \"url4\"]}"
+                system_prompt = "You are an AI that extracts product images from e-commerce product grids. Extract exactly 4 high-quality product image URLs from markdown image tags (![alt](url)). Return ONLY actual physical products. Do not extract site logos, UI layout elements, shipping partner logos (like GLS, Packeta), payment icons, or blog banners. Ensure the URLs point directly to image files (e.g., .jpg, .png, .webp) and not to HTML pages. Return ONLY valid JSON in this format: {\"urls\": [\"url1\", \"url2\", \"url3\", \"url4\"]}"
                 async with httpx.AsyncClient() as client:
                     resp = await client.post(
                         f"{GEMINI_PROXY_ENDPOINT}/v1/chat/completions",
@@ -176,6 +176,7 @@ async def crawl(req: CrawlRequest):
         
         return {
             "success": True,
+            "html": getattr(result, "html", ""),
             "markdown": result.markdown,
             "media": result.media,
             "links": result.links,

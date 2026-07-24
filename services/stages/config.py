@@ -32,7 +32,8 @@ OLLAMA_MODEL: str = os.environ.get("OLLAMA_MODEL", "llama3")
 
 # ── Firecrawl ────────────────────────────────────────────────────────────────
 FIRECRAWL_ENDPOINT: str = os.environ.get("FIRECRAWL_ENDPOINT", "https://api.firecrawl.dev")
-FIRECRAWL_API_KEY: str = os.environ.get("FIRECRAWL_API_KEY", "")
+# Search & Data Providers
+FIRECRAWL_API_KEY = os.environ.get("FIRECRAWL_API_KEY", "")
 
 # ── Crawler service (Crawl4AI — self-hosted, replaces Firecrawl for enrichment) ──
 CRAWLER_ENDPOINT: str = os.environ.get("CRAWLER_ENDPOINT", "http://crawler:8003")
@@ -44,6 +45,10 @@ SERPER_API_KEY: str = os.environ.get("SERPER_API_KEY", "")
 SERPAPI_API_KEY: str = os.environ.get("SERPAPI_API_KEY", "")
 BRAVE_SEARCH_API_KEY: str = os.environ.get("BRAVE_SEARCH_API_KEY", "")
 PUBLICWWW_API_KEY: str = os.environ.get("PUBLICWWW_API_KEY", "")
+URLSCAN_API_KEY: str = os.environ.get("URLSCAN_API_KEY", "")
+NETLAS_API_KEY: str = os.environ.get("NETLAS_API_KEY", "")
+AHREFS_API_KEY: str = os.environ.get("AHREFS_API_KEY", "")
+VIRUSTOTAL_API_KEY: str = os.environ.get("VIRUSTOTAL_API_KEY", "")
 
 # ── Tuning constants ──────────────────────────────────────────────────────────
 MAX_ENRICHMENT_ATTEMPTS: int = int(os.environ.get("MAX_ENRICHMENT_ATTEMPTS", "3"))
@@ -70,4 +75,7 @@ PRICING_MAP = {
     "firecrawl": {"per_query": 0.0},   # self-hosted (legacy — being phased out)
     "crawler": {"per_query": 0.0},     # self-hosted Crawl4AI service
     "ollama": {"per_query": 0.0},      # local
+    "urlhaus": {"per_query": 0.0},     # free API
+    "urlscan": {"per_query": 0.0},     # free tier
+    "certstream": {"per_query": 0.0},  # free WebSocket feed
 }

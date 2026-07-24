@@ -33,7 +33,8 @@ export function formatDate(iso: string): string {
   })
 }
 
-export function formatTimestamp(iso: string): string {
+export function formatTimestamp(iso: string | null | undefined): string {
+  if (!iso) return "Unknown"
   return new Date(iso).toLocaleString("en-US", {
     month: "short",
     day: "numeric",

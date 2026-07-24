@@ -25,8 +25,21 @@ import requests
 
 import config
 import llm
+from scorers.proof_engine import generate_proof
+from scorers.exposure_scanner import scan_exposures
 
 logger = logging.getLogger(__name__)
+
+def calculate_wealth_index(domain: str) -> int:
+    """Assigns firmographic value based on TLD."""
+    tld = domain.split('.')[-1].lower()
+    if tld in ['lu', 'li', 'mc', 'ch']:
+        return 40
+    elif tld in ['us', 'uk', 'co.uk', 'de', 'fr', 'no', 'dk', 'se', 'eu', 'sk', 'cz', 'pl', 'at', 'nl', 'be']:
+        return 30
+    elif tld in ['ru', 'cn', 'in', 'br', 'xyz', 'top', 'tk', 'ml']:
+        return -50
+    return 0
 
 # ── WordPress paths to scan on suspected infected sites ───────────────────────
 WP_PATHS = ["", "/wp-content/", "/wp-includes/"]
@@ -50,6 +63,7 @@ Found snippets: {found_snippets}
 ## Reputation API results
 Google Safe Browsing: {safe_browsing_result}
 VirusTotal: {virustotal_result}
+URLhaus: {urlhaus_result}
 Wayback Machine (recency): {wayback_result}
 
 A site where snippet_confirmed=False BUT wayback shows a recent snapshot
@@ -116,7 +130,7 @@ def _crawl4ai_scrape(url: str, force_playwright: bool = True) -> Optional[str]:
         resp.raise_for_status()
         data = resp.json()
         if data.get("success"):
-            return data.get("markdown") or ""
+            return data.get("html") or data.get("markdown") or ""
         logger.warning("Crawl4AI returned success=False for %s: %s", url, data.get("error"))
         return None
     except Exception as exc:
@@ -174,33 +188,36 @@ def _check_snippet_present(scraped_content: str, snippets: list[str]) -> tuple[b
 
     # Pass 3: base64 decode
     # Extract all candidate base64 strings (length >= 40, only valid b64 chars)
-    b64_candidates = _re.findall(r'[A-Za-z0-9+/]{40,}={0,2}', scraped_content)
-    decoded_blobs = []
-    for b64_str in b64_candidates[:200]:  # cap at 200 to avoid DoS on large pages
-        try:
-            padded = b64_str + "=" * ((-len(b64_str)) % 4)
-            decoded = _b64.b64decode(padded).decode("utf-8", errors="ignore").lower()
-            if decoded:
-                decoded_blobs.append(decoded)
-        except Exception:
-            continue
-
-    if decoded_blobs:
-        decoded_corpus = " ".join(decoded_blobs)
-        for snippet in snippets:
-            snippet_clean = snippet.strip().lower()
-            if not snippet_clean or len(snippet_clean) < 10:
+    # Pass 3: base64 decode
+    # Extract all candidate base64 strings (length >= 40, only valid b64 chars)
+    if not found:
+        b64_candidates = _re.findall(r'[A-Za-z0-9+/]{40,}={0,2}', scraped_content)
+        decoded_blobs = []
+        for b64_str in b64_candidates[:200]:  # cap at 200 to avoid DoS on large pages
+            try:
+                padded = b64_str + "=" * ((-len(b64_str)) % 4)
+                decoded = _b64.b64decode(padded).decode("utf-8", errors="ignore").lower()
+                if decoded:
+                    decoded_blobs.append(decoded)
+            except Exception:
                 continue
-            # Use a meaningful fragment: domain-like or path-like substring
-            # (first 20 chars is usually distinctive enough for C2 domains)
-            fragment = snippet_clean[:20]
-            if fragment in decoded_corpus:
-                label = snippet + " (found via base64 decode — re-encoded variant)"
-                if label not in found:
-                    found.append(label)
-                    logger.info(
-                        "Base64 decode match for snippet fragment '%s'", fragment
-                    )
+
+        if decoded_blobs:
+            decoded_corpus = " ".join(decoded_blobs)
+            for snippet in snippets:
+                snippet_clean = snippet.strip().lower()
+                if not snippet_clean or len(snippet_clean) < 10:
+                    continue
+                # Use a meaningful fragment: domain-like or path-like substring
+                # (first 20 chars is usually distinctive enough for C2 domains)
+                fragment = snippet_clean[:20]
+                if fragment in decoded_corpus:
+                    label = snippet + " (found via base64 decode — re-encoded variant)"
+                    if label not in found:
+                        found.append(label)
+                        logger.info(
+                            "Base64 decode match for snippet fragment '%s'", fragment
+                        )
 
     return len(found) > 0, found
 
@@ -217,7 +234,8 @@ def _check_safe_browsing(url: str) -> dict:
         return {"flagged": False, "note": "API key not configured"}
     try:
         resp = requests.post(
-            f"https://safebrowsing.googleapis.com/v4/threatMatches:find?key={config.SAFE_BROWSING_API_KEY}",
+            "https://safebrowsing.googleapis.com/v4/threatMatches:find",
+            headers={"X-Goog-Api-Key": config.SAFE_BROWSING_API_KEY},
             json={
                 "client": {"clientId": "jenex-threat-intel", "clientVersion": "1.0"},
                 "threatInfo": {
@@ -276,6 +294,44 @@ def _check_virustotal(domain: str) -> dict:
         return {"error": str(exc)}
 
 
+def _check_urlhaus(domain: str) -> dict:
+    """
+    Query URLhaus API to check if the domain is currently serving malware.
+    Uses no API key. Returns {"is_listed": bool, "threat_tags": list[str]}
+    """
+    try:
+        headers = {}
+        if config.URLHAUS_AUTH_KEY:
+            headers["Auth-Key"] = config.URLHAUS_AUTH_KEY
+
+        resp = requests.post(
+            "https://urlhaus-api.abuse.ch/v1/host/",
+            data={"host": domain},
+            headers=headers,
+            timeout=10,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        
+        is_listed = data.get("query_status") == "ok" and bool(data.get("urls"))
+        tags = []
+        if is_listed:
+            for url_entry in data.get("urls", []):
+                if url_entry.get("tags"):
+                    tags.extend(url_entry["tags"])
+            tags = list(set(tags)) # dedup
+            
+        result = {
+            "is_listed": is_listed,
+            "threat_tags": tags
+        }
+        logger.info("URLhaus for %s: listed=%s tags=%s", domain, is_listed, tags)
+        return result
+    except Exception as exc:
+        logger.warning("URLhaus API failed for %s: %s", domain, exc)
+        return {"error": str(exc)}
+
+
 def _check_wayback_recency(domain: str) -> dict:
     """
     Query the Wayback Machine CDX API for the 3 most recent snapshots of the domain.
@@ -288,7 +344,7 @@ def _check_wayback_recency(domain: str) -> dict:
     """
     try:
         resp = requests.get(
-            "http://web.archive.org/cdx/search/cdx",
+            "https://web.archive.org/cdx/search/cdx",
             params={
                 "url": domain,
                 "output": "json",
@@ -297,7 +353,8 @@ def _check_wayback_recency(domain: str) -> dict:
                 "filter": "statuscode:200",
                 "collapse": "timestamp:8",  # deduplicate to 1 per day
             },
-            timeout=5,
+            headers={"User-Agent": "Mozilla/5.0"},
+            timeout=15,
         )
         if resp.status_code != 200:
             return {"status": "error", "last_snapshot_date": None, "snapshot_count_last_30d": 0}
@@ -402,6 +459,19 @@ def score(candidate: dict, campaign: dict, icp: dict, few_shot: list[dict]) -> d
 
     # ── 1. Extract signatures from Stage 2 evidence ───────────────────────────
     matched_sigs = evidence.get("matched_signatures", [])
+    
+    # If no signatures were passed (e.g., from a keyword_search or manual import),
+    # fetch all active signatures for this campaign to scan the source code locally.
+    if not matched_sigs:
+        import db
+        with db.get_conn() as conn:
+            all_sigs = db.fetchall(
+                conn,
+                "SELECT id as signature_id, snippet, malware_family, confidence, source_url FROM malware_signatures WHERE campaign_id = %s AND status = 'approved'",
+                (campaign["id"],)
+            )
+            matched_sigs = all_sigs
+
     snippets = [s.get("snippet", "") for s in matched_sigs if s.get("snippet")]
     logger.info(
         "threat_intel: scoring domain=%s — %d known signatures, re-verifying via Crawl4AI",
@@ -427,6 +497,7 @@ def score(candidate: dict, campaign: dict, icp: dict, few_shot: list[dict]) -> d
     homepage_url = f"https://{domain}"
     safe_browsing = _check_safe_browsing(homepage_url)
     virustotal = _check_virustotal(domain)
+    urlhaus = _check_urlhaus(domain)
     wayback = _check_wayback_recency(domain)
     wp_version_info = _detect_wp_version(domain)
 
@@ -442,11 +513,12 @@ def score(candidate: dict, campaign: dict, icp: dict, few_shot: list[dict]) -> d
     # ── 6. LLM scoring ───────────────────────────────────────────────────────
     prompt = SCORING_PROMPT.format(
         signatures_json=json.dumps(matched_sigs, indent=2, ensure_ascii=False)[:2000],
-        scraped_content=scraped[:5000],
+        scraped_content=scraped[:5000].replace("=== END USER DATA ===", "[END USER DATA STRIPPED]"),
         snippet_confirmed="YES" if snippet_confirmed else "NO — not found in fresh Playwright scrape",
         found_snippets=str(found_snippets)[:500] if found_snippets else "none",
         safe_browsing_result=json.dumps(safe_browsing),
         virustotal_result=json.dumps(virustotal),
+        urlhaus_result=json.dumps(urlhaus),
         wayback_result=json.dumps(wayback),
         wp_version_result=json.dumps(wp_version_info),
         few_shot_examples=few_shot_str,
@@ -455,7 +527,7 @@ def score(candidate: dict, campaign: dict, icp: dict, few_shot: list[dict]) -> d
     result, ti, to, model, provider = llm.chat_json(
         prompt,
         temperature=0.1,
-        required_fields=["score", "rationale", "confidence", "snippet_confirmed", "recommendation", "evidence_urls"]
+        required_fields=["score", "rationale", "confidence", "snippet_confirmed", "recommendation"]
     )
 
     if "_raw" in result:
@@ -477,10 +549,58 @@ def score(candidate: dict, campaign: dict, icp: dict, few_shot: list[dict]) -> d
             "tokens_in": ti,
             "tokens_out": to,
         }
+    # ── Phase X: Compound Lead Score Calculation ─────────────────────────────
+    proof_data = generate_proof(domain, matched_sigs)
+    exposure_data = scan_exposures(domain)
+    
+    proof_bonus = 0
+    if proof_data:
+        proof_bonus += 20
+        logger.info(f"Phase X: Proof generated for {domain}: {proof_data['proof_type']}")
+    if exposure_data.get("critical_found"):
+        proof_bonus += 15
+        logger.info(f"Phase X: Critical exposure found for {domain}")
+
+    firmographic_score = calculate_wealth_index(domain)
+    
+    max_sneakiness_bonus = 0
+    for sig in matched_sigs:
+        tier = sig.get("sneakiness_tier", "C")
+        if tier == "S":
+            max_sneakiness_bonus = max(max_sneakiness_bonus, 20)
+        elif tier == "A":
+            max_sneakiness_bonus = max(max_sneakiness_bonus, 15)
+
+    base_score = int(result.get("score", 30))
+    # If the LLM thinks it's clean (score < 50) but we have hard proof, override it
+    if proof_data and base_score < 50:
+        base_score = 60
+        
+    final_score = base_score + firmographic_score + max_sneakiness_bonus + proof_bonus
+
+    # Generate enhanced rationale
+    rationale = result.get("rationale", "")
+    if proof_data:
+        rationale += f" | PROOF: {proof_data.get('evidence_text')}"
+    if exposure_data.get("critical_found"):
+        rationale += " | EXPOSURE: Critical sensitive files (.env/config) exposed."
+
+    # Derive source post URL/title from the first matched signature that has a source_url
+    source_url = next(
+        (s.get("source_url") for s in matched_sigs if s.get("source_url")),
+        None,
+    )
+    source_title = next(
+        (
+            f"{s.get('malware_family', 'Security intelligence')} — source post"
+            for s in matched_sigs if s.get("source_url")
+        ),
+        None,
+    )
 
     return {
-        "score": max(0, min(100, int(result.get("score", 30)))),
-        "rationale": result.get("rationale", ""),
+        "score": max(0, min(100, final_score)),
+        "rationale": rationale,
         "evidence_urls": list(pages.keys()),
         "evidence_data": {
             "snippet_confirmed": snippet_confirmed,
@@ -495,6 +615,10 @@ def score(candidate: dict, campaign: dict, icp: dict, few_shot: list[dict]) -> d
             "virustotal": virustotal,
             "wayback": wayback,
             "wp_version": wp_version_info,
+            "proof_data": proof_data,
+            "exposure_scan": exposure_data,
+            "source_post_url": source_url,
+            "source_post_title": source_title,
         },
         "model_used": model,
         "provider": provider,

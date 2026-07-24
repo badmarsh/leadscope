@@ -9,4 +9,10 @@ docker compose exec -T postgres psql -U leadscope postgres \
   -c "DROP DATABASE IF EXISTS leadscope;" \
   -c "CREATE DATABASE leadscope;"
 docker compose exec -T postgres psql -U leadscope leadscope < db/schema.sql
+
+echo "▶ Applying migrations"
+for f in db/migrations/*.sql; do
+  docker compose exec -T postgres psql -U leadscope leadscope < "$f"
+done
+
 echo "✅ Database reset complete."

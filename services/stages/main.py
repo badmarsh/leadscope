@@ -93,7 +93,8 @@ def run_stage1(req: CampaignRequest, background_tasks: BackgroundTasks, backgrou
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Stage 1 failed: {exc}")
+        logger.exception("Stage 1 execution failed")
+        raise HTTPException(status_code=500, detail="Stage 1 processing failed")
 
 
 # ── Stage 2: Target Finder ────────────────────────────────────────────────────
@@ -114,7 +115,8 @@ def run_stage2(req: CampaignRequest, background_tasks: BackgroundTasks, backgrou
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Stage 2 failed: {exc}")
+        logger.exception("Stage 2 execution failed")
+        raise HTTPException(status_code=500, detail="Stage 2 processing failed")
 
 
 @app.post("/stage2/run-all", dependencies=[Depends(require_internal_token)])
@@ -130,7 +132,8 @@ def run_stage2_all(background_tasks: BackgroundTasks, background: bool = False):
             results = stage2.run_all()
             return {"ok": True, "results": results}
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Stage 2 run-all failed: {exc}")
+        logger.exception("Stage 2 run-all execution failed")
+        raise HTTPException(status_code=500, detail="Stage 2 run-all processing failed")
 
 
 # ── Stage 5: Enrichment ────────────────────────────────────────────────────────
@@ -148,7 +151,8 @@ def run_stage5(background_tasks: BackgroundTasks, background: bool = False):
             result = stage5.run()
             return {"ok": True, "result": result}
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Stage 5 failed: {exc}")
+        logger.exception("Stage 5 execution failed")
+        raise HTTPException(status_code=500, detail="Stage 5 processing failed")
 
 # ── Knowledge Base Ingestion ────────────────────────────────────────────────────
 
@@ -165,4 +169,5 @@ def run_kb_ingest(background_tasks: BackgroundTasks, background: bool = False):
             result = kb_ingest.run()
             return {"ok": True, "result": result}
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"KB Ingestion failed: {exc}")
+        logger.exception("KB ingestion failed")
+        raise HTTPException(status_code=500, detail="KB Ingestion processing failed")

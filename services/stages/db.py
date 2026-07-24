@@ -1,7 +1,10 @@
 """
 db.py — thread-safe psycopg2 connection pool for the stages service.
 Uses a ThreadedConnectionPool so multiple FastAPI threads share connections.
+
+NOTE: get_conn() sets autocommit = True. Multi-statement transactions require raw psycopg2 connections or manual transaction management (conn.autocommit = False).
 """
+import time
 import logging
 import psycopg2
 import psycopg2.extras
@@ -29,27 +32,46 @@ def _validate_stage(stage: str) -> str:
 def get_pool() -> pg_pool.ThreadedConnectionPool:
     global _pool
     if _pool is None:
-        _pool = pg_pool.ThreadedConnectionPool(
-            minconn=2,
-            maxconn=10,
-            dsn=config.DATABASE_URL,
-        )
+        retries = 10
+        for i in range(retries):
+            try:
+                _pool = pg_pool.ThreadedConnectionPool(
+                    minconn=2,
+                    maxconn=25,
+                    dsn=config.DATABASE_URL,
+                )
+                break
+            except psycopg2.OperationalError as e:
+                if i < retries - 1:
+                    logger.warning("Database connection failed (%s), retrying in 3 seconds...", str(e).strip())
+                    time.sleep(3)
+                else:
+                    logger.error("Could not connect to database after %d retries.", retries)
+                    raise
     return _pool
 
 
 @contextmanager
 def get_conn():
-    """Context manager that checks out a connection and puts it back."""
-    conn = get_pool().getconn()
+    """Context manager that checks out a connection with retry on pool exhaustion."""
+    conn = None
+    retries = 5
+    for attempt in range(retries):
+        try:
+            conn = get_pool().getconn()
+            break
+        except pg_pool.PoolError:
+            if attempt < retries - 1:
+                time.sleep(0.1)
+            else:
+                logger.error("Postgres connection pool exhausted after %d retries", retries)
+                raise
     try:
-        conn.autocommit = False
+        conn.autocommit = True
         yield conn
-        conn.commit()
-    except Exception:
-        conn.rollback()
-        raise
     finally:
-        get_pool().putconn(conn)
+        if conn:
+            get_pool().putconn(conn)
 
 
 def fetchone(conn, sql: str, params=()) -> dict | None:

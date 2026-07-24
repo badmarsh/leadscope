@@ -38,14 +38,18 @@ CREATE TABLE icp_config (
   created_at TIMESTAMPTZ DEFAULT now()
 );
 
-CREATE TABLE malware_signatures (       -- WP-remediation's knowledge base (Part 5 feeds it,
-  id SERIAL PRIMARY KEY,                -- Part 2's finder consumes it)
+CREATE TABLE malware_signatures (
+  id SERIAL PRIMARY KEY,
   campaign_id INT REFERENCES campaigns(id) ON DELETE CASCADE,
   snippet TEXT NOT NULL,
   malware_family TEXT,
   source_url TEXT CHECK (source_url IS NULL OR source_url LIKE 'http%'),
   confidence TEXT DEFAULT 'medium',      -- low | medium | high
   added_at TIMESTAMPTZ DEFAULT now(),
+  sneakiness_tier TEXT DEFAULT 'C',
+  proof_method TEXT DEFAULT NULL,
+  outreach_hook TEXT DEFAULT NULL,
+  outbreak_scope TEXT DEFAULT 'global',
   UNIQUE(campaign_id, snippet)
 );
 
@@ -64,6 +68,10 @@ CREATE TABLE candidates (
   reopen_count INT DEFAULT 0,              -- how many times a stale candidate got reopened by rediscovery
   created_at TIMESTAMPTZ DEFAULT now(),
   updated_at TIMESTAMPTZ DEFAULT now(),
+  audit_token TEXT UNIQUE DEFAULT NULL,
+  audit_token_created TIMESTAMPTZ DEFAULT NULL,
+  audit_viewed_at TIMESTAMPTZ DEFAULT NULL,
+  audit_view_count INT DEFAULT 0,
   UNIQUE(campaign_id, domain)
 );
 
@@ -116,6 +124,7 @@ CREATE TABLE leads (
   buying_power_signals TEXT[],
   tech_stack TEXT[],
   cold_email_hook TEXT,
+  mx_valid BOOLEAN DEFAULT NULL,
   enriched_at TIMESTAMPTZ DEFAULT now(),
   updated_at TIMESTAMPTZ DEFAULT now()
 );
@@ -209,6 +218,7 @@ CREATE TABLE IF NOT EXISTS search_queries_log (
   id SERIAL PRIMARY KEY,
   campaign_id INT REFERENCES campaigns(id) ON DELETE CASCADE,
   query TEXT NOT NULL,
+  query_yield_count INT DEFAULT 0,
   last_run_at TIMESTAMPTZ DEFAULT now(),
   UNIQUE(campaign_id, query)
 );

@@ -22,6 +22,11 @@ until docker compose exec postgres pg_isready -U leadscope; do sleep 1; done
 echo "▶ Applying database schema"
 docker compose exec -T postgres psql -U leadscope leadscope < db/schema.sql
 
+echo "▶ Applying migrations"
+for f in db/migrations/*.sql; do
+  docker compose exec -T postgres psql -U leadscope leadscope < "$f"
+done
+
 echo "▶ Applying seed data"
 if [ -f db/seed.sql ]; then
   docker compose exec -T postgres psql -U leadscope leadscope < db/seed.sql

@@ -1,0 +1,9 @@
+.env
+findings.jsonl
+__pycache__/
+*.pyc
+.pytest_cache/
+output/
+dist/
+build/
+*.egg-info/

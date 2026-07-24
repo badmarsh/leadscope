@@ -58,7 +58,7 @@ def test_snippet_present_multiple_patterns():
 @patch("scorers.threat_intel.llm")
 def test_score_snippet_confirmed_in_fresh_scrape(mock_llm, mock_crawl, mock_sb, mock_vt):
     """Snippet found in live scrape -> LLM should be called with snippet_confirmed=True evidence."""
-    mock_crawl.return_value = "some malicious eval(base64_decode('QWxhZGRpbg==')) code"
+    mock_crawl.return_value = "some malicious eval(base64_decode('QWxhZGRpbg==')) code injected into the website body to compromise the site completely."
     mock_llm.chat_json.return_value = (
         {"score": 90, "snippet_confirmed": True, "malware_family": "Generic.Backdoor",
          "confidence": "high", "recommendation": "remediation_candidate", "rationale": "Found it."},
@@ -111,12 +111,16 @@ def test_score_conservative_default_on_non_json_llm(mock_llm, mock_crawl, mock_s
     result = score(CANDIDATE_WITH_SIG, CAMPAIGN, ICP, [])
     assert result["score"] == 30
 
+@patch("db.get_conn")
+@patch("db.fetchall", return_value=[])
 @patch("scorers.threat_intel._check_virustotal", return_value={})
 @patch("scorers.threat_intel._check_safe_browsing", return_value={})
 @patch("scorers.threat_intel._crawl4ai_scrape")
 @patch("scorers.threat_intel.llm")
-def test_score_no_signatures_skips_scrape_and_calls_llm(mock_llm, mock_crawl, mock_sb, mock_vt):
+def test_score_no_signatures_skips_scrape_and_calls_llm(mock_llm, mock_crawl, mock_sb, mock_vt, mock_fetchall, mock_db):
     """Candidate with no matched_signatures should still go through LLM for final verdict."""
+    # Ensure the DB context manager works safely
+    mock_db.return_value.__enter__.return_value = MagicMock()
     mock_llm.chat_json.return_value = (
         {"score": 10, "recommendation": "confirmed_clean", "rationale": "No signals."},
         5, 3, "gemini-2.5-flash", "gemini"
