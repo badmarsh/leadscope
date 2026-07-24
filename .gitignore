@@ -32,3 +32,8 @@ __v0_jsx-dev-runtime.ts
 .snowflake/
 .v0-trash/
 .vercel/
+temp*.json
+temp*.csv
+run_dbg*.py
+*.swp
+.DS_Store
