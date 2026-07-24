@@ -7,7 +7,7 @@ Returns evidence to feed into the Shadow Audit dashboard and the Compound Lead S
 """
 import logging
 import random
-import time
+import concurrent.futures
 from urllib.parse import urlparse
 
 import requests
@@ -60,56 +60,47 @@ EXPOSURE_VECTORS = {
     }
 }
 
+def _check_vector(session, base_url, vector_name, vector_data):
+    """Check a single exposure vector. Returns finding dict or None."""
+    for path in vector_data["paths"]:
+        target_url = f"{base_url.rstrip('/')}{path}"
+        try:
+            head_resp = session.head(target_url, timeout=4, allow_redirects=False)
+            if head_resp.status_code == 200:
+                get_resp = session.get(target_url, timeout=4, allow_redirects=False)
+                if get_resp.status_code == 200:
+                    content = get_resp.text
+                    for marker in vector_data["critical_markers"]:
+                        if marker in content:
+                            return {
+                                "type": vector_name,
+                                "url": target_url,
+                                "severity": vector_data["severity"],
+                                "snippet": content[:300] + "...",
+                            }
+        except requests.RequestException:
+            continue
+    return None
+
 def scan_exposures(domain: str) -> dict:
-    """
-    Performs serial, rate-limited passive checks for zero-day exposures.
-    """
-    if not domain.startswith("http"):
-        base_url = f"https://{domain}"
-    else:
-        base_url = domain
-        domain = urlparse(base_url).netloc
-        
-    results = {
-        "critical_found": False,
-        "high_found": False,
-        "exposures": []
-    }
-    
+    base_url = f"https://{domain}" if not domain.startswith("http") else domain
+    results = {"critical_found": False, "high_found": False, "exposures": []}
+
     session = requests.Session()
     session.headers.update({"User-Agent": random.choice(USER_AGENTS)})
-    
-    for vector_name, vector_data in EXPOSURE_VECTORS.items():
-        for path in vector_data["paths"]:
-            target_url = f"{base_url.rstrip('/')}{path}"
-            try:
-                # WAF Evasion: Small randomized delay
-                time.sleep(random.uniform(0.3, 1.2))
-                
-                # WAF Evasion: HEAD first
-                head_resp = session.head(target_url, timeout=5, allow_redirects=False)
-                if head_resp.status_code == 200:
-                    # If it exists, GET it
-                    get_resp = session.get(target_url, timeout=5, allow_redirects=False)
-                    if get_resp.status_code == 200:
-                        content = get_resp.text
-                        for marker in vector_data["critical_markers"]:
-                            if marker in content:
-                                severity = vector_data["severity"]
-                                if severity == "critical":
-                                    results["critical_found"] = True
-                                elif severity == "high":
-                                    results["high_found"] = True
-                                    
-                                results["exposures"].append({
-                                    "type": vector_name,
-                                    "url": target_url,
-                                    "severity": severity,
-                                    "snippet": content[:300] + "..." # Truncate for legal safety
-                                })
-                                break # Found a marker, move to next vector
-                                
-            except requests.RequestException as e:
-                logger.debug(f"Exposure scan failed for {target_url}: {e}")
-                
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=6) as executor:
+        futures = {
+            executor.submit(_check_vector, session, base_url, name, data): name
+            for name, data in EXPOSURE_VECTORS.items()
+        }
+        for future in concurrent.futures.as_completed(futures, timeout=15):
+            finding = future.result()
+            if finding:
+                if finding["severity"] == "critical":
+                    results["critical_found"] = True
+                elif finding["severity"] == "high":
+                    results["high_found"] = True
+                results["exposures"].append(finding)
+
     return results
