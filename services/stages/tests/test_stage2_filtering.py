@@ -1,5 +1,6 @@
 import sys
 import os
+
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 import pytest
@@ -9,7 +10,7 @@ from stage2 import _llm_dedup
 @patch('stage2.llm.chat_json')
 def test_llm_dedup_ruthless_filtering(mock_chat_json):
     # Mock LLM response to return a filtered list
-    mock_chat_json.return_value = ([{"domain": "szamicipo.hu", "company_name": "Szami Cipo"}], 100, 50)
+    mock_chat_json.return_value = ([{"domain": "szamicipo.hu", "company_name": "Szami Cipo"}], 100, 50, "gemini", "gemini")
     
     businesses = [
         {"url": "https://amazon.com", "title": "Amazon", "snippet": "Everything"},

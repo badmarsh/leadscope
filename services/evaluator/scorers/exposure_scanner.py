@@ -57,6 +57,16 @@ EXPOSURE_VECTORS = {
         "paths": ["/.wp-config.php.swp"],
         "critical_markers": ["DB_NAME", "DB_PASSWORD"],
         "severity": "critical"
+    },
+    "CVE-2024-4439": {
+        "paths": ["/wp-content/plugins/wp-user-avatar/readme.txt"],
+        "critical_markers": ["WP User Avatar"],
+        "severity": "critical"
+    },
+    "CVE-2024-9047": {
+        "paths": ["/wp-content/plugins/wp-file-manager/readme.txt", "/wp-content/plugins/file-manager/readme.txt"],
+        "critical_markers": ["File Manager"],
+        "severity": "critical"
     }
 }
 

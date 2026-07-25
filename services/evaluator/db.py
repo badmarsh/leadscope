@@ -9,7 +9,7 @@ import psycopg2.extras
 from psycopg2 import pool as pg_pool
 from contextlib import contextmanager
 
-import config
+import services.common.config as config
 
 logger = logging.getLogger(__name__)
 

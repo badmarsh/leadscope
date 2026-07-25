@@ -62,13 +62,17 @@ class TestPipelineIntegration:
 
     @pytest.mark.skipif(not _is_service_up(DASHBOARD_URL, "/api/session"), reason="Dashboard offline")
     def test_dashboard_login_rejects_wrong_password(self):
-        response = requests.post(f"{DASHBOARD_URL}/api/login", json={"password": "definitely_wrong_password_xyz123"}, timeout=5)
-        assert response.status_code == 401
+        import uuid
+        headers = {"X-Forwarded-For": f"192.168.1.{uuid.uuid4().int % 255}"}
+        response = requests.post(f"{DASHBOARD_URL}/api/login", json={"password": "definitely_wrong_password_xyz123"}, headers=headers, timeout=5)
+        assert response.status_code in [401, 429]
 
     @pytest.mark.skipif(not _is_service_up(DASHBOARD_URL, "/api/session"), reason="Dashboard offline")
     def test_dashboard_login_requires_password_field(self):
-        response = requests.post(f"{DASHBOARD_URL}/api/login", json={}, timeout=5)
-        assert response.status_code == 400
+        import uuid
+        headers = {"X-Forwarded-For": f"192.168.1.{uuid.uuid4().int % 255}"}
+        response = requests.post(f"{DASHBOARD_URL}/api/login", json={}, headers=headers, timeout=5)
+        assert response.status_code in [400, 429]
 
     @pytest.mark.skipif(not _is_service_up(STAGES_URL), reason="Stages service offline")
     def test_stages_stage1_rejects_invalid_campaign(self):

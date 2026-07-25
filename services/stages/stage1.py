@@ -12,10 +12,10 @@ import json
 import logging
 from typing import Any
 
-import config
+import services.common.config as config
 import db
 import cost_log
-import llm
+import services.common.llm as llm
 
 logger = logging.getLogger(__name__)
 
@@ -96,7 +96,7 @@ def run(campaign_id: int) -> dict[str, Any]:
 
             # ── 4. Call LLM via OpenAI-compatible proxy (§0.4 pattern) ─────────────
             logger.info("Stage 1: calling LLM (%s) for campaign %s v%s", config.STAGE1_MODEL, campaign_id, next_version)
-            icp, tokens_in, tokens_out = llm.chat_json(
+            icp, tokens_in, tokens_out, _, _ = llm.chat_json(
                 prompt,
                 system_prompt=STAGE1_SYSTEM,
                 temperature=0.2,
@@ -120,16 +120,15 @@ def run(campaign_id: int) -> dict[str, Any]:
 
             required_keys = {"target_segments", "keywords_hu", "keywords_en", "disqualifiers"}
             missing = required_keys - icp.keys()
-            for key in missing:
-                if key in {"keywords_hu", "keywords_en", "disqualifiers"}:
-                    icp[key] = []
-                else:
-                    icp[key] = {}
+            if missing:
+                raise ValueError(f"LLM omitted required keys: {missing}")
 
-            if not isinstance(icp.get("keywords_hu", []), list):
-                raise ValueError("keywords_hu must be a list")
-            if not isinstance(icp.get("keywords_en", []), list):
-                raise ValueError("keywords_en must be a list")
+            if not isinstance(icp.get("keywords_hu"), list) or not icp["keywords_hu"]:
+                raise ValueError("keywords_hu must be a non-empty list")
+            if not isinstance(icp.get("keywords_en"), list) or not icp["keywords_en"]:
+                raise ValueError("keywords_en must be a non-empty list")
+            if not isinstance(icp.get("disqualifiers"), list):
+                icp["disqualifiers"] = []
 
             # ── 7. Insert icp_config row ──────────────────────────────────────────
             row = db.execute_returning(

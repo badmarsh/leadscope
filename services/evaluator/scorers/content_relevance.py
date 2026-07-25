@@ -10,10 +10,11 @@ import logging
 import re
 import requests
 from typing import Optional
+from pydantic import BaseModel, Field
 
-import config
+import services.common.config as config
 import firecrawl_client  # kept for extract_image_urls() and detect_tech_stack() utilities
-import llm
+import services.common.llm as llm
 
 logger = logging.getLogger(__name__)
 
@@ -116,7 +117,11 @@ def _scrape_domain(domain: str) -> tuple[str, list]:
     Scrape domain using Crawl4AI (same pipeline as Stage 5).
     Returns (scraped_text, image_urls).
     """
-    CF_PATTERNS = ["just a moment", "checking your browser", "ddos-guard", "enable javascript", "attention required!"]
+    CF_PATTERNS = [
+        "just a moment", "checking your browser", "ddos-guard", "enable javascript", "attention required!",
+        "moment strpenia", "skontrolujte váš prehliadač", "zkontrolujte svůj prohlížeč",
+        "cloudflare", "ray id:", "security check"
+    ]
 
     def _is_bot_challenge(text: Optional[str]) -> bool:
         if not text:
@@ -201,14 +206,22 @@ def score(candidate: dict, campaign: dict, icp: dict, few_shot: list[dict]) -> d
             images.append(img_url)
     images = images[:8]
 
+    class ContentRelevanceResponse(BaseModel):
+        score: int
+        rationale: str
+        evidence_urls: list[str]
+        matching_segments: list[str]
+        disqualifier_hits: list[str]
+
     # ── 6. Call LLM ──────────────────────────────────────────────────────────
-    req_fields = ["score", "rationale", "evidence_urls", "matching_segments", "disqualifier_hits"]
     if images:
         result, ti, to, model, provider = llm.chat_vision(
-            prompt, images, temperature=0.2, required_fields=req_fields
+            prompt, images, temperature=0.2, response_model=ContentRelevanceResponse
         )
     else:
-        result, ti, to, model, provider = llm.chat_json(prompt, temperature=0.2, required_fields=req_fields)
+        result, ti, to, model, provider = llm.chat_json(
+            prompt, temperature=0.2, response_model=ContentRelevanceResponse
+        )
 
     if "_raw" in result:
         logger.warning("content_relevance scorer got non-JSON response for %s", domain)
@@ -221,12 +234,12 @@ def score(candidate: dict, campaign: dict, icp: dict, few_shot: list[dict]) -> d
         }
 
     return {
-        "score": max(0, min(100, int(result.get("score", 50)))),
-        "rationale": result.get("rationale", ""),
-        "evidence_urls": result.get("evidence_urls", [f"https://{domain}"]),
+        "score": max(0, min(100, result.get("score", 50) if isinstance(result, dict) else getattr(result, "score", result.get("score", 50)))),
+        "rationale": result.get("rationale", "") if isinstance(result, dict) else getattr(result, "rationale", ""),
+        "evidence_urls": result.get("evidence_urls", [f"https://{domain}"]) if isinstance(result, dict) else getattr(result, "evidence_urls", [f"https://{domain}"]),
         "evidence_data": {
-            "matching_segments": result.get("matching_segments", []),
-            "disqualifier_hits": result.get("disqualifier_hits", []),
+            "matching_segments": result.get("matching_segments", []) if isinstance(result, dict) else getattr(result, "matching_segments", []),
+            "disqualifier_hits": result.get("disqualifier_hits", []) if isinstance(result, dict) else getattr(result, "disqualifier_hits", []),
             "pages_scraped": [f"https://{domain}"],
             "pdf_catalogs": pdf_catalogs,
             "images_analyzed": images,

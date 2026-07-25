@@ -47,7 +47,7 @@ class TestCampaignRouting:
         assert scorer.__module__ == "scorers.threat_intel"
 
     def test_campaign_shoe_photo_uses_image_quality_scorer(self):
-        scorer = harness._select_scorer({"id": 4, "name": "shoe product photos"})
+        scorer = harness._select_scorer({"id": 4, "evaluator_type": "image_quality", "name": "shoe product photos"})
         assert scorer.__module__ == "scorers.image_quality"
 
     def test_campaign_hvac_uses_content_relevance_scorer(self):
@@ -62,7 +62,6 @@ class TestMalwareSignatureLogic:
         """If LLM confirms snippet, scorer must return score >= 80."""
         with patch("scorers.threat_intel._crawl4ai_scrape") as mock_crawl, \
              patch("scorers.threat_intel._check_safe_browsing", return_value={}), \
-             patch("scorers.threat_intel._check_virustotal", return_value={}), \
              patch("scorers.threat_intel.llm") as mock_llm:
             mock_crawl.return_value = "eval(base64_decode("
             mock_llm.chat_json.return_value = (
@@ -78,7 +77,6 @@ class TestMalwareSignatureLogic:
         """If re-scrape does NOT find snippet, score should be <= 50."""
         with patch("scorers.threat_intel._crawl4ai_scrape") as mock_crawl, \
              patch("scorers.threat_intel._check_safe_browsing", return_value={}), \
-             patch("scorers.threat_intel._check_virustotal", return_value={}), \
              patch("scorers.threat_intel.llm") as mock_llm:
             mock_crawl.return_value = "totally clean content"
             mock_llm.chat_json.return_value = (

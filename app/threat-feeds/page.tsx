@@ -11,7 +11,9 @@ import {
   CheckCircle2,
   AlertTriangle,
   Play,
-  RefreshCw
+  RefreshCw,
+  ExternalLink,
+  Search
 } from "lucide-react"
 
 import { CtTickerWidget } from "@/components/pipeline-dashboard/CtTickerWidget"
@@ -24,12 +26,24 @@ export default function ThreatFeedsPage() {
   
   const [executing, setExecuting] = useState<boolean>(false)
   const [logs, setLogs] = useState<string>("")
+  const [candidates, setCandidates] = useState<any[]>([])
   
   const eventSourceRef = useRef<EventSource | null>(null)
 
   useEffect(() => {
     fetchCampaigns()
+    fetchCandidates()
   }, [])
+
+  const fetchCandidates = async () => {
+    try {
+      const res = await fetch("/api/threat-feeds")
+      const data = await res.json()
+      if (data.candidates) setCandidates(data.candidates)
+    } catch (err) {
+      console.error("Failed to fetch candidates:", err)
+    }
+  }
 
   const fetchCampaigns = async () => {
     try {
@@ -208,6 +222,97 @@ export default function ThreatFeedsPage() {
 
         {/* Real-time Execution Terminal */}
         <ExecutionTerminal logs={logs} executing={executing} onStop={stopExecution} />
+
+        {/* Threat Feeds Table */}
+        <section className="rounded-xl border border-border bg-card shadow-sm overflow-hidden">
+          <div className="flex items-center justify-between border-b border-border p-4 bg-muted/20">
+            <h2 className="text-sm font-semibold tracking-tight text-foreground flex items-center gap-2">
+              <Search className="size-4 text-primary" />
+              Recent Intelligence Hits
+            </h2>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead className="bg-muted/30 text-xs text-muted-foreground">
+                <tr>
+                  <th className="px-4 py-3 font-medium">Domain</th>
+                  <th className="px-4 py-3 font-medium">Source</th>
+                  <th className="px-4 py-3 font-medium">Scan Result</th>
+                  <th className="px-4 py-3 font-medium">Indicators</th>
+                  <th className="px-4 py-3 font-medium text-right">Score</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border/50">
+                {candidates.map((cand) => {
+                  const evData = cand.evidence_data || {}
+                  const evalData = cand.eval_evidence || {}
+                  
+                  const urlscanUrl = evData.urlscan_result_url || (evData.screenshot_url ? evData.screenshot_url.replace('screenshots/', 'result/').replace('.png', '/') : null)
+                  const publicWwwSnippet = evData.publicwww_snippet || evData.snippet
+                  const crawlSuccess = evalData.crawl_success
+                  const snippetConfirmed = evalData.snippet_confirmed
+                  
+                  return (
+                    <tr key={cand.id} className="hover:bg-muted/10 transition-colors">
+                      <td className="px-4 py-3 font-medium text-foreground">{cand.domain}</td>
+                      <td className="px-4 py-3">
+                        <span className="inline-flex items-center rounded-md bg-secondary px-2 py-1 text-[10px] font-medium text-secondary-foreground">
+                          {cand.source}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex flex-col gap-2">
+                          {urlscanUrl ? (
+                            <a href={urlscanUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-xs text-blue-500 hover:underline">
+                              View Scan <ExternalLink className="size-3" />
+                            </a>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">-</span>
+                          )}
+                          {publicWwwSnippet && (
+                            <div className="bg-muted rounded p-1.5 overflow-x-auto max-w-[250px]">
+                              <code className="text-[10px] whitespace-pre text-rose-500 font-mono">
+                                {publicWwwSnippet}
+                              </code>
+                            </div>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-1.5" title="Crawl Success">
+                            <div className={`size-2 rounded-full ${crawlSuccess === true ? 'bg-emerald-500' : crawlSuccess === false ? 'bg-red-500' : 'bg-muted-foreground/30'}`} />
+                            <span className="text-[11px] text-muted-foreground">Crawl</span>
+                          </div>
+                          <div className="flex items-center gap-1.5" title="Snippet Confirmed">
+                            <div className={`size-2 rounded-full ${snippetConfirmed === true ? 'bg-emerald-500' : snippetConfirmed === false ? 'bg-red-500' : 'bg-muted-foreground/30'}`} />
+                            <span className="text-[11px] text-muted-foreground">Snippet</span>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        {cand.score !== null ? (
+                          <span className={`font-mono text-xs font-semibold ${cand.score >= 80 ? 'text-emerald-500' : cand.score >= 50 ? 'text-amber-500' : 'text-red-500'}`}>
+                            {cand.score}
+                          </span>
+                        ) : (
+                          <span className="text-[11px] text-muted-foreground italic">Pending</span>
+                        )}
+                      </td>
+                    </tr>
+                  )
+                })}
+                {candidates.length === 0 && (
+                  <tr>
+                    <td colSpan={5} className="px-4 py-8 text-center text-xs text-muted-foreground">
+                      No recent intel hits found
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
 
       </main>
     </div>

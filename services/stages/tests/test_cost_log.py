@@ -53,7 +53,7 @@ def test_publicwww_budget_ok():
         def mock_no_budget(c, query, *args, **kwargs):
             return None
         mock_fetchone.side_effect = mock_no_budget
-        assert cost_log.publicwww_budget_ok(conn, 1) is True
+        assert cost_log.publicwww_budget_ok(conn, 1) is False
 
 def test_log_llm_parse_failure():
     conn = MagicMock()

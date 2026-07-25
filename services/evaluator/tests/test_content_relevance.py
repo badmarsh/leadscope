@@ -68,7 +68,8 @@ def test_score_handles_non_json():
 
 
 def test_score_with_images_uses_chat_vision():
-    with patch("scorers.content_relevance.firecrawl_client.scrape_domain_pages", return_value={"http://example.com": "Content"}), \
+    with patch("scorers.content_relevance._crawler_scrape", return_value=("Content", [{"src": "http://example.com/img1.jpg"}])), \
+         patch("scorers.content_relevance.firecrawl_client.scrape_domain_pages", return_value={"http://example.com": "Content"}), \
          patch("scorers.content_relevance.firecrawl_client.extract_image_urls", return_value=["http://example.com/img1.jpg"]), \
          patch("scorers.content_relevance.llm.chat_vision", return_value=({
              "score": 90, "rationale": "Good HVAC images."

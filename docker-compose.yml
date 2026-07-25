@@ -3,15 +3,15 @@ services:
     image: postgres:16
     restart: unless-stopped
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-leadscope}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-leadscope_dev}
-      POSTGRES_DB: ${POSTGRES_DB:-leadscope}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-leadscope}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -23,15 +23,15 @@ services:
       - "5678:5678"
     environment:
       - N8N_BASIC_AUTH_ACTIVE=true
-      - N8N_BASIC_AUTH_USER=${N8N_BASIC_AUTH_USER:-admin}
-      - N8N_BASIC_AUTH_PASSWORD=${N8N_BASIC_AUTH_PASSWORD:-admin_dev}
+      - N8N_BASIC_AUTH_USER=${N8N_BASIC_AUTH_USER}
+      - N8N_BASIC_AUTH_PASSWORD=${N8N_BASIC_AUTH_PASSWORD}
       - DB_TYPE=postgresdb
       - DB_POSTGRESDB_HOST=postgres
       - DB_POSTGRESDB_PORT=5432
-      - DB_POSTGRESDB_DATABASE=${POSTGRES_DB:-leadscope}
-      - DB_POSTGRESDB_USER=${POSTGRES_USER:-leadscope}
-      - DB_POSTGRESDB_PASSWORD=${POSTGRES_PASSWORD:-leadscope_dev}
-      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY:-change_me_before_production}
+      - DB_POSTGRESDB_DATABASE=${POSTGRES_DB}
+      - DB_POSTGRESDB_USER=${POSTGRES_USER}
+      - DB_POSTGRESDB_PASSWORD=${POSTGRES_PASSWORD}
+      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}
       - INTERNAL_API_TOKEN=${INTERNAL_API_TOKEN}
       - N8N_EXPRESSIONS_ALLOWED_ENV_VARS=INTERNAL_API_TOKEN
     depends_on:
@@ -42,17 +42,17 @@ services:
 
   evaluator:
     build:
-      context: ./services/evaluator
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: services/evaluator/Dockerfile
     restart: unless-stopped
     ports:
       - "127.0.0.1:8001:8001"
     env_file:
       - .env
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-leadscope}:${POSTGRES_PASSWORD:-leadscope_dev}@postgres:5432/${POSTGRES_DB:-leadscope}
-      GEMINI_PROXY_ENDPOINT: ${GEMINI_PROXY_ENDPOINT:-http://host.docker.internal:8045}
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       GEMINI_PROXY_API_KEY: ${GEMINI_PROXY_API_KEY}
+      CRAWLER_ENDPOINT: http://crawler:8003
     depends_on:
       postgres:
         condition: service_healthy
@@ -67,8 +67,8 @@ services:
 
   stages:
     build:
-      context: ./services/stages
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: services/stages/Dockerfile
     restart: unless-stopped
     ports:
       - "127.0.0.1:8002:8002"
@@ -76,10 +76,10 @@ services:
       - .env
     environment:
       # Override DATABASE_URL and proxy endpoints to use Docker service/host names
-      DATABASE_URL: postgresql://${POSTGRES_USER:-leadscope}:${POSTGRES_PASSWORD:-leadscope_dev}@postgres:5432/${POSTGRES_DB:-leadscope}
-      GEMINI_PROXY_ENDPOINT: ${GEMINI_PROXY_ENDPOINT:-http://host.docker.internal:8045}
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       GEMINI_PROXY_API_KEY: ${GEMINI_PROXY_API_KEY}
-      OLLAMA_HOST: ${OLLAMA_HOST:-http://host.docker.internal:11434}
+      OLLAMA_HOST: ${OLLAMA_HOST}
+      CRAWLER_ENDPOINT: http://crawler:8003
     depends_on:
       postgres:
         condition: service_healthy
@@ -95,15 +95,14 @@ services:
       start_period: 30s
   crawler:
     build:
-      context: ./services/crawler
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: services/crawler/Dockerfile
     restart: unless-stopped
     ports:
       - "127.0.0.1:8003:8003"
     env_file:
       - .env
     environment:
-      GEMINI_PROXY_ENDPOINT: ${GEMINI_PROXY_ENDPOINT:-http://host.docker.internal:8045}
       GEMINI_PROXY_API_KEY: ${GEMINI_PROXY_API_KEY}
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8003/health')"]
@@ -123,9 +122,8 @@ services:
       - .env
     environment:
       HOSTNAME: "0.0.0.0"
-      DATABASE_URL: postgresql://${POSTGRES_USER:-leadscope}:${POSTGRES_PASSWORD:-leadscope_dev}@postgres:5432/${POSTGRES_DB:-leadscope}
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       DASHBOARD_SESSION_SECRET: ${DASHBOARD_SESSION_SECRET}
-      GEMINI_PROXY_ENDPOINT: ${GEMINI_PROXY_ENDPOINT:-http://host.docker.internal:8045}
       GEMINI_PROXY_API_KEY: ${GEMINI_PROXY_API_KEY}
     depends_on:
       postgres:
@@ -135,17 +133,52 @@ services:
 
   job-budget-monitor:
     build:
-      context: ./services/stages
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: services/stages/Dockerfile
     profiles:
       - jobs
     env_file:
       - .env
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-leadscope}:${POSTGRES_PASSWORD:-leadscope_dev}@postgres:5432/${POSTGRES_DB:-leadscope}
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
     volumes:
       - ./services/jobs:/app/jobs
     command: ["python", "/app/jobs/budget_monitor.py"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  job-icp-drift:
+    build:
+      context: .
+      dockerfile: services/stages/Dockerfile
+    profiles:
+      - jobs
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+    volumes:
+      - ./services/jobs:/app/jobs
+      - ./services/evaluator:/app/evaluator
+    command: ["python", "/app/jobs/icp_drift_job.py"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  job-malwarebazaar-monitor:
+    build:
+      context: .
+      dockerfile: services/evaluator/Dockerfile
+    profiles:
+      - jobs
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+    volumes:
+      - ./services/jobs:/app/jobs
+    command: ["python", "/app/jobs/malwarebazaar_monitor.py"]
     depends_on:
       postgres:
         condition: service_healthy
@@ -158,15 +191,15 @@ services:
 
   certstream:
     build:
-      context: ./services/stages
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: services/stages/Dockerfile
     restart: unless-stopped
     healthcheck:
       disable: true
     env_file:
       - .env
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-leadscope}:${POSTGRES_PASSWORD:-leadscope_dev}@postgres:5432/${POSTGRES_DB:-leadscope}
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
     volumes:
       - ./services/jobs:/app/jobs
     command: ["python", "/app/jobs/certstream_monitor.py", "--check-wp"]
@@ -178,14 +211,14 @@ services:
 
   job-rescore-icp:
     build:
-      context: ./services/stages
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: services/stages/Dockerfile
     profiles:
       - jobs
     env_file:
       - .env
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-leadscope}:${POSTGRES_PASSWORD:-leadscope_dev}@postgres:5432/${POSTGRES_DB:-leadscope}
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       EVALUATOR_HOST: evaluator:8001
     volumes:
       - ./services/jobs:/app/jobs
@@ -204,8 +237,6 @@ services:
       - MAX_CONCURRENT_SESSIONS=10
       - DEFAULT_IGNORE_HTTPS_ERRORS=true
       - TIMEOUT=60000
-
-
 
 volumes:
   postgres_data:

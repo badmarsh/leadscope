@@ -126,6 +126,17 @@ export async function GET(request: Request) {
         if (tempFilePath) {
           await fs.unlink(tempFilePath).catch(() => {})
         }
+
+        if (stage === 'ingest' || stage === 'ingest-feeds') {
+           try {
+             controller.enqueue(encoder.encode('data: [INFO] Running database ingest...\n\n'))
+             await execAsync(`${getPythonBin()} services/jobs/ingest_hunters.py`, { cwd: process.cwd() })
+             controller.enqueue(encoder.encode('data: [INFO] Database ingest complete\n\n'))
+           } catch (e: any) {
+             controller.enqueue(encoder.encode(`data: [ERROR] Ingest failed: ${e.message}\n\n`))
+           }
+        }
+
         controller.enqueue(encoder.encode('data: [DONE]\n\n'))
         controller.close()
       })
@@ -181,11 +192,21 @@ export async function POST(request: Request) {
 
     const outputLogs = (stdout + '\n' + stderr).trim()
 
+    let ingestLogs = ''
+    if (stage === 'ingest' || stage === 'ingest-feeds') {
+      try {
+        const { stdout: ingestOut, stderr: ingestErr } = await execAsync(`${getPythonBin()} services/jobs/ingest_hunters.py`, { cwd: process.cwd() })
+        ingestLogs = '\n\n[DATABASE INGEST]\n' + ingestOut + '\n' + ingestErr
+      } catch (e: any) {
+        ingestLogs = `\n\n[DATABASE INGEST ERROR] ${e.message}`
+      }
+    }
+
     return NextResponse.json({
       success: true,
       stage,
       campaignId,
-      logs: outputLogs,
+      logs: outputLogs + ingestLogs,
     })
   } catch (error: any) {
     console.error('Error executing wp-hunter pipeline:', error)

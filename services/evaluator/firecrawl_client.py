@@ -7,7 +7,7 @@ from typing import Optional
 
 import requests
 
-import config
+import services.common.config as config
 
 logger = logging.getLogger(__name__)
 
@@ -179,14 +179,14 @@ def extract_image_urls(markdown: str, evaluator_type: str = "content_relevance")
         score = 0
         
         # Penalize layout/generic images heavily
-        if any(w in u for w in ["banner", "hero", "footer", "header", "bg", "background", "menu", "avatar", "profile"]):
-            score -= 50
+        if any(w in u for w in ["banner", "hero", "footer", "header", "bg", "background", "menu", "avatar", "profile", "logo", "icon", "svg", "slider", "carousel"]):
+            score -= 1000
             
-        # Slight penalty for PNGs (often icons) and boost for photography formats
+        # Slight penalty for PNGs (often icons/logos) and boost for photography formats
         if ".png" in u:
-            score -= 10
+            score -= 50
         elif any(ext in u for ext in [".jpg", ".jpeg", ".webp"]):
-            score += 10
+            score += 20
             
         # E-commerce platforms usually store product images in specific media folders
         if any(w in u for w in ["upload", "media", "cdn.shopify.com/s/files", "gallery", "large", "zoom", "thumb"]):
@@ -195,13 +195,13 @@ def extract_image_urls(markdown: str, evaluator_type: str = "content_relevance")
         if evaluator_type == "image_quality":
             # Boutique: prioritize shoes, products, shop, items
             if any(w in u for w in ["product", "item", "shoe", "sneaker", "boot", "shop", "catalog"]):
-                score += 100
+                score += 200
             if "interior" in u or "storefront" in u or "store" in u:
                 score -= 20
         else:
-            # Jenex: prioritize HVAC, products, portfolios, catalog covers
-            if any(w in u for w in ["product", "catalog", "katalog", "portfolio", "cover", "hvac", "duct", "szellozes", "legtechnika", "item"]):
-                score += 100
+            # Jenex: prioritize HVAC, products, portfolios, catalog covers, works, references
+            if any(w in u for w in ["product", "termek", "catalog", "katalog", "portfolio", "cover", "hvac", "duct", "szellozes", "legtechnika", "item", "project", "projekt", "work", "munka", "reference", "referencia", "gallery", "galeria"]):
+                score += 500
                 
         return score
 

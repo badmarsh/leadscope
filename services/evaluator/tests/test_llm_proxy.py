@@ -61,9 +61,9 @@ class TestModelSelection(unittest.TestCase):
         with patch.dict(os.environ, env_overrides, clear=False):
             sys.modules.pop("config", None)
             sys.modules.pop("llm", None)
-            import config as cfg
+            import services.common.config as cfg
             importlib.reload(cfg)
-            import llm
+            import services.common.llm as llm
             importlib.reload(llm)
             return llm, cfg
 
@@ -150,9 +150,9 @@ class TestOpenRouterFallback(unittest.TestCase):
                 sys.path.insert(0, EVALUATOR_DIR)
             sys.modules.pop('config', None)
             sys.modules.pop('llm', None)
-            import config as cfg
+            import services.common.config as cfg
             importlib.reload(cfg)
-            import llm
+            import services.common.llm as llm
             importlib.reload(llm)
             self.llm = llm
 
@@ -222,7 +222,7 @@ class TestOpenRouterFallback(unittest.TestCase):
         self.llm._or_client = mock_client
         self.llm._proxy_client = None
 
-        with patch("llm._time.sleep"):  # Don't actually sleep in tests
+        with patch("tenacity.nap.time.sleep"):  # Don't actually sleep in tests
             parsed, *_ = self.llm.chat_json("hello")
 
         self.assertEqual(mock_client.chat.completions.create.call_count, 3)
@@ -250,9 +250,9 @@ class TestChatJsonParsing(unittest.TestCase):
                 sys.path.insert(0, EVALUATOR_DIR)
             sys.modules.pop('config', None)
             sys.modules.pop('llm', None)
-            import config as cfg
+            import services.common.config as cfg
             importlib.reload(cfg)
-            import llm
+            import services.common.llm as llm
             importlib.reload(llm)
             self.llm = llm
 
@@ -289,9 +289,10 @@ class TestChatJsonParsing(unittest.TestCase):
         self.assertEqual(to, 13)
 
     def test_empty_content_returns_raw(self):
-        """An empty string from LLM should not raise — returns _raw."""
-        parsed, *_ = self._call_with_response("")
-        self.assertIn("_raw", parsed)
+        """An empty string from LLM should raise LLMSafetyFilterError and retry."""
+        from services.common.llm import LLMSafetyFilterError
+        with self.assertRaises(LLMSafetyFilterError):
+            self._call_with_response("")
 
 
 # ---------------------------------------------------------------------------
@@ -316,9 +317,9 @@ class TestProxyClientConstruction(unittest.TestCase):
                 sys.path.insert(0, EVALUATOR_DIR)
             sys.modules.pop('config', None)
             sys.modules.pop('llm', None)
-            import config as cfg
+            import services.common.config as cfg
             importlib.reload(cfg)
-            import llm
+            import services.common.llm as llm
             importlib.reload(llm)
 
             expected_base = "http://host.docker.internal:8045/v1"
@@ -366,9 +367,9 @@ class TestLiveProxy(unittest.TestCase):
                 sys.path.insert(0, EVALUATOR_DIR)
             sys.modules.pop('config', None)
             sys.modules.pop('llm', None)
-            import config as cfg
+            import services.common.config as cfg
             importlib.reload(cfg)
-            import llm
+            import services.common.llm as llm
             importlib.reload(llm)
             self.llm = llm
 

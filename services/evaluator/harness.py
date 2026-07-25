@@ -9,7 +9,7 @@ import logging
 import concurrent.futures
 from typing import Any
 
-import config
+import services.common.config as config
 import db
 from scorers import content_relevance, image_quality, threat_intel
 
@@ -31,6 +31,7 @@ SCORER_REGISTRY = {
     "image_quality": image_quality.score,
     "threat_intel": threat_intel.score,
     "threat_intel_fast": _threat_intel_fast,
+    "auto": content_relevance.score,
 }
 
 
@@ -81,25 +82,25 @@ def _load_icp(conn, campaign_id: int) -> tuple[dict, int]:
 def _load_few_shot(conn, campaign_id: int, k: int = None) -> list[dict]:
     """
     Retrieve the k most recent feedback decisions for this campaign.
-    Only includes 'approved' decisions to prevent LLM score drift from mistaken rejections.
+    Includes both approved and rejected decisions to provide balanced context to the LLM.
     Few-shot pools must never cross campaigns (spec requirement).
     """
     if k is None:
         k = config.FEW_SHOT_K
 
-    approved_rows = db.fetchall(
+    rows = db.fetchall(
         conn,
         """
         SELECT f.decision, f.note, c.domain, c.company_name
         FROM feedback f
         JOIN candidates c ON c.id = f.candidate_id
-        WHERE c.campaign_id = %s AND f.decision = 'approved'
+        WHERE c.campaign_id = %s
         ORDER BY f.created_at DESC
         LIMIT %s
         """,
         (campaign_id, k),
     )
-    return approved_rows
+    return rows
 
 
 def _log_call(conn, campaign_id: int, provider: str, model: str, tokens_in: int, tokens_out: int) -> None:
@@ -182,10 +183,10 @@ def score_candidate(candidate_id: int) -> dict[str, Any]:
             """
             SELECT id FROM candidates
             WHERE domain = %s AND campaign_id = %s AND id != %s
-              AND created_at > NOW() - (30 * INTERVAL '1 day')
+              AND created_at > NOW() - (%s * INTERVAL '1 day')
             ORDER BY created_at DESC LIMIT 1
             """,
-            (candidate["domain"], candidate["campaign_id"], candidate_id)
+            (candidate["domain"], candidate["campaign_id"], candidate_id, config.STALE_REOPEN_DAYS)
         )
         if dup:
             db.execute(
@@ -193,7 +194,7 @@ def score_candidate(candidate_id: int) -> dict[str, Any]:
                 "UPDATE candidates SET status = 'duplicate', duplicate_of_candidate_id = %s WHERE id = %s",
                 (int(dup["id"]), candidate_id)
             )
-            return {"candidate_id": candidate_id, "score": 0, "rationale": f"Duplicate of candidate {dup['id']} within 30 days."}
+            return {"candidate_id": candidate_id, "score": 0, "rationale": f"Duplicate of candidate {dup['id']} within {config.STALE_REOPEN_DAYS} days."}
 
         # 3. Load current ICP version
         icp, icp_version = _load_icp(conn, campaign["id"])
@@ -210,18 +211,36 @@ def score_candidate(candidate_id: int) -> dict[str, Any]:
         )
         result = scorer_fn(candidate, campaign, icp, few_shot)
 
+        if candidate.get("source") == "urlscan":
+            original_score = result.get("score", 0)
+            result["score"] = min(100, original_score + 40)
+            result["rationale"] = "(URLScan Fast-Track +40) " + result.get("rationale", "")
+
         if result.get("_raw") or (isinstance(result.get("evidence_data"), dict) and result["evidence_data"].get("raw_response")):
-            logger.error(
-                "Cognitive failure for candidate %s (domain=%s): LLM returned _raw after all retries. "
-                "Resetting status to 'new' for retry on next run.",
-                candidate_id, candidate["domain"],
-            )
-            db.execute(
-                conn,
-                "UPDATE candidates SET status = 'new', created_at = NOW() WHERE id = %s",
-                (candidate_id,),
-            )
-            return {"candidate_id": candidate_id, "score": 0, "rationale": "LLM cognitive failure — will retry."}
+            attempts = (candidate.get("evidence_data") or {}).get("eval_attempts", 0) + 1
+            if attempts >= 3:
+                logger.error(
+                    "Cognitive failure for candidate %s (domain=%s): max retries (%d) exceeded.",
+                    candidate_id, candidate["domain"], attempts,
+                )
+                db.execute(
+                    conn,
+                    "UPDATE candidates SET status = 'discarded', evidence_data = jsonb_set(COALESCE(evidence_data, '{}'), '{eval_attempts}', %s::jsonb, true) WHERE id = %s",
+                    (str(attempts), candidate_id),
+                )
+                return {"candidate_id": candidate_id, "score": 0, "rationale": f"LLM cognitive failure {attempts} times — discarded."}
+            else:
+                logger.error(
+                    "Cognitive failure for candidate %s (domain=%s) (attempt %d/3). "
+                    "Resetting status to 'new' for retry on next run.",
+                    candidate_id, candidate["domain"], attempts,
+                )
+                db.execute(
+                    conn,
+                    "UPDATE candidates SET status = 'new', created_at = NOW(), evidence_data = jsonb_set(COALESCE(evidence_data, '{}'), '{eval_attempts}', %s::jsonb, true) WHERE id = %s",
+                    (str(attempts), candidate_id),
+                )
+                return {"candidate_id": candidate_id, "score": 0, "rationale": f"LLM cognitive failure (attempt {attempts}) — will retry."}
 
         # 6. Write to evaluations
         eval_row = db.execute_returning(
@@ -287,10 +306,11 @@ def trigger_scoring(campaign_id: int | None = None) -> dict:
             new_candidates = db.fetchall(
                 conn,
                 """
-                SELECT id, campaign_id, domain, company_name
+                SELECT id, campaign_id, domain, company_name, source, evidence_data
                 FROM candidates
                 WHERE status = 'new' AND campaign_id = %s
-                ORDER BY created_at ASC
+                ORDER BY (source = 'urlscan') DESC, created_at ASC
+                FOR UPDATE SKIP LOCKED
                 LIMIT %s
                 """,
                 (campaign_id, limit)
@@ -299,11 +319,12 @@ def trigger_scoring(campaign_id: int | None = None) -> dict:
             new_candidates = db.fetchall(
                 conn,
                 """
-                SELECT c.id, c.campaign_id, c.domain, c.company_name
+                SELECT c.id, c.campaign_id, c.domain, c.company_name, c.source, c.evidence_data
                 FROM candidates c
                 JOIN campaigns camp ON c.campaign_id = camp.id
                 WHERE c.status = 'new' AND camp.status = 'active'
-                ORDER BY c.created_at ASC
+                ORDER BY (c.source = 'urlscan') DESC, c.created_at ASC
+                FOR UPDATE SKIP LOCKED
                 LIMIT 50
                 """
             )

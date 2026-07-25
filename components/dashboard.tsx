@@ -47,7 +47,7 @@ function rowToLead(row: Record<string, unknown>): Lead {
         title: (evidenceData.source_post_title as string) ?? "Security intelligence source",
         url: (evidenceData.source_post_url as string) ?? "#",
       },
-      lastConfirmed: (evidenceData.last_confirmed as string) ?? null,
+      lastConfirmed: (evidenceData.last_confirmed as string) ?? (row.created_at as string) ?? null,
     }
   } else {
     evidence = {

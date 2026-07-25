@@ -1,6 +1,9 @@
 import pytest
 from unittest.mock import patch, MagicMock
 import os
+import sys
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 import kb_ingest
 
@@ -48,7 +51,7 @@ def test_fetch_rss_items_failure():
 def test_extract_article_links_from_index_success():
     mock_conn = MagicMock()
     with patch("kb_ingest.crawler_scrape", return_value=("Page content", [])) as mock_crawl, \
-         patch("kb_ingest.llm.chat_json", return_value=(["https://example.com/article1", "https://example.com/article2"], 10, 5)) as mock_llm, \
+         patch("kb_ingest.llm.chat_json", return_value=(["https://example.com/article1", "https://example.com/article2"], 10, 5, "gemini", "gemini")) as mock_llm, \
          patch("kb_ingest.cost_log.log_call"):
         
         links = kb_ingest.extract_article_links_from_index("https://fake.index", 1, mock_conn)
@@ -125,7 +128,7 @@ def test_run_pipeline_success(mock_env, mock_db_conn):
          patch("kb_ingest.db.execute") as mock_execute, \
          patch("kb_ingest.fetch_rss_items", return_value=[{"title": "Malware Found", "url": "https://rss/1"}]), \
          patch("kb_ingest.crawler_scrape", return_value=("This is a very long text about malware details that is definitely longer than one hundred characters so that it passes the validation check inside kb_ingest.py", [])), \
-         patch("kb_ingest.llm.chat_json", return_value=(llm_output, 10, 5)), \
+         patch("kb_ingest.llm.chat_json", return_value=(llm_output, 10, 5, "gemini", "gemini")), \
          patch("kb_ingest.cost_log.log_call"):
         
         stats = kb_ingest.run()

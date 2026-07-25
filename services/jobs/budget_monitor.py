@@ -46,6 +46,20 @@ def monitor_budgets():
         else:
             logger.info("Provider '%s' usage is healthy. (%s/%s - %.1f%%)", provider, used, quota, percent)
 
+    cur.execute("""
+        SELECT campaign_id, provider, SUM(query_count) as used, SUM(estimated_cost) as total_cost
+        FROM api_call_log
+        WHERE date_trunc('month', created_at) = date_trunc('month', now())
+        GROUP BY campaign_id, provider
+        ORDER BY campaign_id, provider
+    """)
+    campaign_usage = cur.fetchall()
+    
+    logger.info("--- Campaign Monthly Breakdown ---")
+    for cmp_id, prov, cmp_used, total_cost in campaign_usage:
+        logger.info("Campaign %s - Provider '%s': %s queries (Est. Cost: $%.4f)", cmp_id, prov, cmp_used, total_cost or 0.0)
+    logger.info("----------------------------------")
+
     logger.info("Budget Monitor Complete. %d warnings issued.", warnings)
     conn.close()
 

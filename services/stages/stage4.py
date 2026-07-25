@@ -19,12 +19,15 @@ import logging
 import concurrent.futures
 import re
 from typing import Any
+import asyncio
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
 import requests
 import whois
+import json
 
 import db
-import config
+import services.common.config as config
 from crawler_client import crawler_scrape, CONTACT_PATHS
 
 logger = logging.getLogger(__name__)
@@ -57,21 +60,31 @@ def _prioritize_contacts(contacts: list[dict]) -> list[dict]:
 
 # ── Apollo.io ───────────────────────────────────────────────────────────────
 
-def _apollo_search(domain: str) -> list[dict]:
+@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10), retry=retry_if_exception_type(Exception), reraise=False)
+def _apollo_search(domain: str, candidate: dict = None) -> list[dict]:
     """Search Apollo.io People Search API for contacts at this domain."""
     if not config.APOLLO_API_KEY:
         return []
     try:
         url = "https://api.apollo.io/v1/mixed_people/search"
+        target_roles = [
+            "CEO", "Owner", "Founder", "Director", "Managing Director",
+            "Facilities Manager", "Operations Manager", "Purchasing Manager",
+        ]
+        if candidate and candidate.get("campaign_config"):
+            try:
+                cfg = json.loads(candidate.get("campaign_config", "{}"))
+                if "target_roles" in cfg:
+                    target_roles = cfg["target_roles"]
+            except Exception:
+                pass
+
         payload = {
             "api_key": config.APOLLO_API_KEY,
             "q_organization_domains": domain,
             "page": 1,
             "per_page": 10,
-            "person_titles": [
-                "CEO", "Owner", "Founder", "Director", "Managing Director",
-                "Facilities Manager", "Operations Manager", "Purchasing Manager",
-            ],
+            "person_titles": target_roles,
         }
         resp = requests.post(url, json=payload, timeout=15)
         resp.raise_for_status()
@@ -98,6 +111,7 @@ def _apollo_search(domain: str) -> list[dict]:
 
 # ── Hunter.io domain search ─────────────────────────────────────────────────
 
+@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10), retry=retry_if_exception_type(Exception), reraise=False)
 def _hunter_search(domain: str) -> list[dict]:
     if not config.HUNTER_API_KEY:
         return []
@@ -124,6 +138,7 @@ def _hunter_search(domain: str) -> list[dict]:
 
 # ── Hunter.io email verifier ────────────────────────────────────────────────
 
+@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10), retry=retry_if_exception_type(Exception), reraise=False)
 def _hunter_verify(email: str) -> bool | None:
     """
     Call Hunter /v2/email-verifier.  Returns:
@@ -140,7 +155,7 @@ def _hunter_verify(email: str) -> bool | None:
         data = resp.json().get("data", {})
         status = data.get("status", "")
         # Hunter statuses: deliverable, risky, undeliverable, unknown
-        if status == "deliverable":
+        if status == "deliverable" or status == "accept_all" or status == "valid":
             return True
         if status in ("undeliverable", "disposable"):
             return False
@@ -152,6 +167,7 @@ def _hunter_verify(email: str) -> bool | None:
 
 # ── Whois fallback ──────────────────────────────────────────────────────────
 
+@retry(stop=stop_after_attempt(2), wait=wait_exponential(multiplier=1, min=1, max=5), retry=retry_if_exception_type(Exception), reraise=False)
 def _whois_search(domain: str) -> list[dict]:
     try:
         w = whois.whois(domain)
@@ -178,6 +194,7 @@ def _whois_search(domain: str) -> list[dict]:
 
 # ── Crawl4AI fallback ───────────────────────────────────────────────────────
 
+@retry(stop=stop_after_attempt(2), wait=wait_exponential(multiplier=1, min=1, max=5), retry=retry_if_exception_type(Exception), reraise=False)
 def _crawler_search(domain: str) -> list[dict]:
     base_url = f"https://{domain}"
     all_emails = set()
@@ -185,7 +202,9 @@ def _crawler_search(domain: str) -> list[dict]:
         text, _ = crawler_scrape(f"{base_url}{path}")
         if text:
             found = re.findall(r'[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+', text)
-            all_emails.update(found)
+            for e in found:
+                if not any(e.lower().startswith(x) for x in ['support@', 'noreply@', 'privacy@', 'info@', 'admin@', 'hello@', 'contact@', 'sales@']):
+                    all_emails.add(e)
     contacts = []
     for email in all_emails:
         contacts.append({
@@ -200,52 +219,63 @@ def _crawler_search(domain: str) -> list[dict]:
 
 # ── Core discovery + upsert ─────────────────────────────────────────────────
 
+async def _async_discover(domain: str, candidate: dict = None) -> list[dict]:
+    # Run all 4 searches in parallel with strict timeouts (e.g. 15s)
+    tasks = [
+        asyncio.wait_for(asyncio.to_thread(_apollo_search, domain, candidate), timeout=15),
+        asyncio.wait_for(asyncio.to_thread(_hunter_search, domain), timeout=15),
+        asyncio.wait_for(asyncio.to_thread(_whois_search, domain), timeout=15),
+        asyncio.wait_for(asyncio.to_thread(_crawler_search, domain), timeout=15)
+    ]
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+    
+    contacts = []
+    for res in results:
+        if isinstance(res, list):
+            contacts.extend(res)
+        elif isinstance(res, Exception):
+            logger.debug(f"Discovery task failed for {domain}: {res}")
+            
+    # Remove exact duplicate emails (case insensitive)
+    seen = set()
+    deduped = []
+    for c in contacts:
+        email = c.get("email", "").lower()
+        if email and email not in seen:
+            seen.add(email)
+            deduped.append(c)
+            
+    return deduped
+
 def _discover_contacts(candidate: dict, conn) -> dict:
     domain = candidate["domain"]
     candidate_id = candidate["id"]
 
-    # Waterfall: Apollo → Hunter → Whois → Crawl4AI
-    contacts = _apollo_search(domain)
-    if not contacts:
-        contacts = _hunter_search(domain)
-    if not contacts:
-        contacts = _whois_search(domain)
-    if not contacts:
-        contacts = _crawler_search(domain)
-
-    # Prioritize decision makers over generic addresses
+    try:
+        contacts = asyncio.run(_async_discover(domain, candidate))
+    except Exception as exc:
+        logger.error(f"Async discover failed for {domain}: {exc}")
+        contacts = []
+    
     contacts = _prioritize_contacts(contacts)
-
+    
     inserted = 0
     for c in contacts:
-        email = c.get("email")
-        if not email:
-            continue
-
-        # Verify MX via Hunter (best-effort; None = skip flag)
-        mx_valid = _hunter_verify(email)
-
+        mx_valid = _hunter_verify(c["email"])
+        linkedin_url = c.get("linkedin_url")
         try:
             db.execute(
                 conn,
                 """
-                INSERT INTO contacts
-                    (candidate_id, email, name, role, confidence, source, linkedin_url, mx_valid)
+                INSERT INTO contacts (candidate_id, email, name, role, confidence, source, mx_valid, linkedin_url)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-                ON CONFLICT (candidate_id, email) DO UPDATE
-                    SET mx_valid = EXCLUDED.mx_valid,
-                        linkedin_url = COALESCE(EXCLUDED.linkedin_url, contacts.linkedin_url)
+                ON CONFLICT (candidate_id, email) DO UPDATE SET 
+                    mx_valid = COALESCE(EXCLUDED.mx_valid, contacts.mx_valid),
+                    linkedin_url = COALESCE(EXCLUDED.linkedin_url, contacts.linkedin_url),
+                    role = EXCLUDED.role, 
+                    confidence = EXCLUDED.confidence
                 """,
-                (
-                    candidate_id,
-                    email,
-                    c.get("name"),
-                    c.get("role"),
-                    c.get("confidence", 0),
-                    c.get("source"),
-                    c.get("linkedin_url"),
-                    mx_valid,
-                ),
+                (candidate_id, c["email"], c["name"], c["role"], c.get("confidence", 0), c["source"], mx_valid, linkedin_url)
             )
             inserted += 1
         except Exception as exc:
@@ -267,7 +297,13 @@ def run() -> dict:
 
     results = []
     with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
-        futures = [executor.submit(_discover_contacts, cand, db.get_conn()) for cand in approved]
+        futures = []
+        for candidate in approved:
+            def _worker(cand):
+                with db.get_conn() as conn:
+                    return _discover_contacts(cand, conn)
+            futures.append(executor.submit(_worker, candidate))
+        
         for future in concurrent.futures.as_completed(futures):
             try:
                 results.append(future.result())

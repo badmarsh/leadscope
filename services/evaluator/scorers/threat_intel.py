@@ -20,94 +20,27 @@ Err on the side of lower scores when evidence is ambiguous.
 import json
 import logging
 from typing import Optional
+from pydantic import BaseModel, Field
 
 import requests
 
-import config
-import llm
+import services.common.config as config
+import services.common.llm as llm
 from scorers.proof_engine import generate_proof
 from scorers.exposure_scanner import scan_exposures
 
 logger = logging.getLogger(__name__)
 
-def calculate_wealth_index(domain: str) -> int:
-    """Assigns firmographic value based on TLD."""
-    tld = domain.split('.')[-1].lower()
-    if tld in ['lu', 'li', 'mc', 'ch']:
-        return 40
-    elif tld in ['us', 'uk', 'co.uk', 'de', 'fr', 'no', 'dk', 'se', 'eu', 'sk', 'cz', 'pl', 'hu', 'at', 'nl', 'be']:
-        return 30
-    elif tld in ['ru', 'cn', 'in', 'br', 'xyz', 'top', 'tk', 'ml']:
-        return -50
+def calculate_wealth_index(domain: str, candidate: dict = None) -> int:
+    """Assigns firmographic value based on target config."""
+    if candidate and "campaign_config" in candidate:
+        try:
+            cfg = json.loads(candidate.get("campaign_config", "{}"))
+            return cfg.get("tld_wealth_bonus", 0)
+        except:
+            pass
     return 0
 
-# ── WordPress paths to scan on suspected infected sites ───────────────────────
-WP_PATHS = ["", "/wp-content/", "/wp-includes/", "/wp-admin/", "/xmlrpc.php"]
-
-SCORING_PROMPT = """
-You are a WordPress security analyst evaluating a website for active malware
-infection. A previous automated scan (PublicWWW) detected suspicious code
-signatures on this site. Your job is to RE-VERIFY whether the infection is
-still active based on fresh evidence provided below.
-
-## Malware signatures detected in Stage 2
-{signatures_json}
-
-## Fresh Playwright scrape of the site (re-verification via Crawl4AI)
-The scraped content is provided below in the USER DATA section.
-
-## Re-verification result
-Snippet still present in fresh Playwright scrape: {snippet_confirmed}
-Found snippets: {found_snippets}
-
-## Reputation API results
-Google Safe Browsing: {safe_browsing_result}
-VirusTotal: {virustotal_result}
-URLhaus: {urlhaus_result}
-Wayback Machine (recency): {wayback_result}
-
-A site where snippet_confirmed=False BUT wayback shows a recent snapshot
-(last_snapshot_date within last 14 days) suggests the owner recently cleaned up
-— this is a WARM LEAD. Score 50-65 with recommendation="warm_lead_cleanup_in_progress".
-
-WordPress version (from RSS feed): {wp_version_result}
-
-If cve_risk is "critical" or "high" AND snippet_confirmed=True, upgrade the
-rationale to explicitly mention unpatched CVEs. This changes the pitch from
-"you're infected" to "your site has known exploitable vulnerabilities AND active malware."
-
-## Past feedback (few-shot)
-{few_shot_examples}
-
-## Instructions
-Score 0-100 where:
-- 90-100: Confirmed active infection — signature found in fresh scrape, strong remediation lead
-- 70-89: Likely infected — partial match or obfuscated variant, OR reputation API flags present
-- 50-69: Inconclusive — signature not found in this fetch (may be intermittent or gated behind JS)
-- 30-49: Unlikely — site appears clean in fresh scrape, no reputation flags
-- 0-29: Confirmed clean, site is down, or not WordPress
-
-CRITICAL: A mistaken "you're hacked" call to a clean site destroys trust and is
-costlier than any other false positive in this system. Only score 70+ if the
-snippet or strong corroborating evidence is clearly present. When in doubt, score lower.
-
-Return JSON with:
-- "score": integer 0-100
-- "rationale": 2-3 sentences — which malware family, which signature,
-  confirmed present as of when, what reputation APIs said. Be specific.
-- "snippet_confirmed": boolean — was the exact or partial snippet found?
-- "malware_family": string — the malware family name (e.g. "SocGholish", "Balada Injector")
-- "confidence": "high" | "medium" | "low"
-- "recommendation": "remediation_candidate" | "needs_manual_check" | "likely_clean" | "warm_lead_cleanup_in_progress"
-=== END SYSTEM INSTRUCTIONS ===
-
-=== BEGIN USER DATA ===
-{scraped_content}
-=== END USER DATA ===
-"""
-
-
-# ── Crawl4AI re-verification helpers ─────────────────────────────────────────
 
 def _crawl4ai_scrape(url: str, force_playwright: bool = True) -> Optional[str]:
     """
@@ -123,19 +56,31 @@ def _crawl4ai_scrape(url: str, force_playwright: bool = True) -> Optional[str]:
                 "url": url,
                 "force_playwright": force_playwright,
                 "bypass_cache": True,
-                "timeout_ms": 30000,
+                "timeout_ms": 90000,
             },
-            timeout=45,
+            timeout=95,
         )
         resp.raise_for_status()
         data = resp.json()
         if data.get("success"):
             return data.get("html") or data.get("markdown") or ""
         logger.warning("Crawl4AI returned success=False for %s: %s", url, data.get("error"))
-        return None
     except Exception as exc:
         logger.warning("Crawl4AI failed for %s: %s", url, exc)
-        return None
+        
+    logger.info("Falling back to requests.get for %s", url)
+    try:
+        fallback_resp = requests.get(
+            url,
+            timeout=15,
+            headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
+        )
+        if fallback_resp.status_code == 200:
+            return fallback_resp.text
+    except Exception as exc2:
+        logger.warning("Fallback requests.get failed for %s: %s", url, exc2)
+        
+    return None
 
 
 def _scrape_wp_site(domain: str) -> dict[str, str]:
@@ -208,9 +153,8 @@ def _check_snippet_present(scraped_content: str, snippets: list[str]) -> tuple[b
                 snippet_clean = snippet.strip().lower()
                 if not snippet_clean or len(snippet_clean) < 10:
                     continue
-                # Use a meaningful fragment: domain-like or path-like substring
-                # (first 20 chars is usually distinctive enough for C2 domains)
-                fragment = snippet_clean[:20]
+                # (Full length verification to mitigate false-positives)
+                fragment = snippet_clean
                 if fragment in decoded_corpus:
                     label = snippet + " (found via base64 decode — re-encoded variant)"
                     if label not in found:
@@ -260,38 +204,7 @@ def _check_safe_browsing(url: str) -> dict:
         return {"error": str(exc)}
 
 
-def _check_virustotal(domain: str) -> dict:
-    """
-    Query VirusTotal domain report (v3 API).
-    Returns {"malicious_count": int, "suspicious_count": int, "community_score": int}
-    or {"error": str}. Silently skips if VIRUSTOTAL_API_KEY is not configured.
-    """
-    if not config.VIRUSTOTAL_API_KEY:
-        return {"note": "API key not configured"}
-    try:
-        resp = requests.get(
-            f"https://www.virustotal.com/api/v3/domains/{domain}",
-            headers={"x-apikey": config.VIRUSTOTAL_API_KEY},
-            timeout=15,
-        )
-        if resp.status_code == 404:
-            return {"note": "Domain not in VirusTotal database"}
-        resp.raise_for_status()
-        attrs = resp.json().get("data", {}).get("attributes", {})
-        stats = attrs.get("last_analysis_stats", {})
-        result = {
-            "malicious_count": stats.get("malicious", 0),
-            "suspicious_count": stats.get("suspicious", 0),
-            "community_score": attrs.get("reputation", 0),
-        }
-        logger.info(
-            "VirusTotal for %s: malicious=%d suspicious=%d community_score=%d",
-            domain, result["malicious_count"], result["suspicious_count"], result["community_score"],
-        )
-        return result
-    except Exception as exc:
-        logger.warning("VirusTotal API failed for %s: %s", domain, exc)
-        return {"error": str(exc)}
+
 
 
 def _check_urlhaus(domain: str) -> dict:
@@ -496,7 +409,6 @@ def score(candidate: dict, campaign: dict, icp: dict, few_shot: list[dict]) -> d
     # ── 4. Reputation + recency checks ────────────────────────────────────────
     homepage_url = f"https://{domain}"
     safe_browsing = _check_safe_browsing(homepage_url)
-    virustotal = _check_virustotal(domain)
     urlhaus = _check_urlhaus(domain)
     wayback = _check_wayback_recency(domain)
     wp_version_info = _detect_wp_version(domain)
@@ -517,17 +429,23 @@ def score(candidate: dict, campaign: dict, icp: dict, few_shot: list[dict]) -> d
         snippet_confirmed="YES" if snippet_confirmed else "NO — not found in fresh Playwright scrape",
         found_snippets=str(found_snippets)[:500] if found_snippets else "none",
         safe_browsing_result=json.dumps(safe_browsing),
-        virustotal_result=json.dumps(virustotal),
         urlhaus_result=json.dumps(urlhaus),
         wayback_result=json.dumps(wayback),
         wp_version_result=json.dumps(wp_version_info),
         few_shot_examples=few_shot_str,
     )
 
+    class ThreatIntelResponse(BaseModel):
+        score: int
+        rationale: str
+        confidence: int
+        snippet_confirmed: bool
+        recommendation: str
+
     result, ti, to, model, provider = llm.chat_json(
         prompt,
         temperature=0.1,
-        required_fields=["score", "rationale", "confidence", "snippet_confirmed", "recommendation"]
+        response_model=ThreatIntelResponse
     )
 
     if "_raw" in result:
@@ -539,7 +457,6 @@ def score(candidate: dict, campaign: dict, icp: dict, few_shot: list[dict]) -> d
             "evidence_data": {
                 "snippet_confirmed": snippet_confirmed,
                 "safe_browsing": safe_browsing,
-                "virustotal": virustotal,
                 "wayback": wayback,
                 "wp_version": wp_version_info,
                 "raw_response": result.get("_raw", "")[:500],
@@ -572,7 +489,7 @@ def score(candidate: dict, campaign: dict, icp: dict, few_shot: list[dict]) -> d
     if wealth_override is not None:
         firmographic_score = int(wealth_override)
     else:
-        firmographic_score = calculate_wealth_index(domain)
+        firmographic_score = calculate_wealth_index(domain, candidate)
     
     max_sneakiness_bonus = 0
     for sig in matched_sigs:
@@ -582,7 +499,7 @@ def score(candidate: dict, campaign: dict, icp: dict, few_shot: list[dict]) -> d
         elif tier == "A":
             max_sneakiness_bonus = max(max_sneakiness_bonus, 15)
 
-    base_score = int(result.get("score", 30))
+    base_score = max(0, min(100, result.get("score", 30) if isinstance(result, dict) else getattr(result, "score", 30)))
     # If the LLM thinks it's clean (score < 50) but we have hard proof, override it
     if proof_data and base_score < 50:
         base_score = 60
@@ -590,7 +507,7 @@ def score(candidate: dict, campaign: dict, icp: dict, few_shot: list[dict]) -> d
     final_score = base_score + firmographic_score + max_sneakiness_bonus + proof_bonus
 
     # Generate enhanced rationale
-    rationale = result.get("rationale", "")
+    rationale = result.get("rationale", "") if isinstance(result, dict) else getattr(result, "rationale", "")
     if proof_data:
         rationale += f" | PROOF: {proof_data.get('evidence_text')}"
     if exposure_data.get("critical_found"):
@@ -615,6 +532,7 @@ def score(candidate: dict, campaign: dict, icp: dict, few_shot: list[dict]) -> d
         "evidence_urls": list(pages.keys()),
         "evidence_data": {
             "snippet_confirmed": snippet_confirmed,
+            "crawl_success": len(pages) > 0,
             "malware_family": result.get("malware_family", "unknown"),
             "confidence": result.get("confidence", "low"),
             "recommendation": result.get("recommendation", "needs_manual_check"),

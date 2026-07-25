@@ -64,17 +64,31 @@ def passes_heuristics(domain: str) -> bool:
 
     return True
 
+# Campaigns that use dedicated search-API discovery (e.g. Tavily, PublicWWW).
+# CertStream is a threat-intel feed and is not appropriate for business discovery.
+# Domains found via CT logs will never be relevant leads for these pipelines.
+CERTSTREAM_EXCLUDED_CAMPAIGNS = {
+    "jenex-hu-hvac",       # Uses Tavily/keyword search; targets Hungarian HVAC trade specifically
+    "shoe-photo-upgrade",  # Uses search APIs; targets e-commerce merchants specifically
+}
+
 def passes_campaign_heuristics(domain: str, campaign: dict) -> bool:
     slug = campaign["slug"]
+
+    # Hard opt-out: campaigns with their own discovery pipelines
+    if slug in CERTSTREAM_EXCLUDED_CAMPAIGNS:
+        return False
+
     if slug == "crypto-scams":
         return any(x in domain for x in ["crypto", "coin", "token", "wallet", "nft", "web3", "defi"])
+
     return passes_heuristics(domain)
 
 def check_wordpress(domain: str) -> bool:
     """Quick check to confirm if target site is running WordPress."""
     url = f"https://{domain}/wp-login.php"
     try:
-        resp = requests.get(url, timeout=3, headers={"User-Agent": "Mozilla/5.0"}, allow_redirects=True)
+        resp = requests.get(url, timeout=2, headers={"User-Agent": "Mozilla/5.0"}, allow_redirects=True)
         return resp.status_code == 200 and ("wordpress" in resp.text.lower() or "wp-login" in resp.text.lower())
     except Exception:
         return False
@@ -158,7 +172,7 @@ def start_certstream_monitor(max_inserts: int = 0, check_wp: bool = False):
             worker_conn.close()
 
     # Start worker threads
-    num_workers = 20
+    num_workers = 100
     for _ in range(num_workers):
         t = threading.Thread(target=process_worker, daemon=True)
         t.start()
@@ -166,36 +180,43 @@ def start_certstream_monitor(max_inserts: int = 0, check_wp: bool = False):
     def message_callback(message, context):
         if message['message_type'] == "heartbeat":
             return
+            
+        all_domains = []
         if message['message_type'] == "certificate_update":
             all_domains = message['data']['leaf_cert']['all_domains']
+        elif message['message_type'] == "dns_entries":
+            all_domains = message['data']
             
-            with state_lock:
-                state["processed"] += 1
+        if not all_domains:
+            return
+            
+        with state_lock:
+            state["processed"] += 1
 
-            for raw_domain in all_domains:
-                domain = raw_domain.lstrip("*.").lower().strip()
+        for raw_domain in all_domains:
+            domain = raw_domain.lstrip("*.").lower().strip()
 
-                if domain in seen_set:
-                    continue
+            if domain in seen_set:
+                continue
 
-                if len(seen_domains) == seen_domains.maxlen:
-                    oldest = seen_domains.popleft()
-                    seen_set.discard(oldest)
+            if len(seen_domains) == seen_domains.maxlen:
+                oldest = seen_domains.popleft()
+                seen_set.discard(oldest)
 
-                seen_set.add(domain)
-                seen_domains.append(domain)
+            seen_set.add(domain)
+            seen_domains.append(domain)
 
-                try:
-                    domain_queue.put_nowait((domain, all_domains))
-                except queue.Full:
-                    pass
+            try:
+                domain_queue.put_nowait((domain, all_domains))
+            except queue.Full:
+                pass
 
         if state["processed"] % 5000 == 0:
             logger.info("CertStream progress: %d cert domains evaluated | %d candidates inserted | queue size: %d", 
                         state["processed"], state["inserted"], domain_queue.qsize())
 
     try:
-        certstream.listen_for_events(message_callback, url="ws://certstream-server:8080/")
+        certstream.listen_for_events(message_callback, url="ws://certstream-server:8080/domains-only")
     except KeyboardInterrupt:
         logger.info("CertStream monitor stopped by user.")
     finally:

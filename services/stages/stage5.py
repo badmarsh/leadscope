@@ -31,10 +31,10 @@ try:
 except ImportError:
     phonenumbers = None
 
-import config
+import services.common.config as config
 import db
 import cost_log
-import llm
+import services.common.llm as llm
 # STABILIZATION FIX: Extracted shared crawler client to break circular dependencies
 import email_validator
 import crawler_client
@@ -51,8 +51,11 @@ def _screenshot_url(domain: str) -> str:
     return f"/api/screenshot?url={encoded}"
 
 
-CF_PATTERNS = ["just a moment", "checking your browser", "ddos-guard", "enable javascript", "attention required!"]
-
+CF_PATTERNS = [
+    "just a moment", "checking your browser", "ddos-guard", "enable javascript", "attention required!",
+    "moment strpenia", "skontrolujte váš prehliadač", "zkontrolujte svůj prohlížeč",
+    "cloudflare", "ray id:", "security check"
+]
 
 def _is_bot_challenge(text: Optional[str]) -> bool:
     if not text:
@@ -215,7 +218,7 @@ def _enrich_info(domain: str, company_name: Optional[str], offer_summary: str, p
         pre_extracted=json.dumps(pre_extracted, ensure_ascii=False),
     )
     try:
-        result, ti, to = llm.chat_json(prompt, model=config.STAGE5_MODEL)
+        result, ti, to, _, _ = llm.chat_json(prompt, model=config.STAGE5_MODEL)
         if isinstance(result, dict) and "_raw" not in result:
             return result, ti, to
         # HARDENING: LLM returned non-JSON or parse failure
@@ -571,7 +574,7 @@ def run() -> dict:
                 logger.info("Stage 5 stopped via dashboard signal for campaign %s", candidate["campaign_id"])
                 return None
             try:
-                with db.get_conn() as conn:
+                with db.get_conn(autocommit=False) as conn:
                     if candidate.get("existing_lead_id") and candidate.get("existing_enrichment_report"):
                         logger.debug(
                             "Stage 5: candidate %s (%s) already enriched, skipping",
@@ -591,8 +594,9 @@ def run() -> dict:
                 logger.error("Stage 5: unexpected error for candidate %s: %s", candidate["id"], exc)
                 return {"candidate_id": candidate["id"], "outcome": "error", "error": str(exc)}
 
-        # HARDENING: Use submit+cancel pattern so stop signal actually stops
-        # in-flight enrichment threads, not just the collection loop.
+        # NOTE (S9): Use submit+cancel pattern to stop queued tasks. 
+        # WARNING: f.cancel() only prevents unstarted futures from running. 
+        # In-flight enrichment threads (up to 5) will run to completion. True interruption would require passing a cancellation token down.
         futures = []
         with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
             for candidate in approved:

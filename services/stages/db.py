@@ -11,7 +11,7 @@ import psycopg2.extras
 from psycopg2 import pool as pg_pool
 from contextlib import contextmanager
 
-import config
+import services.common.config as config
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +52,7 @@ def get_pool() -> pg_pool.ThreadedConnectionPool:
 
 
 @contextmanager
-def get_conn():
+def get_conn(autocommit: bool = True):
     """Context manager that checks out a connection with retry on pool exhaustion."""
     conn = None
     retries = 5
@@ -67,8 +67,14 @@ def get_conn():
                 logger.error("Postgres connection pool exhausted after %d retries", retries)
                 raise
     try:
-        conn.autocommit = True
+        conn.autocommit = autocommit
         yield conn
+        if not autocommit:
+            conn.commit()
+    except Exception:
+        if not autocommit and conn:
+            conn.rollback()
+        raise
     finally:
         if conn:
             get_pool().putconn(conn)
@@ -155,8 +161,8 @@ def acquire_stage_lock(campaign_id: int, stage: str) -> bool:
             )
             return cur.rowcount == 1
     except Exception as exc:
-        logger.warning("acquire_stage_lock failed: %s", exc)
-        return False
+        logger.warning("acquire_stage_lock failed transiently: %s", exc)
+        raise exc
     finally:
         get_pool().putconn(conn)
 

@@ -12,7 +12,7 @@ from typing import Any
 
 import requests
 
-import config
+import services.common.config as config
 import db
 from stage2 import _upsert_candidate, _extract_domain
 

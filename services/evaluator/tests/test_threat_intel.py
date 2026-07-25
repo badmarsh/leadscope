@@ -61,7 +61,6 @@ def test_snippet_present_base64_decode():
 
 # ── score() — Crawl4AI path ───────────────────────────────────────────────────
 
-@patch("scorers.threat_intel._check_virustotal", return_value={})
 @patch("scorers.threat_intel._check_safe_browsing", return_value={})
 @patch("scorers.threat_intel._crawl4ai_scrape")
 @patch("scorers.threat_intel.llm")
@@ -80,7 +79,6 @@ def test_score_snippet_confirmed_in_fresh_scrape(mock_llm, mock_crawl, mock_sb, 
     assert "pages_scraped" in result["evidence_data"]
     mock_llm.chat_json.assert_called_once()
 
-@patch("scorers.threat_intel._check_virustotal", return_value={})
 @patch("scorers.threat_intel._check_safe_browsing", return_value={})
 @patch("scorers.threat_intel._crawl4ai_scrape")
 @patch("scorers.threat_intel.llm")
@@ -95,7 +93,6 @@ def test_score_snippet_not_confirmed_in_fresh_scrape(mock_llm, mock_crawl, mock_
     assert result["evidence_data"]["snippet_confirmed"] is False
     assert result["score"] == 30
 
-@patch("scorers.threat_intel._check_virustotal", return_value={})
 @patch("scorers.threat_intel._check_safe_browsing", return_value={})
 @patch("scorers.threat_intel._crawl4ai_scrape", return_value=None)
 @patch("scorers.threat_intel.llm")
@@ -109,7 +106,6 @@ def test_score_crawl_returns_empty_still_calls_llm(mock_llm, mock_crawl, mock_sb
     mock_llm.chat_json.assert_called_once()
     assert result["score"] == 30
 
-@patch("scorers.threat_intel._check_virustotal", return_value={})
 @patch("scorers.threat_intel._check_safe_browsing", return_value={})
 @patch("scorers.threat_intel._crawl4ai_scrape")
 @patch("scorers.threat_intel.llm")
@@ -122,7 +118,6 @@ def test_score_conservative_default_on_non_json_llm(mock_llm, mock_crawl, mock_s
 
 @patch("db.get_conn")
 @patch("db.fetchall", return_value=[])
-@patch("scorers.threat_intel._check_virustotal", return_value={})
 @patch("scorers.threat_intel._check_safe_browsing", return_value={})
 @patch("scorers.threat_intel._crawl4ai_scrape")
 @patch("scorers.threat_intel.llm")
@@ -137,7 +132,6 @@ def test_score_no_signatures_skips_scrape_and_calls_llm(mock_llm, mock_crawl, mo
     result = score(CANDIDATE_NO_SIG, CAMPAIGN, ICP, [])
     assert result["score"] == 10
 
-@patch("scorers.threat_intel._check_virustotal", return_value={})
 @patch("scorers.threat_intel._check_safe_browsing", return_value={})
 @patch("scorers.threat_intel._crawl4ai_scrape")
 @patch("scorers.threat_intel.llm")
@@ -170,7 +164,6 @@ def test_score_clamps_to_0_100():
     """LLM returning score outside 0-100 must be clamped."""
     with patch("scorers.threat_intel._crawl4ai_scrape", return_value="content"), \
          patch("scorers.threat_intel._check_safe_browsing", return_value={}), \
-         patch("scorers.threat_intel._check_virustotal", return_value={}), \
          patch("scorers.threat_intel.scan_exposures", return_value={}), \
          patch("scorers.threat_intel.llm") as mock_llm:
         mock_llm.chat_json.return_value = ({"score": 9999}, 5, 3, "gemini-2.5-flash", "gemini")
@@ -183,7 +176,6 @@ def test_score_firmographic_penalty(mock_scan, mock_wealth):
     """Firmographic penalty should reduce score."""
     with patch("scorers.threat_intel._crawl4ai_scrape", return_value="content"), \
          patch("scorers.threat_intel._check_safe_browsing", return_value={}), \
-         patch("scorers.threat_intel._check_virustotal", return_value={}), \
          patch("scorers.threat_intel.llm") as mock_llm:
         mock_llm.chat_json.return_value = ({"score": 90}, 5, 3, "gemini-2.5-flash", "gemini")
         result = score(CANDIDATE_WITH_SIG, CAMPAIGN, ICP, [])
@@ -193,7 +185,6 @@ def test_score_warm_lead_cleanup():
     """Warm lead check (recent snapshot)."""
     with patch("scorers.threat_intel._crawl4ai_scrape", return_value="clean"), \
          patch("scorers.threat_intel._check_safe_browsing", return_value={}), \
-         patch("scorers.threat_intel._check_virustotal", return_value={}), \
          patch("scorers.threat_intel.scan_exposures", return_value={}), \
          patch("scorers.threat_intel.llm") as mock_llm:
         mock_llm.chat_json.return_value = ({"score": 60, "recommendation": "warm_lead_cleanup_in_progress"}, 5, 3, "gemini", "gemini")

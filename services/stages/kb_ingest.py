@@ -13,10 +13,10 @@ import json
 import re
 from typing import Any
 
-import config
+import services.common.config as config
 import db
 import cost_log
-import llm
+import services.common.llm as llm
 from crawler_client import crawler_scrape
 
 logger = logging.getLogger(__name__)
@@ -109,7 +109,7 @@ def extract_article_links_from_index(index_url: str, campaign_id: int, conn) -> 
         if len(index_text) > 20000:
             logger.warning("Index text truncated to 20,000 characters for LLM prompt")
         prompt = SCRAPING_INDEX_PROMPT.format(index_text=index_text[:20000])
-        parsed, ti, to = llm.chat_json(prompt, temperature=0.1, model=config.KB_INGEST_MODEL)
+        parsed, ti, to, _, _ = llm.chat_json(prompt, temperature=0.1, model=config.KB_INGEST_MODEL)
         cost_log.log_call(
             conn, "kb_ingest_index", "gemini",
             campaign_id=campaign_id,
@@ -240,7 +240,7 @@ def run() -> dict:
 
                     # 5. LLM Extraction
                     prompt = EXTRACT_PROMPT.format(article_text=page_text[:25000])
-                    parsed, ti, to = llm.chat_json(prompt, temperature=0.1, model=config.KB_INGEST_MODEL)
+                    parsed, ti, to, _, _ = llm.chat_json(prompt, temperature=0.1, model=config.KB_INGEST_MODEL)
 
                     cost_log.log_call(
                         conn, "kb_ingest", "gemini",

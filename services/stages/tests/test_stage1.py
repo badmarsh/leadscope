@@ -1,5 +1,9 @@
 import pytest
 from unittest.mock import patch, MagicMock
+import sys
+import os
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 import stage1
 
@@ -42,7 +46,7 @@ def test_run_stage1_success(mock_env, mock_db_conn):
          patch("stage1.db.fetchone", side_effect=fake_fetchone), \
          patch("stage1.db.execute_returning", side_effect=fake_execute_returning), \
          patch("stage1.cost_log.log_call"), \
-         patch("stage1.llm.chat_json", return_value=(mock_icp, 100, 50)):
+         patch("stage1.llm.chat_json", return_value=(mock_icp, 100, 50, "gemini", "gemini")):
          
          result = stage1.run(1)
          
@@ -105,7 +109,7 @@ def test_run_stage1_invalid_llm_json(mock_env, mock_db_conn):
          patch("stage1.db.fetchone", side_effect=fake_fetchone), \
          patch("stage1.db.execute_returning", side_effect=fake_execute_returning), \
          patch("stage1.cost_log.log_call"), \
-         patch("stage1.llm.chat_json", return_value=(bad_json, 10, 5)):
+         patch("stage1.llm.chat_json", return_value=(bad_json, 10, 5, "gemini", "gemini")):
          
-         res = stage1.run(1)
-         assert res["campaign_id"] == 1
+         with pytest.raises(ValueError, match="LLM omitted required keys"):
+             stage1.run(1)

@@ -26,12 +26,47 @@ logger = logging.getLogger("urlscan_monitor")
 URLSCAN_API_KEY = os.environ.get("URLSCAN_API_KEY", "")
 URLSCAN_SEARCH_URL = "https://urlscan.io/api/v1/search/"
 
-def search_urlscan(snippet: str, size: int = 100) -> list[dict]:
-    # Quote snippet for exact phrase matching
-    query = f'page.body:"{snippet}"'
-    encoded_query = quote(query)
-    url = f"{URLSCAN_SEARCH_URL}?q={encoded_query}&size={size}"
-    
+# URLScan tag-based queries for malware families that security researchers tag on scans.
+# These return CURRENT results — scans tagged by the URLScan community in real time.
+# Much more reliable than page.body searches (which require exact text match in rendered DOM).
+URLSCAN_TAG_MAP = {
+    "SocGholish (NDSW)":             "task.tags:socgholish",
+    "SocGholish (NDSJ variant)":     "task.tags:ndsw",
+    "SocGholish":                    "task.tags:socgholish",
+    "Balada Injector":               "task.tags:balada",
+    "ClearFake / SocGholish":        "task.tags:clearfake",
+    "Sign1 / Generic Redirect":      "task.tags:sign1",
+    "msaRAT / Cloudflare Worker C2": "task.tags:msarat",
+    "msaRAT":                        "task.tags:msarat",
+}
+
+def build_urlscan_query(snippet: str, malware_family: str) -> str:
+    """Build the best URLScan query for a given signature.
+    Priority:
+    1. Tag-based query if the family is known in URLSCAN_TAG_MAP (most results, freshest data)
+    2. page.dom phrase search using the longest safe alphanumeric token from the snippet
+    3. Falls back to page.body for short snippets
+    """
+    # Exact family match
+    if malware_family in URLSCAN_TAG_MAP:
+        return URLSCAN_TAG_MAP[malware_family]
+    # Partial family match
+    for key, tag_query in URLSCAN_TAG_MAP.items():
+        if key.lower() in malware_family.lower() or malware_family.lower() in key.lower():
+            return tag_query
+    # Extract safest token from snippet (longest alphanumeric run >=6 chars)
+    import re
+    tokens = re.findall(r'[a-zA-Z0-9_]{6,}', snippet)
+    if tokens:
+        best_token = max(tokens, key=len)
+        return f'page.dom:"{best_token}"'
+    return f'page.body:"{snippet[:40]}"'
+
+
+def search_urlscan(snippet: str, size: int = 100, malware_family: str = "") -> list[dict]:
+    query = build_urlscan_query(snippet, malware_family)
+    logger.info("  URLScan query: %s", query)
+
     headers = {"Accept": "application/json"}
     if URLSCAN_API_KEY:
         headers["API-Key"] = URLSCAN_API_KEY
@@ -40,7 +75,13 @@ def search_urlscan(snippet: str, size: int = 100) -> list[dict]:
     backoff = 5
     for attempt in range(retries):
         try:
-            resp = requests.get(url, headers=headers, timeout=25)
+            # Use params= so requests handles encoding correctly (colons preserved, spaces as %20)
+            resp = requests.get(
+                URLSCAN_SEARCH_URL,
+                params={"q": query, "size": size},
+                headers=headers,
+                timeout=25,
+            )
             if resp.status_code == 429:
                 logger.warning("URLScan API rate limit exceeded (HTTP 429). Retrying in %d seconds...", backoff)
                 time.sleep(backoff)
@@ -53,6 +94,7 @@ def search_urlscan(snippet: str, size: int = 100) -> list[dict]:
             logger.error("URLScan search request failed for snippet '%s': %s", snippet[:50], e)
             return []
     return []
+
 
 def process_urlscan(dry_run: bool = False, sig_id: int | None = None):
     logger.info("Starting URLScan monitor (dry_run=%s, sig_id=%s)", dry_run, sig_id)
@@ -80,7 +122,7 @@ def process_urlscan(dry_run: bool = False, sig_id: int | None = None):
             family = sig.get("malware_family") or "Unknown"
             logger.info("Querying URLScan for Sig #%s (%s): '%s'", sig["id"], family, snippet[:60])
 
-            results = search_urlscan(snippet)
+            results = search_urlscan(snippet, malware_family=family)
             queries_run += 1
             logger.info("  Found %d scan result(s) from URLScan", len(results))
 

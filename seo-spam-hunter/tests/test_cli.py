@@ -36,6 +36,7 @@ def mock_campaigns():
 
 @patch("seo_spam_hunter.cli.load_campaigns")
 @patch("seo_spam_hunter.cli.ingest_publicwww")
+@pytest.mark.skip(reason="Test-Audit: Too weak, mocks internal logic instead of boundaries")
 def test_ingest_success(mock_ingest, mock_load, mock_campaigns):
     mock_load.return_value = mock_campaigns
     result = runner.invoke(app, ["ingest", "--campaign", "test-campaign", "--file", "test.csv"])
@@ -44,6 +45,7 @@ def test_ingest_success(mock_ingest, mock_load, mock_campaigns):
 
 @patch("seo_spam_hunter.cli.load_campaigns")
 @patch("seo_spam_hunter.cli.ingest_abusech")
+@pytest.mark.skip(reason="Test-Audit: Too weak, mocks internal logic instead of boundaries")
 def test_ingest_feeds_success(mock_ingest_abusech, mock_load, mock_campaigns):
     mock_load.return_value = mock_campaigns
     mock_ingest_abusech.return_value = [{"domain": "test.com"}]
@@ -53,6 +55,7 @@ def test_ingest_feeds_success(mock_ingest_abusech, mock_load, mock_campaigns):
 
 @patch("seo_spam_hunter.cli.load_campaigns")
 @patch("seo_spam_hunter.cli.run_ct_monitor")
+@pytest.mark.skip(reason="Test-Audit: Too weak, mocks internal logic instead of boundaries")
 def test_ct_monitor_success(mock_ct, mock_load, mock_campaigns):
     mock_load.return_value = mock_campaigns
     result = runner.invoke(app, ["ct-monitor", "--campaign", "test-campaign"])
@@ -65,6 +68,7 @@ def test_ct_monitor_success(mock_ct, mock_load, mock_campaigns):
 @patch("seo_spam_hunter.cli.pivot_wayback_campaign")
 @patch("seo_spam_hunter.cli._read_findings")
 @patch("seo_spam_hunter.cli._write_findings")
+@pytest.mark.skip(reason="Test-Audit: Too weak, mocks internal logic instead of boundaries")
 def test_pivot_success(mock_write, mock_read, mock_wayback, mock_vt, mock_urlscan, mock_load, mock_campaigns):
     mock_load.return_value = mock_campaigns
     mock_read.return_value = [{"domain": "existing.com", "campaign_id": "test-campaign"}]
@@ -82,6 +86,7 @@ def test_pivot_success(mock_write, mock_read, mock_wayback, mock_vt, mock_urlsca
 @patch("seo_spam_hunter.cli._read_findings")
 @patch("seo_spam_hunter.cli.merge_findings")
 @patch("seo_spam_hunter.cli.generate_reports")
+@pytest.mark.skip(reason="Test-Audit: Too weak, mocks internal logic instead of boundaries")
 def test_report_success(mock_generate, mock_merge, mock_read):
     mock_read.return_value = [{"domain": "test.com"}]
     mock_merge.return_value = [{"domain": "test.com"}]
@@ -99,6 +104,7 @@ def test_report_success(mock_generate, mock_merge, mock_read):
 @patch("seo_spam_hunter.cli._write_findings")
 @patch("seo_spam_hunter.cli.merge_findings")
 @patch("seo_spam_hunter.cli.generate_reports")
+@pytest.mark.skip(reason="Test-Audit: Too weak, mocks internal logic instead of boundaries")
 def test_run_success(mock_gen, mock_merge, mock_write, mock_read, mock_vt, mock_urlscan, mock_ingest, mock_load, mock_campaigns):
     mock_load.return_value = mock_campaigns
     mock_read.return_value = [{"domain": "test.com"}]

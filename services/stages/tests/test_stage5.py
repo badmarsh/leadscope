@@ -56,7 +56,7 @@ def test_extract_structured_data(mock_get):
 
 @patch.object(stage5.llm, "chat_json")
 def test_enrich_info(mock_chat, mock_db):
-    mock_chat.return_value = ({"report": "Test", "email": "a@b.com"}, 10, 5)
+    mock_chat.return_value = ({"report": "Test", "email": "a@b.com"}, 10, 5, "gemini", "gemini")
     res, ti, to = stage5._enrich_info("example.com", None, "offer", "text", {})
     assert res["report"] == "Test"
     assert ti == 10

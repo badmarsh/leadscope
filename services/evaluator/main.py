@@ -10,7 +10,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, BackgroundTasks, Depends
 
-import config
+import services.common.config as config
 import harness
 from auth import require_internal_token
 

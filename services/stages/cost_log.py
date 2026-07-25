@@ -4,7 +4,7 @@ Every paid API or LLM call in the system should call log_call().
 """
 import json
 from typing import Optional
-import config
+import services.common.config as config
 import db
 
 
@@ -63,7 +63,7 @@ def publicwww_budget_ok(conn, campaign_id: Optional[int] = None) -> bool:
         "SELECT monthly_quota FROM provider_budgets WHERE provider = 'publicwww'",
     )
     if not budget_row or budget_row["monthly_quota"] is None:
-        return True  # no budget configured — allow
+        return False  # FAIL CLOSED: no budget configured — deny
 
     used_row = db.fetchone(
         conn,

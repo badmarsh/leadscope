@@ -10,7 +10,7 @@ import os
 import requests
 from typing import Optional
 from urllib.parse import urlparse
-import config
+import services.common.config as config
 
 _SERPER_API_KEY = os.environ.get("SERPER_API_KEY", "")
 

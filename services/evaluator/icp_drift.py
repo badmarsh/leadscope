@@ -8,7 +8,7 @@ import json
 import logging
 from typing import Any
 import db
-import llm
+import services.common.llm as llm
 
 logger = logging.getLogger(__name__)
 
@@ -61,7 +61,7 @@ def analyze_drift(campaign_id: int) -> dict[str, Any] | None:
             # Count total feedback items
             count_res = db.fetchone(
                 conn,
-                "SELECT COUNT(*) as count FROM feedback WHERE campaign_id = %s",
+                "SELECT COUNT(*) as count FROM feedback f JOIN candidates ca ON f.candidate_id = ca.id WHERE ca.campaign_id = %s",
                 (campaign_id,)
             )
             total_feedback = count_res["count"] if count_res else 0
@@ -76,8 +76,9 @@ def analyze_drift(campaign_id: int) -> dict[str, Any] | None:
                 """
                 SELECT f.decision, f.note, e.score, e.rationale
                 FROM feedback f
+                JOIN candidates ca ON f.candidate_id = ca.id
                 JOIN evaluations e ON e.candidate_id = f.candidate_id
-                WHERE f.campaign_id = %s
+                WHERE ca.campaign_id = %s
                 ORDER BY f.created_at DESC
                 LIMIT 50
                 """,

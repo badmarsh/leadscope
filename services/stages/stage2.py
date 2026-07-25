@@ -17,6 +17,7 @@ import logging
 import re
 from typing import Optional
 from urllib.parse import quote, urlparse
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
 import requests
 try:
@@ -29,10 +30,10 @@ try:
 except ImportError:
     TavilyClient = None
 
-import config
+import services.common.config as config
 import db
 import cost_log
-import llm
+import services.common.llm as llm
 
 logger = logging.getLogger(__name__)
 
@@ -185,6 +186,7 @@ def _upsert_candidate(
 
 # ── Search provider helpers ────────────────────────────────────────────────────
 
+@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10), retry=retry_if_exception_type(Exception), reraise=False)
 def _search_exa(query: str, conn, campaign_id: int) -> list[dict]:
     """Exa search. Returns list of {url, title, snippet} dicts."""
     if not config.EXA_API_KEY:
@@ -205,6 +207,7 @@ def _search_exa(query: str, conn, campaign_id: int) -> list[dict]:
         return []
 
 
+@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10), retry=retry_if_exception_type(Exception), reraise=False)
 def _search_tavily(query: str, conn, campaign_id: int) -> list[dict]:
     """Tavily search. Returns list of {url, title, snippet} dicts."""
     if not config.TAVILY_API_KEY:
@@ -225,6 +228,7 @@ def _search_tavily(query: str, conn, campaign_id: int) -> list[dict]:
         return []
 
 
+@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10), retry=retry_if_exception_type(Exception), reraise=False)
 def _search_serper(query: str, conn, campaign_id: int) -> list[dict]:
     """Serper (Google Search JSON) — raw HTTP."""
     if not config.SERPER_API_KEY:
@@ -250,6 +254,7 @@ def _search_serper(query: str, conn, campaign_id: int) -> list[dict]:
         return []
 
 
+@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10), retry=retry_if_exception_type(Exception), reraise=False)
 def _search_serpapi(query: str, conn, campaign_id: int) -> list[dict]:
     """SerpAPI — raw HTTP (google-search-results SDK optional, raw is simpler)."""
     if not config.SERPAPI_API_KEY:
@@ -274,6 +279,7 @@ def _search_serpapi(query: str, conn, campaign_id: int) -> list[dict]:
         return []
 
 
+@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10), retry=retry_if_exception_type(Exception), reraise=False)
 def _search_brave(query: str, conn, campaign_id: int) -> list[dict]:
     """Brave Search — raw HTTP with Bearer token (as specified in §Part 2)."""
     if not config.BRAVE_SEARCH_API_KEY:
@@ -356,7 +362,7 @@ def _llm_dedup(raw_results: list[dict], conn, campaign_id: int) -> list[dict]:
     for i in range(0, len(unique_raw), batch_size):
         batch = unique_raw[i:i + batch_size]
         try:
-            parsed, ti, to = llm.chat_json(
+            parsed, ti, to, _, _ = llm.chat_json(
                 DEDUP_PROMPT.format(results_json=json.dumps(batch, ensure_ascii=False)),
                 temperature=0.1,
                 model=config.STAGE2_DEDUP_MODEL,
@@ -610,7 +616,7 @@ def _llm_filter_security_blogs(raw_results: list[dict], conn, campaign_id: int) 
     for i in range(0, len(unique_raw), batch_size):
         batch = unique_raw[i:i + batch_size]
         try:
-            parsed, ti, to = llm.chat_json(
+            parsed, ti, to, _, _ = llm.chat_json(
                 FALLBACK_FILTER_PROMPT.format(results_json=json.dumps(batch, ensure_ascii=False)),
                 temperature=0.1,
                 model=config.STAGE2_DEDUP_MODEL,
