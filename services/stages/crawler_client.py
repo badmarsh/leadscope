@@ -7,7 +7,6 @@ without circular module dependencies between stage5 and kb_ingest.
 import logging
 import requests
 from typing import Optional
-from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
 import services.common.config as config
 
@@ -15,8 +14,6 @@ logger = logging.getLogger(__name__)
 
 CONTACT_PATHS = ["/kapcsolat", "/kontakt", "/contact", "/o-nas", "/impressum", "/about", "/kontakty", "/about-us", "/o-firme"]
 
-
-@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10), retry=retry_if_exception_type(Exception), reraise=False)
 def crawler_scrape(url: str, force_playwright: bool = False, bypass_cache: bool = False) -> tuple[Optional[str], Optional[list]]:
     """
     Call self-hosted Crawl4AI service to scrape a URL.

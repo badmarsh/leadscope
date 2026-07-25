@@ -82,18 +82,14 @@ def _scrape_domain(domain: str) -> tuple[Optional[str], str, Optional[list]]:
     Returns (None, '', None) if crawl fails.
     """
     base = f"https://{domain}"
-    # Try fast path first (trafilatura), then Playwright if needed
+    # The crawler service handles trafilatura fast-path and automatically falls back 
+    # to Playwright if the text is too short or if it's a SPA.
     text, images = _crawler_scrape(base, force_playwright=False)
+    
     if text and len(text) > 200 and not _is_bot_challenge(text):
         return text, base, images
 
-    # Force Playwright for potentially JS-heavy sites
-    logger.info("Retrying %s with forced Playwright (SPA or bot challenge suspected)...", base)
-    text, images = _crawler_scrape(base, force_playwright=True)
-    if text and not _is_bot_challenge(text):
-        return text, base, images
-
-    logger.warning("Crawler failed on homepage %s. Aborting subpaths to save time.", base)
+    logger.warning("Crawler failed on homepage %s or returned bot challenge. Aborting subpaths to save time.", base)
     return None, "", None
 
 
@@ -600,9 +596,9 @@ def run() -> dict:
 
         # NOTE (S9): Use submit+cancel pattern to stop queued tasks. 
         # WARNING: f.cancel() only prevents unstarted futures from running. 
-        # In-flight enrichment threads (up to 5) will run to completion. True interruption would require passing a cancellation token down.
+        # In-flight enrichment threads (up to 3) will run to completion. True interruption would require passing a cancellation token down.
         futures = []
-        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
             for candidate in approved:
                 futures.append(executor.submit(process_cand, candidate))
 

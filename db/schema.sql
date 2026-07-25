@@ -64,6 +64,7 @@ CREATE TABLE candidates (
   status TEXT DEFAULT 'new',              -- new | evaluated | pending_review | approved | rejected | enriched | stale | enrichment_failed
   enrichment_attempted_at TIMESTAMPTZ,     -- tracks Stage 5 attempts so Firecrawl failures don't loop silently
   enrichment_attempt_count INT DEFAULT 0,  -- caps retries (Part 2, Stage 5) — see MAX_ENRICHMENT_ATTEMPTS
+  evaluated_at TIMESTAMPTZ,                -- tracks when Stage 3 / find_malware completed domain evaluation
   last_seen_at TIMESTAMPTZ DEFAULT now(),  -- bumped whenever Stage 2 re-encounters this domain
   reopen_count INT DEFAULT 0,              -- how many times a stale candidate got reopened by rediscovery
   created_at TIMESTAMPTZ DEFAULT now(),
@@ -190,8 +191,14 @@ CREATE INDEX IF NOT EXISTS idx_feedback_candidate_id ON feedback(candidate_id);
 -- Fast status filter in Stage 5 enrichment loop and /api/leads
 CREATE INDEX IF NOT EXISTS idx_candidates_status_campaign ON candidates(campaign_id, status);
 
+-- Composite index covering WHERE campaign_id=X AND status='new' ORDER BY created_at ASC
+CREATE INDEX IF NOT EXISTS idx_candidates_campaign_status_created ON candidates(campaign_id, status, created_at ASC) WHERE status = 'new';
+
 -- Fast candidates creation date sorting
 CREATE INDEX IF NOT EXISTS idx_candidates_created_at ON candidates(created_at DESC);
+
+-- Fast lookup for evaluated candidates dashboard queries
+CREATE INDEX IF NOT EXISTS idx_candidates_evaluated_at ON candidates(evaluated_at DESC) WHERE evaluated_at IS NOT NULL;
 
 -- Partial index: Stage 5 only ever queries status='approved'
 CREATE INDEX IF NOT EXISTS idx_candidates_approved ON candidates(status) WHERE status = 'approved';
