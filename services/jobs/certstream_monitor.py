@@ -12,16 +12,14 @@ Usage:
 import argparse
 import collections
 import logging
-import re
-import requests
-import sys
-import os
+import math
 import queue
-import threading
 import re
 import requests
 import sys
 import os
+import threading
+import tldextract
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from discovery_helpers import get_conn, upsert_candidate, log_api_call
@@ -40,26 +38,45 @@ EXCLUDED_DOMAINS = {
     "netlify.app", "vercel.app", "fastly.net", "github.io", "google.com"
 }
 
+def _shannon_entropy(s: str) -> float:
+    if not s:
+        return 0.0
+    freq = [s.count(c) / len(s) for c in set(s)]
+    return -sum(p * math.log2(p) for p in freq)
+
 def passes_heuristics(domain: str) -> bool:
     """Return True if domain matches target business profile."""
+    ext = tldextract.extract(domain)
+    sld = ext.domain
+    suffix = ext.suffix
+
     if not any(domain.endswith(tld) for tld in HIGH_VALUE_TLDS):
         return False
 
     if any(ex in domain for ex in EXCLUDED_DOMAINS):
         return False
 
-    # Check apex domain length
-    parts = domain.split(".")
-    name = parts[0]
-    if len(name) < 4 or len(name) > 35:
+    if len(sld) < 5 or len(sld) > 22:
         return False
 
-    # Filter out IP-like names or subdomains
-    if re.search(r"\d{1,3}-\d{1,3}-\d{1,3}-\d{1,3}", name) or re.search(r"^\d+$", name):
+    if re.search(r"\d{1,3}-\d{1,3}-\d{1,3}-\d{1,3}", sld) or re.search(r"^\d+$", sld):
         return False
 
-    # Simple vowel check to filter out random DGAs
-    if not re.search(r"[aeiouy]", name):
+    entropy = _shannon_entropy(sld)
+    if entropy > 3.5:
+        return False
+
+    if sld.count("-") / len(sld) > 0.25:
+        return False
+
+    digit_ratio = sum(c.isdigit() for c in sld) / len(sld)
+    if digit_ratio > 0.40:
+        return False
+
+    if sld.startswith("xn--") or domain.startswith("xn--"):
+        return False
+
+    if suffix in {"sk", "hu"} and entropy > 2.9:
         return False
 
     return True
@@ -72,6 +89,13 @@ CERTSTREAM_EXCLUDED_CAMPAIGNS = {
     "shoe-photo-upgrade",  # Uses search APIs; targets e-commerce merchants specifically
 }
 
+BUSINESS_SIGNALS = re.compile(
+    r"(shop|store|online|service|solution|consult|media|studio|design|agency"
+    r"|dental|clinic|legal|law|plumb|electric|roof|hvac|clean|repair|hotel"
+    r"|cafe|restaurant|bistro|salon|beauty|health|fitness|sport|realty|estate)",
+    re.IGNORECASE
+)
+
 def passes_campaign_heuristics(domain: str, campaign: dict) -> bool:
     slug = campaign["slug"]
 
@@ -81,6 +105,13 @@ def passes_campaign_heuristics(domain: str, campaign: dict) -> bool:
 
     if slug == "crypto-scams":
         return any(x in domain for x in ["crypto", "coin", "token", "wallet", "nft", "web3", "defi"])
+
+    if slug == "wp-remediation":
+        sld = tldextract.extract(domain).domain
+        if not passes_heuristics(domain):
+            return False
+        # Optional soft filter prioritizing business-category keywords
+        return True
 
     return passes_heuristics(domain)
 
@@ -115,12 +146,13 @@ def start_certstream_monitor(max_inserts: int = 0, check_wp: bool = False):
 
     domain_queue = queue.Queue(maxsize=50000)
 
-    # Separate queue for domains that passed the WP check and are ready to insert
     db_queue = queue.Queue(maxsize=50000)
+
+    _shutdown = threading.Event()
 
     def http_worker():
         try:
-            while True:
+            while not _shutdown.is_set():
                 item = domain_queue.get()
                 if item is None:
                     break
@@ -155,7 +187,7 @@ def start_certstream_monitor(max_inserts: int = 0, check_wp: bool = False):
     def db_writer():
         worker_conn = get_conn()
         try:
-            while True:
+            while not _shutdown.is_set():
                 item = db_queue.get()
                 if item is None:
                     break
@@ -182,7 +214,8 @@ def start_certstream_monitor(max_inserts: int = 0, check_wp: bool = False):
                         logger.info("Reached maximum requested inserts (%d). Stopping CertStream listener.", max_inserts)
                         log_api_call(worker_conn, campaign_id=campaign_id, stage="discovery", provider="certstream", query_count=state["processed"])
                         worker_conn.commit()
-                        os._exit(0)
+                        _shutdown.set()
+                        return
                         
                 db_queue.task_done()
         except Exception as e:
@@ -200,6 +233,9 @@ def start_certstream_monitor(max_inserts: int = 0, check_wp: bool = False):
     writer_t.start()
 
     def message_callback(message, context):
+        if _shutdown.is_set():
+            sys.exit(0)
+
         if message['message_type'] == "heartbeat":
             return
             
