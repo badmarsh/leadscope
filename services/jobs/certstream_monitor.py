@@ -81,7 +81,7 @@ def passes_heuristics(domain: str) -> bool:
 
     return True
 
-# Campaigns that use dedicated search-API discovery (e.g. Tavily, PublicWWW).
+# Campaigns that use dedicated search-API discovery (e.g. Tavily, Serper, Exa).
 # CertStream is a threat-intel feed and is not appropriate for business discovery.
 # Domains found via CT logs will never be relevant leads for these pipelines.
 CERTSTREAM_EXCLUDED_CAMPAIGNS = {
