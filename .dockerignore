@@ -3,7 +3,7 @@ node_modules
 .git
 *.md
 db/
-services/
+
 *.log
 .env.local
 .env.*.local

@@ -206,13 +206,13 @@ export default function SeoSpamHunterPage() {
           </div>
 
           <div className="flex items-center gap-2">
-            <Link
+            <a
               href="/wp-hunter"
               className="flex items-center gap-1.5 rounded-md border border-cyan-500/30 bg-cyan-500/10 px-3 py-1.5 text-xs font-semibold text-cyan-600 dark:text-cyan-400 transition-colors hover:bg-cyan-500/20"
             >
               <Crosshair className="size-3.5" />
               <span>Switch to WP Hunter</span>
-            </Link>
+            </a>
 
             <button
               onClick={() => {

@@ -2,12 +2,13 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-COPY requirements.txt .
+COPY services/evaluator/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Run as non-root user
 RUN adduser --disabled-password --gecos "" appuser
-COPY --chown=appuser:appuser . .
+COPY --chown=appuser:appuser services/evaluator/ .
+COPY --chown=appuser:appuser services/common/ ./services/common/
 RUN chown -R appuser:appuser /app
 USER appuser
 

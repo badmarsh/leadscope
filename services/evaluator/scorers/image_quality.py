@@ -33,9 +33,9 @@ def _crawler_scrape(url: str, force_playwright: bool = False) -> tuple[Optional[
                 "extract_images": True,
                 "force_playwright": force_playwright,
                 "bypass_cache": False,
-                "timeout_ms": 30000,
+                "timeout_ms": 60000,
             },
-            timeout=45,
+            timeout=90,
         )
         resp.raise_for_status()
         data = resp.json()
@@ -128,6 +128,13 @@ def score(candidate: dict, campaign: dict, icp: dict, few_shot: list[dict]) -> d
         if html_content:
             imgs = firecrawl_client.extract_product_grid_images(html_content)
             all_images.extend(imgs)
+
+    # Fallback to markdown image extraction if HTML extraction found 0 images
+    if not all_images and pages_markdown:
+        for md_text in pages_markdown.values():
+            if md_text:
+                imgs = firecrawl_client.extract_image_urls(md_text, evaluator_type="image_quality")
+                all_images.extend(imgs)
 
     # Pre-process URLs
     seen = set()

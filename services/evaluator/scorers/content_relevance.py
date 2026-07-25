@@ -95,9 +95,9 @@ def _crawler_scrape(url: str, force_playwright: bool = False) -> tuple[Optional[
                 "extract_images": True,
                 "force_playwright": force_playwright,
                 "bypass_cache": False,
-                "timeout_ms": 30000,
+                "timeout_ms": 60000,
             },
-            timeout=45,
+            timeout=90,
         )
         resp.raise_for_status()
         data = resp.json()

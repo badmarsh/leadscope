@@ -125,13 +125,13 @@ export default function ThreatFeedsPage() {
       <header className="sticky top-0 z-30 border-b border-border bg-background/95 backdrop-blur">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-8">
           <div className="flex items-center gap-3">
-            <Link
+            <a
               href="/"
               className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:text-foreground"
             >
               <ArrowLeft className="size-4" />
               <span>Back to Dashboard</span>
-            </Link>
+            </a>
             <div className="h-4 w-px bg-border" />
             <div className="flex items-center gap-2">
               <div className="flex size-7 items-center justify-center rounded-md bg-violet-500/15 text-violet-600 dark:text-violet-400">

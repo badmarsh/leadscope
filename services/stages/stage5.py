@@ -498,10 +498,11 @@ def _enrich_candidate(candidate: dict, campaign: dict, conn, settings: dict | No
 
 def _recover_stuck_enrichments(conn):
     """
-    On service startup, decrement attempt count for candidates that were
+    On service startup or run start, decrement attempt count for candidates that were
     'started but never finished' due to a crash (enrichment_attempted_at set
-    within the last 10 minutes but still no enrichment_report).
-    This prevents valid candidates from being permanently locked out.
+    but still no enrichment_report).
+    Only recovers candidates for campaigns that are NOT currently 'running' to
+    avoid clobbering live work.
     """
     count = db.execute(
         conn,
@@ -509,13 +510,16 @@ def _recover_stuck_enrichments(conn):
         UPDATE candidates
         SET enrichment_attempt_count = GREATEST(0, enrichment_attempt_count - 1),
             enrichment_attempted_at  = NULL
-        WHERE enrichment_attempted_at > now() - interval '10 minutes'
+        WHERE enrichment_attempted_at IS NOT NULL
           AND id NOT IN (SELECT candidate_id FROM leads WHERE enrichment_report IS NOT NULL)
           AND status IN ('evaluated', 'pending_review', 'approved')
+          AND campaign_id IN (
+              SELECT id FROM campaigns WHERE stage5_status != 'running'
+          )
         """,
     )
     if count > 0:
-        logger.warning("Stage 5 startup recovery: reset %d stuck enrichment attempts.", count)
+        logger.warning("Stage 5 crash recovery: reset %d stuck enrichment attempts.", count)
 
 
 # ── Main run loop ──────────────────────────────────────────────────────────────

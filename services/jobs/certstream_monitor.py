@@ -115,8 +115,10 @@ def start_certstream_monitor(max_inserts: int = 0, check_wp: bool = False):
 
     domain_queue = queue.Queue(maxsize=50000)
 
-    def process_worker():
-        worker_conn = get_conn()
+    # Separate queue for domains that passed the WP check and are ready to insert
+    db_queue = queue.Queue(maxsize=50000)
+
+    def http_worker():
         try:
             while True:
                 item = domain_queue.get()
@@ -128,7 +130,6 @@ def start_certstream_monitor(max_inserts: int = 0, check_wp: bool = False):
                     if not passes_campaign_heuristics(domain, campaign):
                         continue
 
-                    # If this campaign requires WP check, maybe we only check once
                     campaign_check_wp = check_wp or campaign["slug"] == "wp-remediation"
                     
                     is_wp_confirmed = False
@@ -143,39 +144,60 @@ def start_certstream_monitor(max_inserts: int = 0, check_wp: bool = False):
                         "is_wp_confirmed": is_wp_confirmed,
                     }
 
-                    ok = upsert_candidate(
-                        worker_conn,
-                        campaign_id=campaign["id"],
-                        domain=domain,
-                        source="certstream",
-                        query_used="certstream:ct_log_new_cert",
-                        evidence=evidence,
-                    )
-
-                    if ok:
-                        with state_lock:
-                            state["inserted"] += 1
-                            inserted = state["inserted"]
-                        worker_conn.commit()
-                        logger.info("  ✓ [%d] CertStream candidate inserted for campaign %s: %s (WP confirmed: %s)", inserted, campaign["slug"], domain, is_wp_confirmed)
-
-                        if max_inserts > 0 and inserted >= max_inserts:
-                            logger.info("Reached maximum requested inserts (%d). Stopping CertStream listener.", max_inserts)
-                            log_api_call(worker_conn, campaign_id=campaign["id"], stage="discovery", provider="certstream", query_count=state["processed"])
-                            worker_conn.commit()
-                            os._exit(0)
-
+                    try:
+                        db_queue.put_nowait((campaign["id"], campaign["slug"], domain, evidence))
+                    except queue.Full:
+                        pass
                 domain_queue.task_done()
         except Exception as e:
-            logger.error("Worker error: %s", e)
+            logger.error("HTTP Worker error: %s", e)
+
+    def db_writer():
+        worker_conn = get_conn()
+        try:
+            while True:
+                item = db_queue.get()
+                if item is None:
+                    break
+                
+                campaign_id, campaign_slug, domain, evidence = item
+                
+                ok = upsert_candidate(
+                    worker_conn,
+                    campaign_id=campaign_id,
+                    domain=domain,
+                    source="certstream",
+                    query_used="certstream:ct_log_new_cert",
+                    evidence=evidence,
+                )
+
+                if ok:
+                    with state_lock:
+                        state["inserted"] += 1
+                        inserted = state["inserted"]
+                    worker_conn.commit()
+                    logger.info("  ✓ [%d] CertStream candidate inserted for campaign %s: %s (WP confirmed: %s)", inserted, campaign_slug, domain, evidence["is_wp_confirmed"])
+
+                    if max_inserts > 0 and inserted >= max_inserts:
+                        logger.info("Reached maximum requested inserts (%d). Stopping CertStream listener.", max_inserts)
+                        log_api_call(worker_conn, campaign_id=campaign_id, stage="discovery", provider="certstream", query_count=state["processed"])
+                        worker_conn.commit()
+                        os._exit(0)
+                        
+                db_queue.task_done()
+        except Exception as e:
+            logger.error("DB Writer error: %s", e)
         finally:
             worker_conn.close()
 
-    # Start worker threads
+    # Start 100 HTTP workers and 1 DB writer
     num_workers = 100
     for _ in range(num_workers):
-        t = threading.Thread(target=process_worker, daemon=True)
+        t = threading.Thread(target=http_worker, daemon=True)
         t.start()
+        
+    writer_t = threading.Thread(target=db_writer, daemon=True)
+    writer_t.start()
 
     def message_callback(message, context):
         if message['message_type'] == "heartbeat":

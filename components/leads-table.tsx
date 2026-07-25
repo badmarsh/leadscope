@@ -51,8 +51,23 @@ export function LeadsTable({ leads, selectedId, onSelect, onFilteredChange, onBu
   const [sortDir, setSortDir] = useState<SortDir>("desc")
   const [search, setSearch] = useState("")
   const [scoreFilter, setScoreFilter] = useState<'all'|'high'|'med'|'low'>('all')
+  const [signatureFilter, setSignatureFilter] = useState<string>('all')
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [isBulkActing, setIsBulkActing] = useState(false)
+
+  const availableSignatures = useMemo(() => {
+    const INVALID_NAMES = new Set(["none", "n/a", "unknown", "null", "undefined", ""])
+    const families = new Set<string>()
+    for (const l of leads) {
+      if (l.evidence.kind === "malware" && l.evidence.malwareFamily) {
+        const raw = l.evidence.malwareFamily.trim()
+        if (raw && !INVALID_NAMES.has(raw.toLowerCase())) {
+          families.add(raw)
+        }
+      }
+    }
+    return Array.from(families).sort((a, b) => a.localeCompare(b))
+  }, [leads])
 
   const filtered = useMemo(() => {
     const subset = leads.filter((l) => {
@@ -66,6 +81,9 @@ export function LeadsTable({ leads, selectedId, onSelect, onFilteredChange, onBu
       if (scoreFilter === 'high') return l.score >= 80
       if (scoreFilter === 'med') return l.score >= 60 && l.score < 80
       if (scoreFilter === 'low') return l.score < 60
+      if (signatureFilter !== 'all') {
+        if (l.evidence.kind !== "malware" || l.evidence.malwareFamily !== signatureFilter) return false
+      }
       return true
     })
     return [...subset].sort((a, b) => {
@@ -75,7 +93,7 @@ export function LeadsTable({ leads, selectedId, onSelect, onFilteredChange, onBu
       else cmp = String(a[sortKey]).localeCompare(String(b[sortKey]))
       return sortDir === "asc" ? cmp : -cmp
     })
-  }, [leads, view, sortKey, sortDir, search, scoreFilter])
+  }, [leads, view, sortKey, sortDir, search, scoreFilter, signatureFilter])
 
   useEffect(() => {
     onFilteredChange?.(filtered)
@@ -197,6 +215,22 @@ export function LeadsTable({ leads, selectedId, onSelect, onFilteredChange, onBu
             </button>
           ))}
         </div>
+
+        {availableSignatures.length > 0 && (
+          <select
+            value={signatureFilter}
+            onChange={(e) => setSignatureFilter(e.target.value)}
+            className="rounded-md border border-input bg-background px-2 py-1 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-ring/50"
+            aria-label="Filter by malware signature"
+          >
+            <option value="all">All Signatures ({availableSignatures.length})</option>
+            {availableSignatures.map((sig) => (
+              <option key={sig} value={sig}>
+                {sig}
+              </option>
+            ))}
+          </select>
+        )}
         
         {selectedIds.size > 0 && (
           <div className="flex items-center gap-2 border-l border-border pl-2 ml-1">

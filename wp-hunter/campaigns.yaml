@@ -109,7 +109,6 @@ campaigns:
     urlscan_pivot:
       - 'page.url:"/wp-json/wp/v2/snippets"'
     virustotal_pivot:
-      hashes:
-        - "e3b0c44298fc1c149afb4c8996fb92427ae41e4649b934ca495991b7852b855"
+      hashes: []
       domains: []
     notes: "Injected via Dessky Snippets plugin. Skims POST data from WooCommerce checkout. Skip stage A."

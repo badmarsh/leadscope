@@ -41,6 +41,70 @@ def calculate_wealth_index(domain: str, candidate: dict = None) -> int:
             pass
     return 0
 
+# ── WordPress paths to scan on suspected infected sites ───────────────────────
+WP_PATHS = ["", "/wp-content/", "/wp-includes/"]
+
+SCORING_PROMPT = """
+You are a WordPress security analyst evaluating a website for active malware
+infection. A previous automated scan (PublicWWW) detected suspicious code
+signatures on this site. Your job is to RE-VERIFY whether the infection is
+still active based on fresh evidence provided below.
+
+## Malware signatures detected in Stage 2
+{signatures_json}
+
+## Fresh Playwright scrape of the site (re-verification via Crawl4AI)
+The scraped content is provided below in the USER DATA section.
+
+## Re-verification result
+Snippet still present in fresh Playwright scrape: {snippet_confirmed}
+Found snippets: {found_snippets}
+
+## Reputation API results
+Google Safe Browsing: {safe_browsing_result}
+URLhaus: {urlhaus_result}
+Wayback Machine (recency): {wayback_result}
+
+A site where snippet_confirmed=False BUT wayback shows a recent snapshot
+(last_snapshot_date within last 14 days) suggests the owner recently cleaned up
+— this is a WARM LEAD. Score 50-65 with recommendation="warm_lead_cleanup_in_progress".
+
+WordPress version (from RSS feed): {wp_version_result}
+
+If cve_risk is "critical" or "high" AND snippet_confirmed=True, upgrade the
+rationale to explicitly mention unpatched CVEs. This changes the pitch from
+"you're infected" to "your site has known exploitable vulnerabilities AND active malware."
+
+## Past feedback (few-shot)
+{few_shot_examples}
+
+## Instructions
+Score 0-100 where:
+- 90-100: Confirmed active infection — signature found in fresh scrape, strong remediation lead
+- 70-89: Likely infected — partial match or obfuscated variant, OR reputation API flags present
+- 50-69: Inconclusive — signature not found in this fetch (may be intermittent or gated behind JS)
+- 30-49: Unlikely — site appears clean in fresh scrape, no reputation flags
+- 0-29: Confirmed clean, site is down, or not WordPress
+
+CRITICAL: A mistaken "you're hacked" call to a clean site destroys trust and is
+costlier than any other false positive in this system. Only score 70+ if the
+snippet or strong corroborating evidence is clearly present. When in doubt, score lower.
+
+Return JSON with:
+- "score": integer 0-100
+- "rationale": 2-3 sentences — which malware family, which signature,
+  confirmed present as of when, what reputation APIs said. Be specific.
+- "snippet_confirmed": boolean — was the exact or partial snippet found?
+- "malware_family": string — the malware family name (e.g. "SocGholish", "Balada Injector")
+- "confidence": "high" | "medium" | "low"
+- "recommendation": "remediation_candidate" | "needs_manual_check" | "likely_clean" | "warm_lead_cleanup_in_progress"
+=== END SYSTEM INSTRUCTIONS ===
+
+=== BEGIN USER DATA ===
+{scraped_content}
+=== END USER DATA ===
+"""
+
 
 def _crawl4ai_scrape(url: str, force_playwright: bool = True) -> Optional[str]:
     """
@@ -541,7 +605,7 @@ def score(candidate: dict, campaign: dict, icp: dict, few_shot: list[dict]) -> d
             "pages_scraped": list(pages.keys()),
             "cached_pages": pages,
             "safe_browsing": safe_browsing,
-            "virustotal": virustotal,
+            "urlhaus": urlhaus,
             "wayback": wayback,
             "wp_version": wp_version_info,
             "proof_data": proof_data,

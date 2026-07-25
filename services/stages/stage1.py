@@ -125,10 +125,20 @@ def run(campaign_id: int) -> dict[str, Any]:
 
             if not isinstance(icp.get("keywords_hu"), list) or not icp["keywords_hu"]:
                 raise ValueError("keywords_hu must be a non-empty list")
+            icp["keywords_hu"] = [str(k).strip() for k in icp["keywords_hu"] if str(k).strip()]
+            if not icp["keywords_hu"]:
+                raise ValueError("keywords_hu must contain valid non-empty strings")
+                
             if not isinstance(icp.get("keywords_en"), list) or not icp["keywords_en"]:
                 raise ValueError("keywords_en must be a non-empty list")
-            if not isinstance(icp.get("disqualifiers"), list):
-                icp["disqualifiers"] = []
+            icp["keywords_en"] = [str(k).strip() for k in icp["keywords_en"] if str(k).strip()]
+            if not icp["keywords_en"]:
+                raise ValueError("keywords_en must contain valid non-empty strings")
+                
+            if not isinstance(icp.get("disqualifiers"), dict):
+                # The prompt asks for an object, but sometimes it returns a list.
+                # Ensure it's a dict or fallback to default structure.
+                icp["disqualifiers"] = {"exclude_if": [], "sectors_out": []}
 
             # ── 7. Insert icp_config row ──────────────────────────────────────────
             row = db.execute_returning(

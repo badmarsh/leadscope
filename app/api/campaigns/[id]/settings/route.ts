@@ -70,6 +70,14 @@ export const SETTINGS_SCHEMA: Record<
     min: 1,
     max: 200,
   },
+  western_tld_filter_enabled: {
+    label: "Western High-Wealth TLD Filter",
+    description: "Scope Stage 2 discovery queries strictly to Western European & DACH TLDs (.li, .ch, .de, .at, .co.uk, .com).",
+    unit: "on/off",
+    default: 1,
+    min: 0,
+    max: 1,
+  },
 }
 
 function mergeWithDefaults(stored: Record<string, number>): Record<string, number> {

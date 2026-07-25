@@ -21,6 +21,7 @@ interface SettingsModalProps {
 }
 
 const FIELD_ORDER = [
+  "western_tld_filter_enabled",
   "search_cooldown_days",
   "keyword_min_hits",
   "min_score_for_review",

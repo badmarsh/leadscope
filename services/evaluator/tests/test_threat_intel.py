@@ -64,7 +64,7 @@ def test_snippet_present_base64_decode():
 @patch("scorers.threat_intel._check_safe_browsing", return_value={})
 @patch("scorers.threat_intel._crawl4ai_scrape")
 @patch("scorers.threat_intel.llm")
-def test_score_snippet_confirmed_in_fresh_scrape(mock_llm, mock_crawl, mock_sb, mock_vt):
+def test_score_snippet_confirmed_in_fresh_scrape(mock_llm, mock_crawl, mock_sb):
     """Snippet found in live scrape -> LLM should be called with snippet_confirmed=True evidence."""
     mock_crawl.return_value = "some malicious eval(base64_decode('QWxhZGRpbg==')) code injected into the website body to compromise the site completely."
     mock_llm.chat_json.return_value = (
@@ -82,7 +82,7 @@ def test_score_snippet_confirmed_in_fresh_scrape(mock_llm, mock_crawl, mock_sb, 
 @patch("scorers.threat_intel._check_safe_browsing", return_value={})
 @patch("scorers.threat_intel._crawl4ai_scrape")
 @patch("scorers.threat_intel.llm")
-def test_score_snippet_not_confirmed_in_fresh_scrape(mock_llm, mock_crawl, mock_sb, mock_vt):
+def test_score_snippet_not_confirmed_in_fresh_scrape(mock_llm, mock_crawl, mock_sb):
     """Snippet NOT found in re-scrape -> score should reflect unconfirmed state."""
     mock_crawl.return_value = "clean content here"
     mock_llm.chat_json.return_value = (
@@ -96,7 +96,7 @@ def test_score_snippet_not_confirmed_in_fresh_scrape(mock_llm, mock_crawl, mock_
 @patch("scorers.threat_intel._check_safe_browsing", return_value={})
 @patch("scorers.threat_intel._crawl4ai_scrape", return_value=None)
 @patch("scorers.threat_intel.llm")
-def test_score_crawl_returns_empty_still_calls_llm(mock_llm, mock_crawl, mock_sb, mock_vt):
+def test_score_crawl_returns_empty_still_calls_llm(mock_llm, mock_crawl, mock_sb):
     """Even if Crawl4AI returns no content, LLM is still called for a final verdict."""
     mock_llm.chat_json.return_value = (
         {"score": 30, "recommendation": "needs_manual_check", "rationale": "No content."},
@@ -109,7 +109,7 @@ def test_score_crawl_returns_empty_still_calls_llm(mock_llm, mock_crawl, mock_sb
 @patch("scorers.threat_intel._check_safe_browsing", return_value={})
 @patch("scorers.threat_intel._crawl4ai_scrape")
 @patch("scorers.threat_intel.llm")
-def test_score_conservative_default_on_non_json_llm(mock_llm, mock_crawl, mock_sb, mock_vt):
+def test_score_conservative_default_on_non_json_llm(mock_llm, mock_crawl, mock_sb):
     """If LLM returns garbage, scorer must return a safe default score (30) not crash."""
     mock_crawl.return_value = "some content"
     mock_llm.chat_json.return_value = ({"_raw": "I cannot answer."}, 5, 3, "gemini-2.5-flash", "gemini")
@@ -121,7 +121,7 @@ def test_score_conservative_default_on_non_json_llm(mock_llm, mock_crawl, mock_s
 @patch("scorers.threat_intel._check_safe_browsing", return_value={})
 @patch("scorers.threat_intel._crawl4ai_scrape")
 @patch("scorers.threat_intel.llm")
-def test_score_no_signatures_skips_scrape_and_calls_llm(mock_llm, mock_crawl, mock_sb, mock_vt, mock_fetchall, mock_db):
+def test_score_no_signatures_skips_scrape_and_calls_llm(mock_llm, mock_crawl, mock_sb, mock_fetchall, mock_db):
     """Candidate with no matched_signatures should still go through LLM for final verdict."""
     # Ensure the DB context manager works safely
     mock_db.return_value.__enter__.return_value = MagicMock()
@@ -135,7 +135,7 @@ def test_score_no_signatures_skips_scrape_and_calls_llm(mock_llm, mock_crawl, mo
 @patch("scorers.threat_intel._check_safe_browsing", return_value={})
 @patch("scorers.threat_intel._crawl4ai_scrape")
 @patch("scorers.threat_intel.llm")
-def test_score_result_always_contains_required_keys(mock_llm, mock_crawl, mock_sb, mock_vt):
+def test_score_result_always_contains_required_keys(mock_llm, mock_crawl, mock_sb):
     """Score result must always have score, evidence_data, model_used, provider, rationale."""
     mock_crawl.return_value = "content"
     mock_llm.chat_json.return_value = (

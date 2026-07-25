@@ -300,9 +300,9 @@ def extract_product_grid_images_via_crawler(url: str) -> list[str]:
                 "extract_images": True,
                 "force_playwright": True,
                 "bypass_cache": False,
-                "timeout_ms": 30000,
+                "timeout_ms": 60000,
             },
-            timeout=45,
+            timeout=90,
         )
         resp.raise_for_status()
         data = resp.json()

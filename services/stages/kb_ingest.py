@@ -55,6 +55,11 @@ Extract ALL signatures you find. For each, output a JSON object with these field
 - "outreach_hook": (string) A 1-sentence cold outreach hook referencing the specific infection.
   Example: "Your site is hosting a hidden backdoor that gives attackers full admin access."
 - "outbreak_scope": (string) The scale of the campaign. Examples: "Over 10,000 sites", "Targeted", "Global"
+- "suggested_publicwww_query": (string or null) Recommended PublicWWW search string with filetype:js or depth:all. If client-side DOM visible, format as: `"snippet_pattern" filetype:js depth:all`
+- "fit": (string) "suitable" if client-side DOM visible, or "not_suitable_for_publicwww" if server-side PHP.
+- "suggested_urlscan_pivot": (array of strings) Passive pivot queries for URLScan (e.g. ["page.domain:c2-domain.com"]).
+- "target_tlds": (array of strings) Suggested target TLDs, e.g. ["li", "ch", "de", "at", "co.uk", "com"].
+- "remediation_urgency": (string) "CRITICAL", "HIGH", or "MEDIUM".
 
 Return ONLY a valid JSON array. If no actionable signatures found, return [].
 Do not include any prose outside the JSON array.

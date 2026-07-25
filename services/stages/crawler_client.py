@@ -31,9 +31,9 @@ def crawler_scrape(url: str, force_playwright: bool = False, bypass_cache: bool 
                 "url": url,
                 "bypass_cache": bypass_cache,
                 "force_playwright": force_playwright,
-                "timeout_ms": 30000,
+                "timeout_ms": 60000,
             },
-            timeout=45,
+            timeout=90,
         )
         resp.raise_for_status()
         data = resp.json()

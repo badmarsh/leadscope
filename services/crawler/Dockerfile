@@ -8,13 +8,14 @@ RUN apt-get update && apt-get install -y \
     git \
     && rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt .
+COPY services/crawler/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Install playwright browsers (Chromium only to save space)
 RUN playwright install --with-deps chromium
 
-COPY . .
+COPY services/crawler/ .
+COPY services/common/ ./services/common/
 
 EXPOSE 8003
 
