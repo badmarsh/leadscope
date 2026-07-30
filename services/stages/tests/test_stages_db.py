@@ -4,9 +4,12 @@ import pytest
 import psycopg2
 from unittest.mock import MagicMock
 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+import services.stages.db as db
 
-from db import set_stage_status, check_stop_signal
+set_stage_status = db.set_stage_status
+check_stop_signal = db.check_stop_signal
+claim_candidates_for_stage = db.claim_candidates_for_stage
+update_candidate_generation = db.update_candidate_generation
 
 @pytest.fixture
 def mock_pool(mocker):
@@ -79,9 +82,6 @@ def test_check_stop_signal_false(mocker):
     
     result = check_stop_signal(123, "stage2")
     assert result is False
-
-
-from db import claim_candidates_for_stage, update_candidate_generation
 
 def test_claim_candidates_for_stage(mocker):
     conn_mock = MagicMock()

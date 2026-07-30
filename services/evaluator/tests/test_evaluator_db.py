@@ -3,14 +3,12 @@ import os
 import pytest
 from unittest.mock import MagicMock
 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+import services.evaluator.db as db
 
-from db import (
-    claim_candidates_for_stage,
-    update_candidate_generation,
-    set_stage_status,
-    check_stop_signal,
-)
+claim_candidates_for_stage = db.claim_candidates_for_stage
+update_candidate_generation = db.update_candidate_generation
+set_stage_status = db.set_stage_status
+check_stop_signal = db.check_stop_signal
 
 def test_claim_candidates_for_stage(mocker):
     conn_mock = MagicMock()
