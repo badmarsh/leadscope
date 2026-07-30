@@ -56,9 +56,10 @@ describe("POST /api/action/bulk", () => {
     // Check what SQL was called
     expect(mockQuery).toHaveBeenCalled()
     const sql = mockQuery.mock.calls[0][0]
-    // The query should NOT contain the old search_attempted_at columns!
     expect(sql).not.toContain("search_attempted_at")
     expect(sql).toContain("status = 'new'")
+    expect(sql).toContain("processing_generation = processing_generation + 1")
+    expect(sql).toContain("lease_id = NULL")
     expect(sql).toContain("id = ANY($1::int[])")
   })
 
@@ -72,8 +73,10 @@ describe("POST /api/action/bulk", () => {
 
     // Rerun enrichment executes 2 queries: update candidate status, delete from leads
     expect(mockQuery).toHaveBeenCalledTimes(2)
-    expect(mockQuery.mock.calls[0][0]).toContain("CASE WHEN status = 'enrichment_failed' THEN 'evaluated'") // first it clears enrichment stats in candidates
-    expect(mockQuery.mock.calls[1][0]).toContain("DELETE FROM leads") // then it deletes from leads
+    expect(mockQuery.mock.calls[0][0]).toContain("CASE WHEN status = 'enrichment_failed' THEN 'evaluated'")
+    expect(mockQuery.mock.calls[0][0]).toContain("processing_generation = processing_generation + 1")
+    expect(mockQuery.mock.calls[0][0]).toContain("lease_id = NULL")
+    expect(mockQuery.mock.calls[1][0]).toContain("DELETE FROM leads")
   })
 
   it("handles approved properly and creates feedback", async () => {
