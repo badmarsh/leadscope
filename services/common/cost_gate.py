@@ -38,6 +38,6 @@ def check_budget(conn, campaign_id: int, stage: str, daily_limit_usd: float = DE
             return False
         return True
     except Exception as exc:
-        # Fail open: if we cannot check the budget, allow the call and log the error
-        logger.warning("Budget check failed for campaign=%s stage=%s: %s (failing open)", campaign_id, stage, exc)
-        return True
+        # Fail closed: if we cannot check the budget, block the call and log the error
+        logger.critical("Budget check FAILED — failing closed for campaign=%s stage=%s: %s", campaign_id, stage, exc)
+        return False

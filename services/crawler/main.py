@@ -69,16 +69,23 @@ def _trafilatura_scrape(url: str) -> Optional[str]:
     Returns markdown-like text or None if page requires JS rendering.
     """
     try:
-        downloaded = trafilatura.fetch_url(url)
-        if not downloaded:
+        import requests
+        resp = requests.get(url, timeout=15, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"})
+        if resp.status_code != 200:
             return None
-        if _is_spa_likely(downloaded):
+            
+        html = resp.text
+        if _is_spa_likely(html):
             logger.info("Trafilatura detected SPA for %s — routing to Playwright", url)
             return None
-        text = trafilatura.extract(downloaded, include_links=True, include_images=True, output_format="markdown")
+            
+        text = trafilatura.extract(html, include_links=True, include_images=True, output_format="markdown")
         return text
+    except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as exc:
+        logger.warning("Trafilatura fast-path network failed for %s: %s", url, exc)
+        return None
     except Exception as exc:
-        logger.warning("Trafilatura failed for %s: %s", url, exc)
+        logger.warning("Trafilatura extraction failed for %s: %s", url, exc)
         return None
 
 

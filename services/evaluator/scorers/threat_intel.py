@@ -120,7 +120,7 @@ def _crawl4ai_scrape(url: str, force_playwright: bool = True) -> Optional[str]:
             json={
                 "url": url,
                 "force_playwright": force_playwright,
-                "bypass_cache": True,
+                "bypass_cache": False,
                 "timeout_ms": 90000,
             },
             timeout=95,

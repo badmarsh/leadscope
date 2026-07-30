@@ -146,6 +146,9 @@ def _extract_structured_data(domain: str) -> dict:
     except ImportError:
         logger.warning("extruct not installed — skipping structured data extraction")
         return {}
+    except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as exc:
+        logger.warning("extruct network failed for %s: %s (domain is dead or unreachable)", domain, exc)
+        return {"_network_error": True}
     except Exception as exc:
         logger.warning("extruct failed for %s: %s", domain, exc)
         return {}
@@ -284,6 +287,24 @@ def _enrich_candidate(candidate: dict, campaign: dict, conn, settings: dict | No
     # ── Step 1: extruct — deterministic structured data extraction ────────────
     pre_extracted = _extract_structured_data(domain)
     cost_log.log_call(conn, "stage5", "crawler", campaign_id=campaign_id, query_count=1)
+
+    if pre_extracted.pop("_network_error", False):
+        logger.warning("Stage 5: %s is unreachable (network error), skipping crawler entirely.", domain)
+        db.execute(
+            conn,
+            """
+            UPDATE candidates
+            SET enrichment_attempted_at  = now(),
+                enrichment_attempt_count = enrichment_attempt_count + 1
+            WHERE id = %s
+            """,
+            (candidate_id,),
+        )
+        new_attempt_count = (candidate["enrichment_attempt_count"] or 0) + 1
+        if new_attempt_count >= max_attempts:
+            db.execute(conn, "UPDATE candidates SET status = 'enrichment_failed' WHERE id = %s", (candidate_id,))
+            return {"candidate_id": candidate_id, "outcome": "enrichment_failed", "attempts": new_attempt_count}
+        return {"candidate_id": candidate_id, "outcome": "network_error_retry", "attempts": new_attempt_count}
 
     # ── Step 2: Crawl page (use cache from eval if available) ─────────────────
     page_text = None

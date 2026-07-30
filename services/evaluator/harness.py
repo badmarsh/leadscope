@@ -15,8 +15,28 @@ import db
 import icp_drift
 from scorers import content_relevance, image_quality, threat_intel
 from scorers import performance_gap, gdpr_gap, accessibility_risk
+from services.common import cost_gate
 
 logger = logging.getLogger(__name__)
+
+def _recover_stuck_evaluations(conn):
+    """
+    On service startup or run start, reset status for candidates that were
+    claimed but never finished due to a crash.
+    """
+    count = db.execute(
+        conn,
+        """
+        UPDATE candidates
+        SET status = 'new'
+        WHERE status = 'evaluating'
+          AND campaign_id IN (
+              SELECT id FROM campaigns WHERE stage3_status != 'running'
+          )
+        """
+    )
+    if count > 0:
+        logger.warning("Stage 3 crash recovery: reset %d stuck evaluations to 'new'.", count)
 
 # ── Scorer registry keyed by campaigns.evaluator_type ──────────────────────────
 # NOTE (v3 judgment call from spec): three hardcoded strategies, not a DB-driven
@@ -211,6 +231,12 @@ def score_candidate(candidate_id: int) -> dict[str, Any]:
         # 4. Retrieve few-shot feedback (same campaign only)
         few_shot = _load_few_shot(conn, campaign["id"])
 
+        # Check budget before LLM dispatch
+        if not cost_gate.check_budget(conn, campaign["id"], "stage3"):
+            logger.warning("Budget ceiling reached for campaign %s — skipping candidate %s", campaign["id"], candidate_id)
+            db.execute(conn, "UPDATE candidates SET status = 'new' WHERE id = %s", (candidate_id,))
+            return {"candidate_id": candidate_id, "score": 0, "rationale": "Budget ceiling reached."}
+
         # 5. Dispatch to the matching scorer
         settings = json.loads(campaign.get("settings") or "{}") if isinstance(campaign.get("settings"), str) else (campaign.get("settings") or {})
         candidate["_campaign_settings"] = settings
@@ -317,6 +343,9 @@ def trigger_scoring(campaign_id: int | None = None) -> dict:
     (displays 'pending_review').
     """
     with db.get_conn() as conn:
+        _recover_stuck_evaluations(conn)
+
+    with db.get_conn() as conn:
         if campaign_id:
             camp = db.fetchone(conn, "SELECT settings FROM campaigns WHERE id = %s", (campaign_id,))
             settings = json.loads(camp["settings"]) if camp and isinstance(camp.get("settings"), str) else (camp.get("settings") or {})
@@ -324,12 +353,16 @@ def trigger_scoring(campaign_id: int | None = None) -> dict:
             new_candidates = db.fetchall(
                 conn,
                 """
-                SELECT id, campaign_id, domain, company_name, source, evidence_data
-                FROM candidates
-                WHERE status = 'new' AND campaign_id = %s
-                ORDER BY (source = 'urlscan') DESC, created_at ASC
-                FOR UPDATE SKIP LOCKED
-                LIMIT %s
+                UPDATE candidates SET status = 'evaluating'
+                WHERE id IN (
+                    SELECT id
+                    FROM candidates
+                    WHERE status = 'new' AND campaign_id = %s
+                    ORDER BY (source = 'urlscan') DESC, created_at ASC
+                    FOR UPDATE SKIP LOCKED
+                    LIMIT %s
+                )
+                RETURNING id, campaign_id, domain, company_name, source, evidence_data
                 """,
                 (campaign_id, limit)
             )
@@ -337,13 +370,17 @@ def trigger_scoring(campaign_id: int | None = None) -> dict:
             new_candidates = db.fetchall(
                 conn,
                 """
-                SELECT c.id, c.campaign_id, c.domain, c.company_name, c.source, c.evidence_data
-                FROM candidates c
-                JOIN campaigns camp ON c.campaign_id = camp.id
-                WHERE c.status = 'new' AND camp.status = 'active'
-                ORDER BY (c.source = 'urlscan') DESC, c.created_at ASC
-                FOR UPDATE SKIP LOCKED
-                LIMIT 50
+                UPDATE candidates SET status = 'evaluating'
+                WHERE id IN (
+                    SELECT c.id
+                    FROM candidates c
+                    JOIN campaigns camp ON c.campaign_id = camp.id
+                    WHERE c.status = 'new' AND camp.status = 'active'
+                    ORDER BY (c.source = 'urlscan') DESC, c.created_at ASC
+                    FOR UPDATE SKIP LOCKED
+                    LIMIT 50
+                )
+                RETURNING id, campaign_id, domain, company_name, source, evidence_data
                 """
             )
 
