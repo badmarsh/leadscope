@@ -63,9 +63,10 @@ export async function POST(
       body = { campaign_id: campaignId }
     } else if (stage === "stage5") {
       url = `http://stages:8002/stage5/run?background=true`
-      // stage5 doesn't take a campaign_id currently, runs for all
+      body = { campaign_id: campaignId }
     } else if (stage === "stage3") {
       url = `http://evaluator:8001/score/trigger?background=true`
+      body = { campaign_id: campaignId }
     }
 
     try {

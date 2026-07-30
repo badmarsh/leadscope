@@ -37,12 +37,10 @@ Produce a structured ICP in JSON format with exactly these top-level keys:
     - "name": segment name (string)
     - "description": one sentence description (string)
     - "priority": "high" | "medium" | "low"
-- "keywords_hu": array of Hungarian-language search query strings that would
+- "keywords_hu": array of local-language (or target market language) search query strings that would
   find businesses matching this ICP on Google/Exa/Tavily.
-  Include location modifiers (e.g. "Magyarország", city names).
   Aim for 8-15 queries.
 - "keywords_en": array of English-language search query strings for the same purpose.
-  Include "Hungary" or "Hungarian" as location modifiers where relevant.
   Aim for 5-10 queries.
 - "disqualifiers": object with:
     - "exclude_if": array of strings — characteristics that disqualify a business

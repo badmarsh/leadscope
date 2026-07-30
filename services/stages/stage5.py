@@ -520,7 +520,7 @@ def _recover_stuck_enrichments(conn):
 
 # ── Main run loop ──────────────────────────────────────────────────────────────
 
-def run() -> dict:
+def run(campaign_id: Optional[int] = None) -> dict:
     """
     Poll all approved candidates and enrich them.
     Each candidate is processed in its own transaction so one failure
@@ -531,9 +531,35 @@ def run() -> dict:
         _recover_stuck_enrichments(conn)
 
     with db.get_conn() as conn:
-        approved = db.fetchall(
-            conn,
-            """
+        if campaign_id:
+            approved = db.fetchall(
+                conn,
+                """
+                SELECT c.id, c.campaign_id, c.domain, c.company_name, c.status,
+                       c.enrichment_attempt_count, c.enrichment_attempted_at,
+                       camp.id as camp_id, camp.business_brief, camp.slug, camp.settings,
+                       l.id as existing_lead_id,
+                       l.enrichment_report as existing_enrichment_report,
+                       (
+                           SELECT evidence_data
+                           FROM evaluations
+                           WHERE candidate_id = c.id
+                           ORDER BY created_at DESC
+                           LIMIT 1
+                       ) as eval_evidence
+                FROM candidates c
+                JOIN campaigns camp ON camp.id = c.campaign_id
+                LEFT JOIN leads l ON l.candidate_id = c.id
+                WHERE c.status IN ('evaluated', 'pending_review', 'approved')
+                  AND c.campaign_id = %s
+                ORDER BY c.created_at ASC
+                """,
+                (campaign_id,)
+            )
+        else:
+            approved = db.fetchall(
+                conn,
+                """
             SELECT c.id, c.campaign_id, c.domain, c.company_name, c.status,
                    c.enrichment_attempt_count, c.enrichment_attempted_at,
                    camp.id as camp_id, camp.business_brief, camp.slug, camp.settings,

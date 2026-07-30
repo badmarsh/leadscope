@@ -9,6 +9,8 @@ import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, BackgroundTasks, Depends
+from pydantic import BaseModel
+from typing import Optional
 
 import services.common.config as config
 import harness
@@ -53,6 +55,9 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Leadscope Evaluator", version="1.0.0", lifespan=lifespan)
 
+class CampaignRequest(BaseModel):
+    campaign_id: int
+
 
 @app.get("/health")
 def health():
@@ -62,16 +67,17 @@ def health():
 # IMPORTANT: /score/trigger MUST be defined before /score/{candidate_id}
 # otherwise FastAPI matches "trigger" as candidate_id.
 @app.post("/score/trigger", dependencies=[Depends(require_internal_token)])
-def trigger_scoring(background_tasks: BackgroundTasks, background: bool = False):
+def trigger_scoring(req: Optional[CampaignRequest] = None, background_tasks: BackgroundTasks = None, background: bool = False):
     """
     Poll for candidates with status='new', score each, flip to 'pending_review'.
     """
     try:
+        camp_id = req.campaign_id if req else None
         if background:
-            background_tasks.add_task(harness.trigger_scoring)
+            background_tasks.add_task(harness.trigger_scoring, camp_id)
             return {"ok": True, "message": "Scoring started in background"}
         else:
-            result = harness.trigger_scoring()
+            result = harness.trigger_scoring(camp_id)
             return {"ok": True, "result": result}
     except Exception as exc:
         logger.exception("Scoring trigger failed")

@@ -5,16 +5,15 @@ export const statusLabels: Record<LeadStatus, string> = {
   approved: "Approved",
   rejected: "Rejected",
   enrichment_failed: "Enrich failed",
+  junk: "Junk",
 }
 
 export const statusBadgeClasses: Record<LeadStatus, string> = {
-  pending:
-    "bg-amber-500/15 text-amber-700 dark:text-amber-400 border border-amber-500/30",
-  approved:
-    "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30",
-  rejected: "bg-red-500/15 text-red-700 dark:text-red-400 border border-red-500/30",
-  enrichment_failed:
-    "bg-muted text-muted-foreground border border-border",
+  pending: "bg-yellow-500/10 text-yellow-500 border-yellow-500/20",
+  approved: "bg-green-500/10 text-green-500 border-green-500/20",
+  rejected: "bg-red-500/10 text-red-500 border-red-500/20",
+  enrichment_failed: "bg-orange-500/10 text-orange-500 border-orange-500/20",
+  junk: "bg-zinc-500/10 text-zinc-500 border-zinc-500/20",
 }
 
 export function scoreColorClasses(score: number): { text: string; bar: string } {

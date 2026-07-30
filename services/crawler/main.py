@@ -13,7 +13,7 @@ from contextlib import asynccontextmanager
 from typing import Optional
 
 import trafilatura
-from crawl4ai import AsyncWebCrawler
+from crawl4ai import AsyncWebCrawler, BrowserConfig
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, HttpUrl, Field
 import json
@@ -26,22 +26,14 @@ GEMINI_PROXY_ENDPOINT = os.environ.get("GEMINI_PROXY_ENDPOINT", "http://host.doc
 
 # ── Persistent browser instance (reused across all requests) ──────────────────
 
-_crawler: Optional[AsyncWebCrawler] = None
+# ── Persistent browser instance (reused across all requests) ──────────────────
 
+# Removed global crawler to prevent hanging issues; now instantiated per request.
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Start Chromium once at boot; tear it down cleanly on shutdown."""
-    global _crawler
-    logger.info("Starting persistent AsyncWebCrawler (Chromium)...")
-    _crawler = AsyncWebCrawler(verbose=False)
-    await _crawler.start()
-    logger.info("AsyncWebCrawler ready.")
+    """Empty lifespan since we instantiate per request now."""
     yield
-    logger.info("Shutting down AsyncWebCrawler...")
-    await _crawler.close()
-    logger.info("AsyncWebCrawler closed.")
-
 
 app = FastAPI(title="Jenex Crawl4AI Service", lifespan=lifespan)
 
@@ -95,7 +87,7 @@ def _trafilatura_scrape(url: str) -> Optional[str]:
 @app.get("/health")
 async def health():
     """Liveness probe — returns ok if the crawler service is running."""
-    return {"status": "ok", "browser_ready": _crawler is not None}
+    return {"status": "ok", "browser_ready": True}
 
 
 @app.post("/crawl")
@@ -121,10 +113,7 @@ async def crawl(req: CrawlRequest):
                 "renderer": "trafilatura",
             }
 
-    # ── Full path: Playwright via persistent Crawl4AI browser ────────────────
-    if _crawler is None:
-        raise HTTPException(status_code=503, detail="Browser not initialized yet. Try again in a few seconds.")
-
+    # ── Full path: Playwright via Crawl4AI ────────────────
     try:
         kwargs = {
             "bypass_cache": req.bypass_cache,
@@ -133,14 +122,16 @@ async def crawl(req: CrawlRequest):
         if req.css_selector:
             kwargs["css_selector"] = req.css_selector
 
-        result = await _crawler.arun(url=url_str, **kwargs)
+        config = BrowserConfig(cdp_url="ws://browserless:3000")
+        async with AsyncWebCrawler(config=config, verbose=False) as crawler:
+            result = await crawler.arun(url=url_str, **kwargs)
 
         extracted_data = None
         if req.extract_images and result.success and result.markdown:
             import httpx
             import json
             try:
-                system_prompt = "You are an AI that extracts product images from e-commerce product grids. Extract exactly 4 high-quality product image URLs from markdown image tags (![alt](url)). Return ONLY actual physical products. Do not extract site logos, UI layout elements, shipping partner logos (like GLS, Packeta), payment icons, or blog banners. Ensure the URLs point directly to image files (e.g., .jpg, .png, .webp) and not to HTML pages. Return ONLY valid JSON in this format: {\"urls\": [\"url1\", \"url2\", \"url3\", \"url4\"]}"
+                system_prompt = "You are an AI that extracts product images from e-commerce product grids. Extract up to 10 high-quality product image URLs from markdown image tags (![alt](url)). Return ONLY actual physical products. Do not extract site logos, UI layout elements, shipping partner logos (like GLS, Packeta), payment icons, or blog banners. Ensure the URLs point directly to image files (e.g., .jpg, .png, .webp) and not to HTML pages. Return ONLY valid JSON in this format: {\"urls\": [\"url1\", \"url2\"]}"
                 async with httpx.AsyncClient() as client:
                     resp = await client.post(
                         f"{GEMINI_PROXY_ENDPOINT}/v1/chat/completions",

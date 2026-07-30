@@ -265,9 +265,9 @@ export function Dashboard() {
     }
   }
 
-  async function handleBulkAction(ids: string[], action: "approved" | "rejected" | "rerun_evaluation" | "rerun_enrichment") {
-    // Optimistic update for approved / rejected
-    if (action === "approved" || action === "rejected") {
+  async function handleBulkAction(ids: string[], action: "approved" | "rejected" | "junk" | "rerun_evaluation" | "rerun_enrichment") {
+    // Optimistic update for approved / rejected / junk
+    if (action === "approved" || action === "rejected" || action === "junk") {
       setLeads((prev) =>
         prev.map((l) => (ids.includes(l.id) ? { ...l, status: action } : l)),
       )

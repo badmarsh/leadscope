@@ -72,7 +72,7 @@ export const SETTINGS_SCHEMA: Record<
   },
   western_tld_filter_enabled: {
     label: "Western High-Wealth TLD Filter",
-    description: "Scope Stage 2 discovery queries strictly to Western European & DACH TLDs (.li, .ch, .de, .at, .co.uk, .com).",
+    description: "Scope Stage 2 discovery queries strictly to the 10 richest European countries, 10 richest English-speaking countries globally, and generic TLDs (e.g. .com).",
     unit: "on/off",
     default: 1,
     min: 0,

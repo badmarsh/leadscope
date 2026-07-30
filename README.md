@@ -20,12 +20,16 @@ A high-performance lead generation, evaluation, and AI-powered intelligence plat
     │                      │                      │                      │
 ┌───▼───────────────┐  ┌───▼───────────────┐  ┌───▼───────────────┐  ┌───▼───────────────┐
 │ PostgreSQL DB     │  │ Evaluator Service │  │ Stages Service    │  │ Crawler Service   │
-│ (leadscope pool)  │  │ (Python FastAPI)  │  │ (Python FastAPI)  │  │ (Crawl4AI)        │
+│ (leadscope pool)  │  │ (Shared llm.py)   │  │ (Shared llm.py)   │  │ (Crawl4AI)        │
 └─────────▲─────────┘  └───────────────────┘  └───────────────────┘  └───────────────────┘
           │
-   ┌──────┴──────┐
-   │ n8n (crons) │
-   └─────────────┘
+   ┌──────┴─────────────────────────────────┐
+   │ Background Jobs & Orchestration        │
+   │ - n8n (crons for core pipeline)        │
+   │ - certstream_monitor (HTTP / DB queues)│
+   │ - malwarebazaar / publicwww / hunters  │
+   │ - icp_drift_job                        │
+   └────────────────────────────────────────┘
 ```
 
 ---
@@ -114,9 +118,9 @@ Three campaigns ship by default:
 
 | Slug | Evaluator | Description |
 |---|---|---|
-| `jenex` | `content_relevance` | HVAC distributor/installer leads in Hungary |
-| `shoe-photo` | `image_quality` | Shoe boutiques with poor product photography |
-| `wp-remediation` | `threat_intel` | WordPress sites with active malware signatures |
+| `jenex` | `content_relevance` | HVAC distributor/installer leads in Hungary (Dynamic via ICP) |
+| `shoe-photo` | `image_quality` | Visual QA for e-commerce (Dynamic via `{icp_target}`) |
+| `wp-remediation` | `threat_intel` | Threat Intel via passive discovery (CertStream, PublicWWW, Hunters) |
 
 To add a new campaign: insert a row into `campaigns`, create an ICP config row, and add the slug → DB ID mapping in `lib/campaigns.ts`.
 

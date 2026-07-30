@@ -171,7 +171,7 @@ def parse_malwarebazaar_result(data: dict) -> dict:
 def fetch_certstream_new_candidates(conn, limit: int) -> list[dict]:
     """
     Return up to `limit` candidates from certstream that haven't been
-    enriched yet (status = 'new').
+    enriched yet (status = 'certstream_raw').
     """
     with conn.cursor() as cur:
         cur.execute(
@@ -179,7 +179,7 @@ def fetch_certstream_new_candidates(conn, limit: int) -> list[dict]:
             SELECT id, campaign_id, domain, evidence_data
             FROM candidates
             WHERE source = 'certstream'
-              AND status = 'new'
+              AND status = 'certstream_raw'
             ORDER BY created_at ASC
             LIMIT %s
             """,

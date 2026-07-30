@@ -13,7 +13,7 @@ services:
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
       interval: 5s
-      timeout: 5s
+      timeout: 15s
       retries: 10
 
   n8n:
@@ -61,7 +61,7 @@ services:
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health')"]
       interval: 15s
-      timeout: 5s
+      timeout: 15s
       retries: 5
       start_period: 30s
 
@@ -90,7 +90,7 @@ services:
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8002/health')"]
       interval: 15s
-      timeout: 5s
+      timeout: 15s
       retries: 5
       start_period: 30s
   crawler:
@@ -107,7 +107,7 @@ services:
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8003/health')"]
       interval: 15s
-      timeout: 5s
+      timeout: 15s
       retries: 5
       start_period: 30s
 
@@ -183,31 +183,7 @@ services:
       postgres:
         condition: service_healthy
 
-  certstream-server:
-    image: 0rickyy0/certstream-server-go:latest
-    restart: unless-stopped
-    ports:
-      - "8080:8080"
 
-  certstream:
-    build:
-      context: .
-      dockerfile: services/stages/Dockerfile
-    restart: unless-stopped
-    healthcheck:
-      disable: true
-    env_file:
-      - .env
-    environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
-    volumes:
-      - ./services/jobs:/app/jobs
-    command: ["python", "/app/jobs/certstream_monitor.py", "--check-wp"]
-    depends_on:
-      postgres:
-        condition: service_healthy
-      certstream-server:
-        condition: service_started
 
   job-rescore-icp:
     build:
@@ -234,7 +210,7 @@ services:
       - "8047:3000"
     environment:
       - CONNECTION_TIMEOUT=300000
-      - MAX_CONCURRENT_SESSIONS=10
+      - MAX_CONCURRENT_SESSIONS=25
       - DEFAULT_IGNORE_HTTPS_ERRORS=true
       - TIMEOUT=60000
 

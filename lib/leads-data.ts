@@ -4,7 +4,7 @@
 
 export type CampaignId = "jenex" | "shoe-photo" | "wp-remediation"
 
-export type LeadStatus = "pending" | "approved" | "rejected" | "enrichment_failed"
+export type LeadStatus = "pending" | "approved" | "rejected" | "enrichment_failed" | "junk"
 
 export type CampaignStatus = "active" | "paused" | "draft"
 

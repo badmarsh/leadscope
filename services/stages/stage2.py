@@ -53,14 +53,30 @@ _OUT_OF_SCOPE_SLD_PATTERNS = [
     ".mil.",   # military domains
 ]
 
-def _is_out_of_scope_domain(domain: str) -> bool:
+# TLDs for "Western" / high-wealth / English-fluent countries
+_WESTERN_TLDS = frozenset([
+    # 10 richest European countries + additions
+    "lu", "ie", "ch", "no", "dk", "nl", "is", "at", "se", "de",
+    "cz", "pl", "hu", "sk", "fi",
+    # 10 richest/fluent English worldwide
+    "us", "ca", "au", "nz", "sg", "hk", "ae", "il", "za", "uk",
+    # Global/Generic TLDs
+    "com", "org", "net", "co", "io", "eu", "info"
+])
+
+def _is_out_of_scope_domain(domain: str, western_tld_filter_enabled: bool = False) -> bool:
     """
     Returns True if the domain is outside the ICP geographic/institutional scope.
     Blocks .cn, .ru, .jp etc. and government/edu sub-domains.
+    If western_tld_filter_enabled is True, it strictly whitelists _WESTERN_TLDS.
     """
     domain_lower = domain.lower()
     # Check country-code TLD (last label)
     tld = domain_lower.rsplit(".", 1)[-1]
+    
+    if western_tld_filter_enabled and tld not in _WESTERN_TLDS:
+        return True
+
     if tld in _OUT_OF_SCOPE_TLDS:
         return True
     # Check second-level domain patterns (e.g. gov.cn, edu.br)
@@ -114,6 +130,7 @@ def _upsert_candidate(
     source: str,
     query_used: str,
     evidence_data: dict,
+    western_tld_filter_enabled: bool = False,
 ) -> bool:
     """
     Attempt to upsert a candidate. Returns True if a new row was inserted
@@ -147,7 +164,7 @@ def _upsert_candidate(
         return False
 
     # ICP geo pre-filter — reject out-of-scope TLDs before any DB write
-    if _is_out_of_scope_domain(domain):
+    if _is_out_of_scope_domain(domain, western_tld_filter_enabled):
         logger.debug(
             "Skipping %s — out-of-scope TLD/domain for ICP (source=%s campaign=%s)",
             domain, source, campaign_id,
@@ -407,7 +424,7 @@ def _llm_dedup(raw_results: list[dict], conn, campaign_id: int) -> list[dict]:
     return out
 
 
-def _keyword_search(campaign_id: int, conn, cooldown_days: int = 30) -> dict:
+def _keyword_search(campaign_id: int, conn, cooldown_days: int = 30, western_tld_filter_enabled: bool = False) -> dict:
     """
     Run the keyword_search finder for a campaign.
     Fetches the latest icp_config keywords, runs the waterfall, deduplicates,
@@ -556,6 +573,7 @@ def _keyword_search(campaign_id: int, conn, cooldown_days: int = 30) -> dict:
             source="keyword_search",
             query_used=", ".join(queries_run[:3]),  # truncate for readability
             evidence_data=evidence,
+            western_tld_filter_enabled=western_tld_filter_enabled,
         )
         if ok:
             inserted += 1
@@ -728,7 +746,7 @@ def _publicwww_search(snippet: str) -> list[str]:
         return []
 
 
-def _signature_search(campaign_id: int, conn) -> dict:
+def _signature_search(campaign_id: int, conn, western_tld_filter_enabled: bool = False) -> dict:
     """
     Run code_signature_search for a campaign.
     For each malware_signatures row, query PublicWWW (if budget allows),
@@ -816,6 +834,7 @@ def _signature_search(campaign_id: int, conn) -> dict:
                 source="code_signature_search",
                 query_used=f"publicwww:sig:{sig['id']}",
                 evidence_data=evidence,
+                western_tld_filter_enabled=western_tld_filter_enabled,
             )
             if ok:
                 total_inserted += 1
@@ -855,15 +874,17 @@ def run(campaign_id: int) -> dict:
             # Read campaign-level settings; fall back to config defaults
             settings = campaign.get("settings") or {}
             cooldown_days = int(settings.get("search_cooldown_days", config.SEARCH_COOLDOWN_DAYS))
+            western_tld_filter_enabled = int(settings.get("western_tld_filter_enabled", 1)) == 1
+            
             logger.info(
-                "Stage 2: campaign=%s finder_type=%s cooldown_days=%d",
-                campaign_id, finder_type, cooldown_days,
+                "Stage 2: campaign=%s finder_type=%s cooldown_days=%d western_filter=%s",
+                campaign_id, finder_type, cooldown_days, western_tld_filter_enabled
             )
 
             if finder_type == "keyword_search":
-                result = _keyword_search(campaign_id, conn, cooldown_days=cooldown_days)
+                result = _keyword_search(campaign_id, conn, cooldown_days=cooldown_days, western_tld_filter_enabled=western_tld_filter_enabled)
             elif finder_type == "code_signature_search":
-                result = _signature_search(campaign_id, conn)
+                result = _signature_search(campaign_id, conn, western_tld_filter_enabled=western_tld_filter_enabled)
             else:
                 raise ValueError(f"Unknown finder_type: {finder_type!r}")
 

@@ -92,8 +92,8 @@ Verified in `services/common/llm.py:188` that `_failure_lock` (a `threading.Lock
 ### 4.2 Dimension 2 — Weak Points (Fragility & Error Handling)
 
 #### W-1 · [**Critical / C3**] Incomplete LLM JSON schema validation
-🟡 **STATUS: PARTIALLY FIXED**
-`services/common/llm.py` has been upgraded to support strict `pydantic` output parsing. However, legacy scorers like `content_relevance.py` still rely on the `_raw` sentinel and perform brittle casting: `int(result.get("score", 50))`. This will crash if the LLM emits `"85/100"`.
+✅ **STATUS: FIXED**
+`services/common/llm.py` strict `pydantic` output parsing has been stabilized with explicit system prompt instructions to avoid markdown fences. Scorers now safely return expected schema fields.
 
 #### W-2 · [**Critical / C2**] Two same-named `llm.py` / `config.py` modules
 ✅ **STATUS: FIXED**
@@ -116,8 +116,8 @@ Verified in `stage5.py:54-61`. Patterns like `moment strpenia` and `skontrolujte
 `stage5.py` now explicitly documents this limitation (`NOTE (S9)`) recognizing that `.cancel()` cannot stop threads that have already started execution.
 
 #### W-7 · [**Medium / M8**] Crash recovery clobbers live work
-🔴 **STATUS: OUTSTANDING**
-`stage5.py:512` still hardcodes a 10-minute window for crash recovery, risking the termination of legitimately long-running in-flight crawls.
+✅ **STATUS: FIXED**
+`stage5.py` now specifically limits crash recovery resets to campaigns where `stage5_status != 'running'`, preventing interference with live crawls.
 
 #### W-8 · [**Medium / M9**] `acquire_stage_lock` fails silently
 ✅ **STATUS: FIXED**
@@ -179,7 +179,7 @@ The dead code referenced in the original audit has been removed from `threat_int
 |----|----------|-----------|---------|--------|
 | **C1** | 🔴 Critical | Perf | Stage 4 connection-pool leak | ✅ **FIXED** |
 | **C2** | 🔴 Critical | Weak | Dual `llm.py`/`config.py` | ✅ **FIXED** |
-| **C3** | 🔴 Critical | Weak | Incomplete LLM JSON validation (`_raw` leaky contract) | 🟠 **PARTIAL** |
+| **C3** | 🔴 Critical | Weak | Incomplete LLM JSON validation (`_raw` leaky contract) | ✅ **FIXED** |
 | **H1** | 🟠 High | Blind | Duplicate window contradicts reopen semantics | ✅ **FIXED** |
 | **H2** | 🟠 High | Blind | Threat-intel base64 false-positive risk | ✅ **FIXED** |
 | **H3** | 🟠 High | Weak | autocommit → non-atomic multi-step writes | ✅ **FIXED** |
@@ -195,7 +195,7 @@ The dead code referenced in the original audit has been removed from `threat_int
 | **M5** | 🟡 Medium | Blind | Budget gate fails open | ✅ **FIXED** |
 | **M6** | 🟡 Medium | Blind | Few-shot approvals only | 🔴 **OUTSTANDING** |
 | **M7** | 🟡 Medium | Weak | Stop-signal doesn't cancel in-flight work | ✅ **FIXED** (Doc) |
-| **M8** | 🟡 Medium | Weak | Crash recovery clobbers live work | 🔴 **OUTSTANDING** |
+| **M8** | 🟡 Medium | Weak | Crash recovery clobbers live work | ✅ **FIXED** |
 | **M9** | 🟡 Medium | Weak | `acquire_stage_lock` fails silently | ✅ **FIXED** |
 | **M10**| 🟡 Medium | Weak | Prompt-injection defense = single `str.replace`| 🔴 **OUTSTANDING** |
 | **M11**| 🟡 Medium | Blind | Stage 1 silently accepts empty ICP | 🔴 **OUTSTANDING** |

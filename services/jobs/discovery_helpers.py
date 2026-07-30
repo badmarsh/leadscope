@@ -73,7 +73,7 @@ def extract_domain(url: str) -> str | None:
     except Exception:
         return None
 
-def upsert_candidate(conn, *, campaign_id: int, domain: str, source: str, query_used: str, evidence: dict) -> bool:
+def upsert_candidate(conn, *, campaign_id: int, domain: str, source: str, query_used: str, evidence: dict, status: str = 'new') -> bool:
     import tldextract
     ext = tldextract.extract(domain)
     if ext.subdomain and ext.subdomain != 'www':
@@ -86,11 +86,11 @@ def upsert_candidate(conn, *, campaign_id: int, domain: str, source: str, query_
     with conn.cursor() as cur:
         cur.execute(
             "INSERT INTO candidates (campaign_id, domain, source, query_used, evidence_data, last_seen_at, status) "
-            "VALUES (%s, %s, %s, %s, %s, now(), 'new') "
+            "VALUES (%s, %s, %s, %s, %s, now(), %s) "
             "ON CONFLICT (campaign_id, domain) DO UPDATE SET "
             "last_seen_at = now(), reopen_count = candidates.reopen_count + 1, "
             "evidence_data = EXCLUDED.evidence_data",
-            (campaign_id, domain, source, query_used, json.dumps(evidence)),
+            (campaign_id, domain, source, query_used, json.dumps(evidence), status),
         )
         return cur.rowcount > 0
 

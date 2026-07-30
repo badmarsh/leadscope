@@ -54,6 +54,32 @@ export async function POST(request: NextRequest) {
         `DELETE FROM leads WHERE candidate_id = ANY($1::int[])`,
         [candidate_ids]
       )
+    } else if (decision === "junk") {
+      // 1. Fetch domains for these candidates to blocklist them globally
+      const res = await query(
+        `SELECT domain FROM candidates WHERE id = ANY($1::int[])`,
+        [candidate_ids]
+      )
+      const domains = (res as any[]).map(row => row.domain)
+      
+      if (domains.length > 0) {
+        // Insert into do_not_contact globally (campaign_id = null)
+        // using ON CONFLICT DO NOTHING in case it's already there
+        await query(
+          `INSERT INTO do_not_contact (domain, reason)
+           SELECT unnest($1::text[]), 'Marked as junk in dashboard'
+           ON CONFLICT (domain, campaign_id) DO NOTHING`,
+          [domains]
+        )
+      }
+
+      // 2. Set status to 'junk'
+      await query(
+        `UPDATE candidates 
+         SET status = 'junk'
+         WHERE id = ANY($1::int[])`,
+        [candidate_ids]
+      )
     } else {
       return NextResponse.json({ error: "Unknown action" }, { status: 400 })
     }

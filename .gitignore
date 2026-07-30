@@ -7,6 +7,19 @@
 node_modules/
 .next/
 .DS_Store
+
+# Windows reserved device names
+nul
+
+# Temp output files
+err.txt
+error.txt
+output.txt
+logs.txt
+eval_out.json
+out.json
+eval_repair.log
+stages_repair.log
 *.log
 temp_logs.txt
 tsconfig.tsbuildinfo

@@ -17,7 +17,7 @@ interface LeadsTableProps {
   selectedId: string | null
   onSelect: (lead: Lead) => void
   onFilteredChange?: (leads: Lead[]) => void
-  onBulkAction?: (ids: string[], action: "approved" | "rejected" | "rerun_evaluation" | "rerun_enrichment") => Promise<void>
+  onBulkAction?: (ids: string[], action: "approved" | "rejected" | "junk" | "rerun_evaluation" | "rerun_enrichment") => Promise<void>
 }
 
 export function LeadsTable({ leads, selectedId, onSelect, onFilteredChange, onBulkAction }: LeadsTableProps) {
@@ -130,7 +130,7 @@ export function LeadsTable({ leads, selectedId, onSelect, onFilteredChange, onBu
     setSelectedIds(next)
   }
 
-  async function handleBulkAction(action: "approved" | "rejected") {
+  async function handleBulkAction(action: "approved" | "rejected" | "junk" | "rerun_evaluation" | "rerun_enrichment") {
     if (!onBulkAction || selectedIds.size === 0) return
     setIsBulkActing(true)
     try {
@@ -251,17 +251,24 @@ export function LeadsTable({ leads, selectedId, onSelect, onFilteredChange, onBu
                 >
                   {t("dashboard.stats.discarded")}
                 </button>
+                <button
+                  onClick={() => handleBulkAction("junk")}
+                  disabled={isBulkActing}
+                  className="rounded px-2.5 py-1 text-xs font-medium bg-orange-600/10 text-orange-600 transition-colors hover:bg-orange-600/20 disabled:opacity-50"
+                >
+                  Mark as Junk
+                </button>
               </>
             )}
             <button
-              onClick={() => handleBulkAction("rerun_evaluation" as any)}
+              onClick={() => handleBulkAction("rerun_evaluation")}
               disabled={isBulkActing}
               className="rounded px-2.5 py-1 text-xs font-medium bg-slate-600/10 text-slate-300 transition-colors hover:bg-slate-600/20 disabled:opacity-50"
             >
               {t("leads_table.bulk.rerun_eval", { defaultValue: "Rerun Evaluation" })}
             </button>
             <button
-              onClick={() => handleBulkAction("rerun_enrichment" as any)}
+              onClick={() => handleBulkAction("rerun_enrichment")}
               disabled={isBulkActing}
               className="rounded px-2.5 py-1 text-xs font-medium bg-slate-600/10 text-slate-300 transition-colors hover:bg-slate-600/20 disabled:opacity-50"
             >

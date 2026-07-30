@@ -91,17 +91,17 @@ export function HelpModal({ isOpen, onClose }: HelpModalProps) {
               </div>
 
               <div className="bg-card border border-border rounded-lg p-5 space-y-3">
-                <h4 className="font-semibold text-primary text-base border-b border-border pb-2">2. Shoe Boutique Photo Upgrade Pipeline</h4>
+                <h4 className="font-semibold text-primary text-base border-b border-border pb-2">2. Dynamic Visual QA Pipeline (e.g., Photo Upgrade)</h4>
                 <p className="text-sm text-muted-foreground leading-relaxed">
-                  This pipeline targets independent shoe boutiques with poor quality product photography.
+                  A dynamic pipeline that evaluates the visual quality of e-commerce storefronts based on any configured target (e.g., jewelry, furniture, shoes).
                 </p>
                 <ul className="list-disc list-inside text-sm text-muted-foreground space-y-1.5 ml-2">
-                  <li><strong>Target Finding:</strong> Uses keyword search waterfall to find local shoe boutiques.</li>
+                  <li><strong>Target Finding:</strong> Uses keyword search waterfall to find relevant boutiques for the configured <code>{"{icp_target}"}</code>.</li>
                   <li><strong>Evaluation (Backend):</strong> 
                     <ul className="list-[circle] list-inside ml-6 mt-1 space-y-1">
                       <li>Scrapes website using Firecrawl to extract all product images.</li>
-                      <li>Vision AI evaluates image quality (lighting, resolution, background).</li>
-                      <li><strong>Disqualifiers:</strong> Large e-commerce brands (Nike, Adidas) or stock-photo sites are immediately disqualified.</li>
+                      <li>Vision AI evaluates image quality (lighting, resolution, background) against the dynamic <code>{"{icp_target}"}</code>.</li>
+                      <li><strong>Disqualifiers:</strong> Large e-commerce brands, stock-photo sites, or sites not matching the <code>{"{icp_target}"}</code> are immediately disqualified.</li>
                       <li><strong>Exceptions:</strong> If no images are found, the lead scores 0 and is auto-discarded.</li>
                     </ul>
                   </li>
@@ -110,15 +110,15 @@ export function HelpModal({ isOpen, onClose }: HelpModalProps) {
               </div>
 
               <div className="bg-card border border-border rounded-lg p-5 space-y-3">
-                <h4 className="font-semibold text-primary text-base border-b border-border pb-2">3. WordPress Remediation Pipeline</h4>
+                <h4 className="font-semibold text-primary text-base border-b border-border pb-2">3. Threat Intel & Incident Remediation Pipeline</h4>
                 <p className="text-sm text-muted-foreground leading-relaxed">
-                  This pipeline targets businesses running outdated WordPress sites.
+                  A passive monitoring pipeline that detects malware infections on high-value business websites for remediation outreach.
                 </p>
                 <ul className="list-disc list-inside text-sm text-muted-foreground space-y-1.5 ml-2">
-                  <li><strong>Target Finding:</strong> Uses a Python script to scan PublicWWW for domains matching specific malware code signatures. <em>Applies vertical filtering to exclude non-commercial/gov sites.</em></li>
-                  <li><strong>Evaluation:</strong> Re-verifies malware on the live site using Crawl4AI, checks reputation via Google Safe Browsing/VirusTotal, uses Wayback Machine for recency (identifying recent cleanups as warm leads), and checks WP versions via RSS for CVE risks.</li>
-                  <li><strong>Auto-Discard:</strong> Sites that do not have the signature in the fresh scrape or are conclusively clean score low and are discarded.</li>
-                  <li><strong>Enrichment:</strong> Scrapes site with Crawl4AI and generates firmographics along with a cold email hook.</li>
+                  <li><strong>Passive Target Discovery:</strong> Asynchronously monitors Certificate Transparency logs (CertStream) and runs scheduled passive pivot queries against PublicWWW, URLScan, and Hunters. Avoids active scanning to preserve stealth.</li>
+                  <li><strong>Evaluation:</strong> Re-verifies malware on the live site using Crawl4AI, checks reputation via Google Safe Browsing/VirusTotal, uses Wayback Machine for recency, and checks for plugin CVE risks.</li>
+                  <li><strong>Drift Monitoring:</strong> The automated `icp_drift_job` actively monitors campaigns to ensure evaluations do not drift away from the core Ideal Customer Profile (ICP).</li>
+                  <li><strong>Enrichment:</strong> Scrapes site with Crawl4AI, extracts contacts, and generates highly targeted, urgency-driven cold outreach hooks referencing the specific infection (e.g., Dessky skimmer, Sign1).</li>
                 </ul>
               </div>
 

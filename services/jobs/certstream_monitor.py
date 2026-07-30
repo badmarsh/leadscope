@@ -87,6 +87,12 @@ def passes_heuristics(domain: str) -> bool:
 CERTSTREAM_EXCLUDED_CAMPAIGNS = {
     "jenex-hu-hvac",       # Uses Tavily/keyword search; targets Hungarian HVAC trade specifically
     "shoe-photo-upgrade",  # Uses search APIs; targets e-commerce merchants specifically
+    "wp-remediation",      # Uses PublicWWW; CertStream firehose creates too much noise
+    "socgholish-khutmhpx",
+    "pharma-hack-hidden-links",
+    "balada-fake-plugin-template",
+    "socgholish-ndsw",
+    "japanese-keyword-hack",
 }
 
 BUSINESS_SIGNALS = re.compile(
@@ -201,6 +207,7 @@ def start_certstream_monitor(max_inserts: int = 0, check_wp: bool = False):
                     source="certstream",
                     query_used="certstream:ct_log_new_cert",
                     evidence=evidence,
+                    status="certstream_raw",
                 )
 
                 if ok:

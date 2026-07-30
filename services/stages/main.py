@@ -159,16 +159,17 @@ def run_stage4(background_tasks: BackgroundTasks, background: bool = False):
 # ── Stage 5: Enrichment ────────────────────────────────────────────────────────
 
 @app.post("/stage5/run", dependencies=[Depends(require_internal_token)])
-def run_stage5(background_tasks: BackgroundTasks, background: bool = False):
+def run_stage5(req: Optional[CampaignRequest] = None, background_tasks: BackgroundTasks = None, background: bool = False):
     """
-    Run Stage 5 (Enrichment) — polls all approved candidates.
+    Run Stage 5 (Enrichment) — polls all approved candidates, optionally filtered by campaign.
     """
     try:
+        camp_id = req.campaign_id if req else None
         if background:
-            background_tasks.add_task(stage5.run)
+            background_tasks.add_task(stage5.run, camp_id)
             return {"ok": True, "message": "Stage 5 started in background"}
         else:
-            result = stage5.run()
+            result = stage5.run(camp_id)
             return {"ok": True, "result": result}
     except Exception as exc:
         logger.exception("Stage 5 execution failed")

@@ -45,13 +45,36 @@ def scrape_url(url: str, timeout: int = 30, include_html: bool = False) -> dict 
         return None
 
 
+def map_url(url: str, timeout: int = 20) -> list[str]:
+    """
+    Call Firecrawl's /v1/map endpoint to instantly retrieve the sitemap.
+    """
+    endpoint = f"{config.FIRECRAWL_ENDPOINT.rstrip('/')}/v1/map"
+    try:
+        resp = requests.post(
+            endpoint,
+            headers={
+                "Authorization": f"Bearer {config.FIRECRAWL_API_KEY}",
+                "Content-Type": "application/json",
+            },
+            json={"url": url},
+            timeout=timeout,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        if data.get("success"):
+            return data.get("links", [])
+    except Exception as exc:
+        logger.warning("Firecrawl map failed for %s: %s", url, exc)
+    return []
+
+
 def _discover_product_paths(domain: str, max_paths: int = 4) -> list[str]:
     """
-    HARDENING: Dynamically discover likely product/catalogue paths by
-    fetching the homepage and scoring <a href> links with e-commerce
-    keyword heuristics. Falls back to static list if fetch fails.
+    HARDENING: Dynamically discover likely product/catalogue paths using
+    Firecrawl's /map API to instantly get the sitemap.
     """
-    from bs4 import BeautifulSoup
+    from urllib.parse import urlparse
     import re
 
     PRODUCT_KEYWORDS = [
@@ -64,32 +87,25 @@ def _discover_product_paths(domain: str, max_paths: int = 4) -> list[str]:
         "login", "signin", "register", "account", "cart", "checkout",
         "contact", "kapcsolat", "impressum", "adatvedelem", "cookie",
         "privacy", "terms", "gdpr", "sitemap", "xml", "rss", "feed",
-        "javascript:", "mailto:", "#",
+        "javascript:", "mailto:", "#", "tag", "blog", "author", "page"
     ]
     STATIC_FALLBACK = ["/products", "/shop", "/termekek", "/catalogue", "/kategoria"]
 
     try:
-        resp = requests.get(
-            f"https://{domain}",
-            timeout=10,
-            headers={"User-Agent": "Mozilla/5.0"},
-            allow_redirects=True,
-        )
-        if resp.status_code != 200:
+        base_url = f"https://{domain}"
+        links = map_url(base_url)
+        
+        if not links:
+            logger.info("Firecrawl map returned 0 links for %s, using static fallback", domain)
             return STATIC_FALLBACK
 
-        soup = BeautifulSoup(resp.text, "html.parser")
         scored: dict[str, int] = {}
-
-        for tag in soup.find_all("a", href=True):
-            href = tag["href"].strip()
-            # Only consider internal relative paths
-            if href.startswith("http") or href.startswith("//"):
+        for link in links:
+            parsed = urlparse(link)
+            if parsed.netloc and parsed.netloc != domain and parsed.netloc != f"www.{domain}":
                 continue
-            if not href.startswith("/"):
-                href = "/" + href
-            # Strip query strings and fragments
-            href = re.split(r"[?#]", href)[0].rstrip("/") or "/"
+            
+            href = parsed.path.rstrip("/") or "/"
             if len(href) < 2 or href in scored:
                 continue
 
@@ -113,13 +129,13 @@ def _discover_product_paths(domain: str, max_paths: int = 4) -> list[str]:
 
         top_paths = sorted(scored, key=lambda p: scored[p], reverse=True)[:max_paths]
         logger.info(
-            "Dynamic path discovery for %s found %d candidates, top: %s",
+            "Map path discovery for %s found %d candidates, top: %s",
             domain, len(scored), top_paths,
         )
         return top_paths
 
     except Exception as exc:
-        logger.warning("Dynamic path discovery failed for %s: %s — using static fallback", domain, exc)
+        logger.warning("Map path discovery failed for %s: %s - using static fallback", domain, exc)
         return STATIC_FALLBACK
 
 
