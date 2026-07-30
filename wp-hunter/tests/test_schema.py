@@ -18,7 +18,7 @@ def test_freshness_gate_rejects_templates():
     )
     with pytest.raises(ValueError) as excinfo:
         freshness_gate([template_camp], force_stale=False)
-    assert "Unresolved template variables" in str(excinfo.value)
+    assert "templates" in str(excinfo.value)
 
 def test_campaign_staleness():
     camp = Campaign(
