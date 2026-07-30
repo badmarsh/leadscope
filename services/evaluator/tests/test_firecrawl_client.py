@@ -64,11 +64,16 @@ def test_extract_product_grid_images_no_links():
 from unittest.mock import patch, MagicMock
 from firecrawl_client import scrape_url, scrape_domain_pages, extract_product_grid_images_via_crawler
 
+@patch("firecrawl_client.requests.get")
 @patch("firecrawl_client.requests.post")
-def test_scrape_url_success(mock_post):
-    mock_resp = MagicMock()
-    mock_resp.json.return_value = {"data": {"markdown": "Test Markdown", "html": "<p>Test</p>"}}
-    mock_post.return_value = mock_resp
+def test_scrape_url_success(mock_post, mock_get):
+    mock_post_resp = MagicMock()
+    mock_post_resp.json.return_value = {"id": "job-123"}
+    mock_post.return_value = mock_post_resp
+    
+    mock_get_resp = MagicMock()
+    mock_get_resp.json.return_value = {"status": "completed", "data": [{"markdown": "Test Markdown", "html": "<p>Test</p>"}]}
+    mock_get.return_value = mock_get_resp
     
     # Test markdown only
     res = scrape_url("https://example.com")

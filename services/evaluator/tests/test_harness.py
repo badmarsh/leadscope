@@ -17,11 +17,12 @@ def test_scorer_registry_has_all_scorers():
 @patch("harness.score_candidate")
 @patch("harness.db")
 def test_auto_reject_shitty_jenex(mock_db, mock_score):
-    mock_db.fetchall.return_value = [
-        {"id": 1, "campaign_id": 1, "domain": "jenex.sk", "company_name": "Jenex"}
+    mock_db.claim_candidates_for_stage.return_value = [
+        {"id": 1, "campaign_id": 1, "domain": "jenex.sk", "company_name": "Jenex", "processing_generation": 1}
     ]
     mock_db.fetchone.return_value = {"settings": '{"blocked_domain_terms": ["jenex"]}'}
     mock_db.check_stop_signal.return_value = False
+    mock_db.acquire_stage_lock.return_value = True
     mock_db.execute.return_value = 1
     
     mock_score.return_value = {
@@ -44,11 +45,12 @@ def test_auto_reject_shitty_jenex(mock_db, mock_score):
 @patch("harness.score_candidate")
 @patch("harness.db")
 def test_auto_approve_high_score(mock_db, mock_score):
-    mock_db.fetchall.return_value = [
-        {"id": 1, "campaign_id": 1, "domain": "shoe.sk", "company_name": "Shoe"}
+    mock_db.claim_candidates_for_stage.return_value = [
+        {"id": 1, "campaign_id": 1, "domain": "shoe.sk", "company_name": "Shoe", "processing_generation": 1}
     ]
     mock_db.fetchone.return_value = {"settings": "{}"}
     mock_db.check_stop_signal.return_value = False
+    mock_db.acquire_stage_lock.return_value = True
     mock_db.execute.return_value = 1
     
     mock_score.return_value = {
@@ -79,16 +81,17 @@ def test_ignore_paused_campaigns(mock_db):
     calls = mock_db.fetchall.call_args_list
     assert len(calls) > 0
     queries = [c[0][1] for c in calls]
-    assert any("camp.status = 'active'" in q for q in queries)
+    assert any("WHERE status = 'active'" in q for q in queries)
+
 
 @patch("harness._select_scorer")
 @patch("harness.db")
 def test_score_candidate_dnc(mock_db, mock_scorer):
     from harness import score_candidate
     mock_db.fetchone.side_effect = [
-        {"id": 1, "domain": "dnc.com", "campaign_id": 1, "source": "test", "query_used": "", "evidence_data": "{}", "status": "new", "company_name": "dnc"}, # candidate
-        {"id": 1, "evaluator_type": "threat_intel", "slug": "test", "name": "test", "business_brief": "test"}, # campaign
-        {"1": 1} # is_dnc = True
+        {"id": 1, "domain": "dnc.com", "campaign_id": 1, "source": "test", "query_used": "", "evidence_data": "{}", "status": "new", "company_name": "dnc", "processing_generation": 0},
+        {"id": 1, "evaluator_type": "threat_intel", "slug": "test", "name": "test", "business_brief": "test"},
+        {"1": 1}
     ]
     conn_mock = MagicMock()
     mock_db.get_conn.return_value.__enter__.return_value = conn_mock
@@ -97,17 +100,18 @@ def test_score_candidate_dnc(mock_db, mock_scorer):
     
     assert result["score"] == 0
     assert "Do Not Contact" in result["rationale"]
-    mock_db.execute.assert_called_with(conn_mock, "UPDATE candidates SET status = 'discarded' WHERE id = %s", (1,))
+    mock_db.execute.assert_called_with(conn_mock, "UPDATE candidates SET status = 'discarded', lease_id = NULL, lease_expires_at = NULL WHERE id = %s AND processing_generation = %s", (1, 0))
+
 
 @patch("harness._select_scorer")
 @patch("harness.db")
 def test_score_candidate_duplicate(mock_db, mock_scorer):
     from harness import score_candidate
     mock_db.fetchone.side_effect = [
-        {"id": 1, "domain": "dup.com", "campaign_id": 1, "source": "test", "query_used": "", "evidence_data": "{}", "status": "new", "company_name": "dup"}, # candidate
-        {"id": 1, "evaluator_type": "threat_intel", "slug": "test", "name": "test", "business_brief": "test"}, # campaign
-        None, # is_dnc = False
-        {"id": 42} # dup
+        {"id": 1, "domain": "dup.com", "campaign_id": 1, "source": "test", "query_used": "", "evidence_data": "{}", "status": "new", "company_name": "dup", "processing_generation": 0},
+        {"id": 1, "evaluator_type": "threat_intel", "slug": "test", "name": "test", "business_brief": "test"},
+        None,
+        {"id": 42}
     ]
     conn_mock = MagicMock()
     mock_db.get_conn.return_value.__enter__.return_value = conn_mock
@@ -117,7 +121,7 @@ def test_score_candidate_duplicate(mock_db, mock_scorer):
     assert result["score"] == 0
     assert "Duplicate" in result["rationale"]
     mock_db.execute.assert_called_with(
-        conn_mock, 
-        "UPDATE candidates SET status = 'duplicate', duplicate_of_candidate_id = %s WHERE id = %s", 
-        (42, 1)
+        conn_mock,
+        "UPDATE candidates SET status = 'duplicate', duplicate_of_candidate_id = %s, lease_id = NULL, lease_expires_at = NULL WHERE id = %s AND processing_generation = %s", 
+        (42, 1, 0)
     )

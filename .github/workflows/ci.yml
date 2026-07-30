@@ -73,9 +73,14 @@ jobs:
         run: psql postgresql://leadscope_test:leadscope_test@localhost:5432/leadscope_test -f db/schema.sql
 
       - name: Run unit tests
-        run: pytest tests/unit/ -v
+        run: pytest tests/unit/ services/evaluator/tests/ services/stages/tests/ services/crawler/tests/ -v
         env:
-          PYTHONPATH: services/stages:services/evaluator
+          PYTHONPATH: services/stages:services/evaluator:services/crawler
+
+      - name: Run sub-project tests
+        run: |
+          cd seo-spam-hunter && pytest tests/ -v && cd ..
+          cd wp-hunter && pytest tests/ -v && cd ..
 
       - name: Run integration tests
         run: pytest tests/integration/ -v
@@ -83,7 +88,7 @@ jobs:
           DATABASE_URL: postgresql://leadscope_test:leadscope_test@localhost:5432/leadscope_test
           GEMINI_PROXY_API_KEY: dummy
           GEMINI_PROXY_ENDPOINT: http://localhost:9999
-          PYTHONPATH: services/stages:services/evaluator
+          PYTHONPATH: services/stages:services/evaluator:services/crawler
 
   # ── Playwright E2E (smoke only) ───────────────────────────────────────────
   e2e:

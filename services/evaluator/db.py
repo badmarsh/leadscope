@@ -203,11 +203,21 @@ def claim_candidates_for_stage(conn, campaign_id: int, from_statuses: list[str],
     """
     return fetchall(conn, sql, tuple(params))
 
+_ALLOWED_CANDIDATE_COLUMNS = {
+    "status", "score", "rationale", "company_name", "evidence_data", "notes",
+    "contact_email", "contact_phone", "contact_name", "screenshot_url",
+    "products_sold", "enrichment_report", "draft_email", "estimated_size",
+    "estimated_revenue", "estimated_traffic", "enrichment_attempt_count",
+    "duplicate_of_candidate_id", "processing_generation", "lease_id", "lease_expires_at",
+    "source", "domain", "query_used", "created_at"
+}
+
 def update_candidate_generation(conn, candidate_id: int, generation: int, updates: dict):
     """
     Updates a candidate ONLY if the processing_generation matches.
     Clears the lease upon update.
     Returns True if update succeeded, False if generation mismatched.
+    Raises ValueError if an updates key is not in the column allowlist.
     """
     if not updates:
         return True
@@ -215,6 +225,8 @@ def update_candidate_generation(conn, candidate_id: int, generation: int, update
     set_clauses = []
     params = []
     for k, v in updates.items():
+        if k not in _ALLOWED_CANDIDATE_COLUMNS:
+            raise ValueError(f"Invalid column name for candidate update: {k!r}")
         set_clauses.append(f"{k} = %s")
         params.append(v)
     
