@@ -17,8 +17,9 @@ CONTACT_PATHS = ["/kapcsolat", "/kontakt", "/contact", "/o-nas", "/impressum", "
 
 @retry(
     stop=stop_after_attempt(3),
-    wait=wait_exponential(multiplier=1, min=2, max=10),
-    retry=retry_if_exception_type(requests.exceptions.RequestException),
+    wait=wait_exponential(multiplier=0.1, min=0.1, max=1),
+    retry=retry_if_exception_type(Exception),
+    retry_error_callback=lambda retry_state: (None, None),
     reraise=False
 )
 def crawler_scrape(url: str, force_playwright: bool = False, bypass_cache: bool = False) -> tuple[Optional[str], Optional[list]]:
@@ -26,7 +27,7 @@ def crawler_scrape(url: str, force_playwright: bool = False, bypass_cache: bool 
     Call self-hosted Crawl4AI service to scrape a URL.
     Returns (markdown_text, images_list) or (None, None) on failure.
     Images is a list of strings (image URLs).
-    Uses tenacity retry on network failure.
+    Uses tenacity retry on network failure and returns (None, None) gracefully if all retries fail.
     """
     endpoint = f"{config.CRAWLER_ENDPOINT.rstrip('/')}/crawl"
     try:
