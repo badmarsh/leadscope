@@ -10,7 +10,7 @@ cp .env.example .env    # fill in your API keys
 pnpm install
 
 # Start local infrastructure
-docker compose up -d postgres n8n
+docker compose up -d postgres
 pnpm dev
 ```
 
