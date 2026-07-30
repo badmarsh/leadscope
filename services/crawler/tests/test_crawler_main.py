@@ -14,8 +14,15 @@ sys.modules["crawl4ai"] = mock_crawl4ai
 mock_trafilatura = MagicMock()
 sys.modules["trafilatura"] = mock_trafilatura
 
-import main
-from main import app, CrawlRequest, _is_spa_likely
+import importlib.util
+spec = importlib.util.spec_from_file_location("crawler_main", os.path.join(CRAWLER_DIR, "main.py"))
+crawler_main = importlib.util.module_from_spec(spec)
+sys.modules["main"] = crawler_main
+spec.loader.exec_module(crawler_main)
+
+app = crawler_main.app
+CrawlRequest = crawler_main.CrawlRequest
+_is_spa_likely = crawler_main._is_spa_likely
 
 client = TestClient(app)
 

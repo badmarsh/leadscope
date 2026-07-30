@@ -5,8 +5,18 @@ import os
 import pytest
 from unittest.mock import MagicMock, patch
 
-import pytest
-from unittest.mock import MagicMock, patch
+# Ensure local service paths take precedence over installed packages (e.g. email_validator)
+repo_root = os.path.dirname(os.path.abspath(__file__))
+service_paths = [
+    os.path.join(repo_root, "services", "stages"),
+    os.path.join(repo_root, "services", "evaluator"),
+    os.path.join(repo_root, "services", "crawler"),
+    os.path.join(repo_root, "services", "jobs"),
+]
+for p in service_paths:
+    if p in sys.path:
+        sys.path.remove(p)
+    sys.path.insert(0, p)
 
 @pytest.fixture
 def mock_env():

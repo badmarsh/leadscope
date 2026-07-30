@@ -58,9 +58,11 @@ class TestModelSelection(unittest.TestCase):
     def _import_fresh_llm(self, env_overrides: dict):
         """Import llm module with patched environment and reset its module-level cache."""
         import importlib
-        with patch.dict(os.environ, env_overrides, clear=False):
+        with patch.dict(os.environ, env_overrides, clear=False), patch("dotenv.load_dotenv"):
             sys.modules.pop("config", None)
             sys.modules.pop("llm", None)
+            sys.modules.pop("services.common.config", None)
+            sys.modules.pop("services.common.llm", None)
             import services.common.config as cfg
             importlib.reload(cfg)
             import services.common.llm as llm
@@ -115,6 +117,7 @@ class TestModelSelection(unittest.TestCase):
         """Ensure the broken model name that causes proxy 400s is not the default."""
         env = {
             "OPENROUTER_API_KEY": "",
+            "GEMINI_MODEL": "",
             "DATABASE_URL": "postgresql://x:x@localhost/x",
             "GEMINI_PROXY_API_KEY": "sk-test",
             "GEMINI_PROXY_ENDPOINT": "http://localhost:8045",
@@ -143,13 +146,15 @@ class TestOpenRouterFallback(unittest.TestCase):
             "GEMINI_MODEL": "gemini-3.6-flash-high",
             "DATABASE_URL": "postgresql://x:x@localhost/x",
         }
-        with patch.dict(os.environ, env, clear=False):
+        with patch.dict(os.environ, env, clear=False), patch("dotenv.load_dotenv"):
             import sys
             sys.path = [p for p in sys.path if "services\\stages" not in p and "services/stages" not in p]
             if EVALUATOR_DIR not in sys.path:
                 sys.path.insert(0, EVALUATOR_DIR)
             sys.modules.pop('config', None)
             sys.modules.pop('llm', None)
+            sys.modules.pop('services.common.config', None)
+            sys.modules.pop('services.common.llm', None)
             import services.common.config as cfg
             importlib.reload(cfg)
             import services.common.llm as llm

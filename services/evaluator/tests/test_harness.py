@@ -36,10 +36,10 @@ def test_auto_reject_shitty_jenex(mock_db, mock_score):
     
     trigger_scoring(campaign_id=1)
     
-    calls = mock_db.execute.call_args_list
+    calls = mock_db.update_candidate_generation.call_args_list
     assert len(calls) > 0
-    queries = [c[0][1] for c in calls]
-    assert any("UPDATE candidates SET status = 'discarded'" in q for q in queries)
+    statuses = [c[0][3].get("status") for c in calls if len(c[0]) >= 4]
+    assert "discarded" in statuses
 
 
 @patch("harness.score_candidate")
@@ -64,9 +64,9 @@ def test_auto_approve_high_score(mock_db, mock_score):
     
     trigger_scoring(campaign_id=1)
     
-    calls = mock_db.execute.call_args_list
-    queries = [c[0][1] for c in calls]
-    assert any("UPDATE candidates SET status = 'pending_review'" in q for q in queries)
+    calls = mock_db.update_candidate_generation.call_args_list
+    statuses = [c[0][3].get("status") for c in calls if len(c[0]) >= 4]
+    assert "pending_review" in statuses
 
 
 @patch("harness.db")
@@ -100,7 +100,9 @@ def test_score_candidate_dnc(mock_db, mock_scorer):
     
     assert result["score"] == 0
     assert "Do Not Contact" in result["rationale"]
-    mock_db.execute.assert_called_with(conn_mock, "UPDATE candidates SET status = 'discarded', lease_id = NULL, lease_expires_at = NULL WHERE id = %s AND processing_generation = %s", (1, 0))
+    mock_db.update_candidate_generation.assert_called_with(
+        conn_mock, 1, 0, {"status": "discarded"}
+    )
 
 
 @patch("harness._select_scorer")
@@ -120,8 +122,6 @@ def test_score_candidate_duplicate(mock_db, mock_scorer):
     
     assert result["score"] == 0
     assert "Duplicate" in result["rationale"]
-    mock_db.execute.assert_called_with(
-        conn_mock,
-        "UPDATE candidates SET status = 'duplicate', duplicate_of_candidate_id = %s, lease_id = NULL, lease_expires_at = NULL WHERE id = %s AND processing_generation = %s", 
-        (42, 1, 0)
+    mock_db.update_candidate_generation.assert_called_with(
+        conn_mock, 1, 0, {"status": "duplicate", "duplicate_of_candidate_id": 42}
     )
