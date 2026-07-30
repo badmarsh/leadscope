@@ -123,7 +123,7 @@ export async function GET(request: NextRequest) {
         },
         options: { type: "jpeg", quality: 75, fullPage: false },
         viewport: { width: 1280, height: 800 },
-        rejectResourceTypes: ["media", "font"],
+        rejectResourceTypes: "media,font",
       })
     })
 
