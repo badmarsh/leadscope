@@ -5,7 +5,7 @@ import os
 from dotenv import load_dotenv
 import logging
 
-load_dotenv()
+load_dotenv(override=True)
 
 # ── Database ──────────────────────────────────────────────────────────────────
 # Evaluator enforces presence, stages had a default with dev credentials.

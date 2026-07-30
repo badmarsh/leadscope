@@ -20,7 +20,7 @@ def mock_pool(mocker):
     conn_mock.cursor.return_value.__enter__.return_value = cursor_mock
     pool_mock.getconn.return_value = conn_mock
     
-    mocker.patch('db.get_pool', return_value=pool_mock)
+    mocker.patch('services.stages.db.get_pool', return_value=pool_mock)
     
     return pool_mock, conn_mock, cursor_mock
 
@@ -57,7 +57,7 @@ def test_check_stop_signal_true(mocker):
     cm.__enter__.return_value = conn_mock
     cm.__exit__.return_value = False
     
-    mocker.patch('db.get_conn', return_value=cm)
+    mocker.patch('services.stages.db.get_conn', return_value=cm)
     
     cursor_mock.fetchone.return_value = {"stage1_status": "stopping"}
     
@@ -76,7 +76,7 @@ def test_check_stop_signal_false(mocker):
     cm = MagicMock()
     cm.__enter__.return_value = conn_mock
     cm.__exit__.return_value = False
-    mocker.patch('db.get_conn', return_value=cm)
+    mocker.patch('services.stages.db.get_conn', return_value=cm)
     
     cursor_mock.fetchone.return_value = {"stage2_status": "running"}
     

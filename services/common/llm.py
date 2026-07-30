@@ -59,7 +59,7 @@ def should_retry(retry_state):
 
 @retry(
     stop=stop_after_attempt(5),
-    wait=wait_exponential(multiplier=1, min=2, max=10),
+    wait=wait_exponential(multiplier=2, min=4, max=60),
     retry=retry_if_exception(lambda exc: isinstance(exc, (RateLimitError, APIStatusError, LLMSafetyFilterError)) and getattr(exc, "status_code", 0) != 403),
     reraise=True
 )
@@ -216,23 +216,43 @@ def chat_json(
             temperature=temperature,
             max_tokens=max_tokens,
         )
-    except APIStatusError as primary_exc:
-        if provider == "openrouter" and config.GEMINI_PROXY_API_KEY and primary_exc.status_code == 403:
-            logger.warning("OpenRouter failed (%s) — falling back to local Gemini proxy", primary_exc)
-            client = _get_proxy()
-            use_model = config.GEMINI_MODEL
-            provider = "gemini"
-            resp = _call_with_retry(
-                client,
-                provider=provider,
-                model=use_model,
-                messages=[
-                    {"role": "system", "content": system},
-                    {"role": "user", "content": user_prompt},
-                ],
-                temperature=temperature,
-                max_tokens=max_tokens,
-            )
+    except (APIStatusError, RateLimitError) as primary_exc:
+        status_code = getattr(primary_exc, "status_code", 429)
+        if status_code in (401, 403, 429):
+            if provider == "gemini" and config.OPENROUTER_API_KEY:
+                logger.warning("Gemini proxy quota/rate-limited (%s) — falling back to OpenRouter", primary_exc)
+                client = _get_openrouter()
+                use_model = config.OPENROUTER_MODEL
+                provider = "openrouter"
+                resp = _call_with_retry(
+                    client,
+                    provider=provider,
+                    model=use_model,
+                    messages=[
+                        {"role": "system", "content": system},
+                        {"role": "user", "content": user_prompt},
+                    ],
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                )
+            elif provider == "openrouter" and config.GEMINI_PROXY_API_KEY:
+                logger.warning("OpenRouter failed (%s) — falling back to local Gemini proxy", primary_exc)
+                client = _get_proxy()
+                use_model = config.GEMINI_MODEL
+                provider = "gemini"
+                resp = _call_with_retry(
+                    client,
+                    provider=provider,
+                    model=use_model,
+                    messages=[
+                        {"role": "system", "content": system},
+                        {"role": "user", "content": user_prompt},
+                    ],
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                )
+            else:
+                raise
         else:
             raise
 
@@ -368,7 +388,7 @@ def chat_vision(
             max_tokens=max_tokens,
         )
     except APIStatusError as primary_exc:
-        if provider == "openrouter" and config.GEMINI_PROXY_API_KEY and primary_exc.status_code == 403:
+        if provider == "openrouter" and config.GEMINI_PROXY_API_KEY and primary_exc.status_code in (401, 403, 429):
             client = _get_proxy()
             use_model = config.GEMINI_MODEL
             provider = "gemini"

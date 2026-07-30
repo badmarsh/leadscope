@@ -67,7 +67,7 @@ def test_set_stage_status(mocker):
     cursor_mock = MagicMock()
     conn_mock.cursor.return_value.__enter__.return_value = cursor_mock
     pool_mock.getconn.return_value = conn_mock
-    mocker.patch('db.get_pool', return_value=pool_mock)
+    mocker.patch('services.evaluator.db.get_pool', return_value=pool_mock)
 
     set_stage_status(1, 'stage3', 'running')
     cursor_mock.execute.assert_called_once_with(
@@ -84,6 +84,6 @@ def test_check_stop_signal(mocker):
     cm = MagicMock()
     cm.__enter__.return_value = conn_mock
     cm.__exit__.return_value = False
-    mocker.patch('db.get_conn', return_value=cm)
+    mocker.patch('services.evaluator.db.get_conn', return_value=cm)
 
     assert check_stop_signal(1, 'stage3') is True

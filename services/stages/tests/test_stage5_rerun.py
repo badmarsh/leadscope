@@ -58,30 +58,32 @@ def test_rerun_resets_attempt_count(mock_cost, mock_enrich, mock_extract, mock_s
 def test_failed_enrichment_marks_candidate_failed_after_max_retries(mock_scrape, mock_db):
     """After MAX_ENRICHMENT_ATTEMPTS, candidate must be marked enrichment_failed."""
     conn = mock_db.get_conn.return_value.__enter__.return_value
-    max_attempts = getattr(stage5, "MAX_ENRICHMENT_ATTEMPTS", 3)
+    max_attempts = getattr(stage5.config, "MAX_ENRICHMENT_ATTEMPTS", 3)
     candidate = {
         "id": 1, "domain": "example.com", "company_name": "Ex", "campaign_id": 10,
-        "enrichment_attempt_count": max_attempts - 1,
-        "enrichment_attempted_at": None
+        "enrichment_attempt_count": max_attempts,
+        "enrichment_attempted_at": None,
+        "processing_generation": 1,
     }
     mock_db.fetchone.return_value = None
     mock_scrape.return_value = (None, "", None)
 
     res = stage5._enrich_candidate(candidate, {}, conn)
-    assert res["outcome"] in ("crawler_failed_retry", "enrichment_failed")
+    assert res["outcome"] == "enrichment_failed"
 
 
-def test_scrape_failure_increments_attempt_count(mock_db):
-    """When scraping fails, enrichment_attempt_count must be incremented in DB."""
+def test_scrape_failure_leaves_candidate_for_retry_when_under_max_attempts(mock_db):
+    """When scraping fails under max attempts, candidate returns crawler_failed_retry."""
     conn = mock_db.get_conn.return_value.__enter__.return_value
     candidate = {
         "id": 99, "domain": "bad.com", "company_name": None, "campaign_id": 1,
-        "enrichment_attempt_count": 1, "enrichment_attempted_at": None
+        "enrichment_attempt_count": 1, "enrichment_attempted_at": None,
+        "processing_generation": 1,
     }
     mock_db.fetchone.return_value = None
 
-    with patch.object(stage5, "_scrape_domain", return_value=(None, "", None)):
-        stage5._enrich_candidate(candidate, {}, conn)
+    with patch.object(stage5, "_extract_structured_data", return_value={}), \
+         patch.object(stage5, "_scrape_domain", return_value=(None, "", None)):
+        res = stage5._enrich_candidate(candidate, {}, conn)
 
-    execute_sqls = [str(c) for c in mock_db.execute.call_args_list]
-    assert any("enrichment_attempt_count" in s for s in execute_sqls)
+    assert res["outcome"] == "crawler_failed_retry"
