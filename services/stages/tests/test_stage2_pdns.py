@@ -11,7 +11,7 @@ from services.stages.stage2_pdns import (
 
 
 def test_vt_get_domain_resolutions_no_key():
-    with patch("services.common.config.VIRUSTOTAL_API_KEY", ""):
+    with patch("services.stages.stage2_pdns.config.VIRUSTOTAL_API_KEY", ""):
         assert _vt_get_domain_resolutions("example.com") == []
 
 

@@ -337,8 +337,10 @@ export function LeadsTable({ leads, selectedId, onSelect, onFilteredChange, onBu
                   </button>
                 </th>
               ))}
-              <th scope="col" className="w-8 px-2 py-2 text-center" title={t("leads_table.columns.completeness", { defaultValue: "Completeness" })}>
-                <span className="text-xs text-muted-foreground">●</span>
+              <th scope="col" className="w-16 px-2 py-2 text-center" title={t("leads_table.columns.completeness", { defaultValue: "Status" })}>
+                <span className="text-xs font-medium text-muted-foreground">
+                  {t("leads_table.columns.completeness", { defaultValue: "Status" })}
+                </span>
               </th>
             </tr>
           </thead>
@@ -424,7 +426,7 @@ export function LeadsTable({ leads, selectedId, onSelect, onFilteredChange, onBu
                     <span
                       title={lead.status === "enrichment_failed" && lead.enrichment_attempt_count ? `Failed after ${lead.enrichment_attempt_count} attempts` : undefined}
                       className={cn(
-                        "inline-block rounded-full px-2 py-0.5 text-xs font-medium",
+                        "inline-block whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-medium",
                         statusBadgeClasses[lead.status],
                       )}
                     >
@@ -443,7 +445,7 @@ export function LeadsTable({ leads, selectedId, onSelect, onFilteredChange, onBu
                         <span
                           title={complete ? "Complete" : `Missing: ${missing.join(", ")}`}
                           className={cn(
-                            "inline-block size-2.5 rounded-full cursor-help",
+                            "inline-block size-1.5 rounded-full cursor-help",
                             complete ? "bg-emerald-500" : "bg-red-500"
                           )}
                         />

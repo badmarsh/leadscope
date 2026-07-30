@@ -165,11 +165,15 @@ async def crawl(req: CrawlRequest):
             logger.error("Crawl4AI failed for %s: %s", url_str, result.error_message)
             return {"success": False, "error": result.error_message, "renderer": "playwright"}
 
+        media_dict = result.media if isinstance(result.media, dict) else {}
+        images_list = media_dict.get("images", []) if isinstance(media_dict, dict) else []
+        images_count = len(images_list) if isinstance(images_list, list) else 0
+
         logger.info(
             "Crawl4AI succeeded for %s (%d chars, %d images)",
             url_str,
             len(result.markdown or ""),
-            len((result.media or {}).get("images", [])),
+            images_count,
         )
         
         return {

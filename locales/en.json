@@ -46,7 +46,7 @@
   "leads_table.columns.score": "Score",
   "leads_table.columns.status": "Status",
   "leads_table.columns.date_found": "Date found",
-  "leads_table.columns.completeness": "Complete",
+  "leads_table.columns.completeness": "Status",
   "leads_table.empty.pending.heading": "Queue is empty — great work!",
   "leads_table.empty.pending.sub": "All leads have been reviewed or are awaiting enrichment.",
   "leads_table.empty.reviewed.heading": "No reviewed leads yet",

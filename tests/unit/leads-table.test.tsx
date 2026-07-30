@@ -21,7 +21,7 @@ describe('LeadsTable Component', () => {
     expect(screen.getByText('Company')).toBeInTheDocument();
     expect(screen.getByText('Domain')).toBeInTheDocument();
     expect(screen.getByText('Score')).toBeInTheDocument();
-    expect(screen.getByText('Status')).toBeInTheDocument();
+    expect(screen.getAllByText('Status')[0]).toBeInTheDocument();
   });
 
   it('renders only pending leads by default', () => {
