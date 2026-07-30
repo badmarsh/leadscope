@@ -110,7 +110,7 @@ describe("GET /api/screenshot", () => {
     const req = new NextRequest("http://localhost/api/screenshot?url=https://safe.com")
     await GET(req)
     const body = JSON.parse(mockFetch.mock.calls[0][1].body)
-    expect(body.gotoOptions.waitUntil).toEqual(["networkidle"])
+    expect(body.gotoOptions.waitUntil).toBe("networkidle")
     expect(body.addScriptTag[0].content).toContain("cookie")
     expect(body.addScriptTag[0].content).toContain("gdpr")
     expect(body.addScriptTag[0].content).toContain("fixed")
