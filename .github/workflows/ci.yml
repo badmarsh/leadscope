@@ -67,7 +67,8 @@ jobs:
       - name: Install Python deps
         run: |
           pip install -r services/stages/requirements.txt
-          pip install pytest pytest-asyncio pytest-mock
+          pip install pytest pytest-asyncio pytest-mock playwright
+          playwright install --with-deps
 
       - name: Apply DB schema
         run: psql postgresql://leadscope_test:leadscope_test@localhost:5432/leadscope_test -f db/schema.sql
