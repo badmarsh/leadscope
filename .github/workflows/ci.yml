@@ -76,6 +76,7 @@ jobs:
         run: pytest tests/unit/ services/evaluator/tests/ services/stages/tests/ services/crawler/tests/ services/jobs/tests/ -v
         env:
           PYTHONPATH: services/stages:services/evaluator:services/crawler
+          DATABASE_URL: postgresql://leadscope_test:leadscope_test@localhost:5432/leadscope_test
 
       - name: Run sub-project tests
         run: |
