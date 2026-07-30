@@ -19,6 +19,7 @@ Err on the side of lower scores when evidence is ambiguous.
 """
 import json
 import logging
+import re
 from typing import Optional
 from pydantic import BaseModel, Field
 
@@ -477,19 +478,38 @@ def score(candidate: dict, campaign: dict, icp: dict, few_shot: list[dict]) -> d
     wayback = _check_wayback_recency(domain)
     wp_version_info = _detect_wp_version(domain)
 
-    # ── 5. Few-shot examples ──────────────────────────────────────────────────
+    # ── 5. Few-shot examples ────────────────────────────────────────────────────────────────────────────
     few_shot_str = "(No prior feedback available)"
     if few_shot:
-        examples = [
-            f"- Domain: {fb.get('domain', '?')} | Decision: {fb['decision']} | Note: {fb.get('note', 'N/A')}"
-            for fb in few_shot
-        ]
-        few_shot_str = "\n".join(examples)
+        approved_ex = [fb for fb in few_shot if fb.get('decision') == 'approved']
+        rejected_ex = [fb for fb in few_shot if fb.get('decision') == 'rejected']
+        parts = []
+        if approved_ex:
+            parts.append("APPROVED — score HIGH for similar sites:")
+            for fb in approved_ex[:5]:
+                parts.append(f"  ✓ {fb.get('domain', '?')}: {fb.get('note', 'N/A')}")
+        if rejected_ex:
+            parts.append("REJECTED — score LOW for similar sites:")
+            for fb in rejected_ex[:5]:
+                parts.append(f"  ✗ {fb.get('domain', '?')}: {fb.get('note', 'N/A')}")
+        few_shot_str = "\n".join(parts) if parts else "(No prior feedback available)"
 
     # ── 6. LLM scoring ───────────────────────────────────────────────────────
+    def _sanitize_scraped(text: str) -> str:
+        """Strip === BLOCK === markers and system instruction override attempts from scraped content."""
+        # Remove all === SECTION === delimiters that could escape the user data boundary
+        text = re.sub(r'={3,}\s*[A-Z][A-Z\s]+={3,}', '[BLOCK_STRIPPED]', text)
+        # Strip common prompt injection patterns
+        text = re.sub(
+            r'(?i)(ignore\s+(all\s+)?(previous|prior|above)\s+instructions?|'
+            r'you\s+are\s+(now|a|an)\s+|system\s*:\s*|assistant\s*:\s*)',
+            '[STRIPPED]', text
+        )
+        return text
+
     prompt = SCORING_PROMPT.format(
         signatures_json=json.dumps(matched_sigs, indent=2, ensure_ascii=False)[:2000],
-        scraped_content=scraped[:5000].replace("=== END USER DATA ===", "[END USER DATA STRIPPED]"),
+        scraped_content=_sanitize_scraped(scraped[:5000]),
         snippet_confirmed="YES" if snippet_confirmed else "NO — not found in fresh Playwright scrape",
         found_snippets=str(found_snippets)[:500] if found_snippets else "none",
         safe_browsing_result=json.dumps(safe_browsing),

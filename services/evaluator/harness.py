@@ -6,12 +6,15 @@ fetch few-shot feedback → dispatch to scorer → write evaluations + api_call_
 """
 import json
 import logging
+import time
 import concurrent.futures
 from typing import Any
 
 import services.common.config as config
 import db
+import icp_drift
 from scorers import content_relevance, image_quality, threat_intel
+from scorers import performance_gap, gdpr_gap, accessibility_risk
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +35,12 @@ SCORER_REGISTRY = {
     "threat_intel": threat_intel.score,
     "threat_intel_fast": _threat_intel_fast,
     "auto": content_relevance.score,
+    # Campaign 8: Core Web Vitals Red-Zone Detector (no LLM, pure PSI API)
+    "performance_gap": performance_gap.score,
+    # Campaign 9: GDPR/Cookie Consent Compliance Gap (no LLM, Playwright network intercept)
+    "gdpr_gap": gdpr_gap.score,
+    # Campaign 1: ADA/WCAG Accessibility Violation Detector (no LLM, axe-core)
+    "accessibility_risk": accessibility_risk.score,
 }
 
 
@@ -211,10 +220,19 @@ def score_candidate(candidate_id: int) -> dict[str, Any]:
         )
         result = scorer_fn(candidate, campaign, icp, few_shot)
 
+        # URLScan fast-track: only apply bonus when snippet is confirmed, and
+        # make the bonus amount campaign-configurable (default 20, was hardcoded 40)
         if candidate.get("source") == "urlscan":
             original_score = result.get("score", 0)
-            result["score"] = min(100, original_score + 40)
-            result["rationale"] = "(URLScan Fast-Track +40) " + result.get("rationale", "")
+            settings = json.loads(campaign.get("settings") or "{}") if isinstance(campaign.get("settings"), str) else (campaign.get("settings") or {})
+            bonus = int(settings.get("urlscan_score_bonus", 20))
+            snippet_confirmed = result.get("evidence_data", {}).get("snippet_confirmed", False)
+            if snippet_confirmed:
+                result["score"] = min(100, original_score + bonus)
+                result["rationale"] = f"(URLScan Confirmed +{bonus}) " + result.get("rationale", "")
+            else:
+                # URLScan source but snippet not confirmed — no bonus, keep raw score
+                result["rationale"] = "(URLScan Unconfirmed — no bonus applied) " + result.get("rationale", "")
 
         if result.get("_raw") or (isinstance(result.get("evidence_data"), dict) and result["evidence_data"].get("raw_response")):
             attempts = (candidate.get("evidence_data") or {}).get("eval_attempts", 0) + 1
@@ -430,6 +448,29 @@ def trigger_scoring(campaign_id: int | None = None) -> dict:
                     scored += 1
                 else:
                     errors += 1
+
+        # Backpressure: slow down polling when backlog is large
+        batch_size = len(new_candidates)
+        if batch_size >= 100:
+            time.sleep(5)   # Heavy backlog — throttle to protect token budget
+        elif batch_size >= 20:
+            time.sleep(2)
+        else:
+            time.sleep(0.5)
+
+        # ICP drift detection: run after every batch to catch evaluation pattern shifts
+        for cid in locked_campaign_ids:
+            try:
+                drift_result = icp_drift.analyze_drift(cid)
+                if drift_result and drift_result.get("drift_detected"):
+                    logger.warning(
+                        "ICP DRIFT DETECTED for campaign %s (confidence: %s): %s",
+                        cid,
+                        drift_result.get("confidence", "unknown"),
+                        drift_result.get("suggested_icp_update", "see icp_drift_suggestion column"),
+                    )
+            except Exception as drift_exc:
+                logger.debug("ICP drift check skipped for campaign %s: %s", cid, drift_exc)
 
         return {
             "scored": scored,

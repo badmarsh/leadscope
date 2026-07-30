@@ -217,7 +217,8 @@ def _search_exa(query: str, conn, campaign_id: int) -> list[dict]:
             for r in results.results
         ]
     except Exception as exc:
-        if "429" in str(exc) or "rate" in str(exc).lower():
+        status = getattr(getattr(exc, 'response', None), 'status_code', None)
+        if status == 429 or "429" in str(exc) or "rate" in str(exc).lower():
             logger.error("Exa RATE LIMIT EXCEEDED for query=%r: %s", query, exc)
         else:
             logger.warning("Exa search failed for query=%r: %s", query, exc)
@@ -238,7 +239,8 @@ def _search_tavily(query: str, conn, campaign_id: int) -> list[dict]:
             for r in resp.get("results", [])
         ]
     except Exception as exc:
-        if "429" in str(exc) or "rate" in str(exc).lower():
+        status = getattr(getattr(exc, 'response', None), 'status_code', None)
+        if status == 429 or "429" in str(exc) or "rate" in str(exc).lower():
             logger.error("Tavily RATE LIMIT EXCEEDED for query=%r: %s", query, exc)
         else:
             logger.warning("Tavily search failed for query=%r: %s", query, exc)

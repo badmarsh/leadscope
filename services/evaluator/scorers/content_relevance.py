@@ -165,13 +165,20 @@ def score(candidate: dict, campaign: dict, icp: dict, few_shot: list[dict]) -> d
                     pdf_catalogs.append(url)
 
     # ── 3. Build few-shot examples ───────────────────────────────────────────
+    # ── 3. Build few-shot examples ───────────────────────────────────────
     if few_shot:
-        examples = [
-            f"- Domain: {fb.get('domain', '?')} | Decision: {fb['decision']} | "
-            f"Note: {fb.get('note', 'N/A')}"
-            for fb in few_shot
-        ]
-        few_shot_str = "\n".join(examples)
+        approved_ex = [fb for fb in few_shot if fb.get('decision') == 'approved']
+        rejected_ex = [fb for fb in few_shot if fb.get('decision') == 'rejected']
+        parts = []
+        if approved_ex:
+            parts.append("APPROVED — score HIGH for similar leads:")
+            for fb in approved_ex[:5]:
+                parts.append(f"  ✓ {fb.get('domain', '?')}: {fb.get('note', 'N/A')}")
+        if rejected_ex:
+            parts.append("REJECTED — score LOW for similar leads:")
+            for fb in rejected_ex[:5]:
+                parts.append(f"  ✗ {fb.get('domain', '?')}: {fb.get('note', 'N/A')}")
+        few_shot_str = "\n".join(parts) if parts else "(No prior feedback available for this campaign yet)"
     else:
         few_shot_str = "(No prior feedback available for this campaign yet)"
 

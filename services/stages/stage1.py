@@ -126,12 +126,20 @@ def run(campaign_id: int) -> dict[str, Any]:
             icp["keywords_hu"] = [str(k).strip() for k in icp["keywords_hu"] if str(k).strip()]
             if not icp["keywords_hu"]:
                 raise ValueError("keywords_hu must contain valid non-empty strings")
+            # Quality gate: reject single-word generic keywords (e.g. 'website', 'online')
+            icp["keywords_hu"] = [k for k in icp["keywords_hu"] if len(k.split()) >= 2]
+            if not icp["keywords_hu"]:
+                raise ValueError("keywords_hu must contain specific multi-word queries (at least 2 words each)")
                 
             if not isinstance(icp.get("keywords_en"), list) or not icp["keywords_en"]:
                 raise ValueError("keywords_en must be a non-empty list")
             icp["keywords_en"] = [str(k).strip() for k in icp["keywords_en"] if str(k).strip()]
             if not icp["keywords_en"]:
                 raise ValueError("keywords_en must contain valid non-empty strings")
+            # Quality gate: reject single-word generic keywords
+            icp["keywords_en"] = [k for k in icp["keywords_en"] if len(k.split()) >= 2]
+            if not icp["keywords_en"]:
+                raise ValueError("keywords_en must contain specific multi-word queries (at least 2 words each)")
                 
             if not isinstance(icp.get("disqualifiers"), dict):
                 # The prompt asks for an object, but sometimes it returns a list.

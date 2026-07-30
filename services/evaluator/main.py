@@ -14,6 +14,7 @@ from typing import Optional
 
 import services.common.config as config
 import harness
+import yara_engine
 from auth import require_internal_token
 
 log_dir = "/var/log/app"
@@ -98,3 +99,17 @@ def score_candidate(candidate_id: int):
     except Exception as exc:
         logger.exception("Candidate scoring failed for ID %s", candidate_id)
         raise HTTPException(status_code=500, detail="Scoring failed")
+
+
+@app.post("/reload-yara", dependencies=[Depends(require_internal_token)])
+def reload_yara():
+    """
+    Hot-reload YARA malware detection rules without restarting the container.
+    Drop new .yar files into services/evaluator/yara_rules/ and call this endpoint.
+    """
+    try:
+        count = yara_engine.reload_rules()
+        return {"ok": True, "rules_loaded": count, "message": f"{count} .yar rule file(s) reloaded"}
+    except Exception as exc:
+        logger.exception("YARA reload failed")
+        raise HTTPException(status_code=500, detail=f"YARA reload failed: {exc}")

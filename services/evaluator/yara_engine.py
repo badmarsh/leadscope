@@ -27,10 +27,27 @@ def get_compiled_rules():
             rule_files = {f.stem: str(f) for f in RULES_DIR.glob("*.yar")}
             if rule_files:
                 _compiled_rules = yara.compile(filepaths=rule_files)
+                logger.info("YARA: compiled %d rule file(s): %s", len(rule_files), list(rule_files.keys()))
         except Exception as e:
             logger.error("Failed to compile YARA rules: %s", e)
             _compiled_rules = None
     return _compiled_rules
+
+
+def reload_rules() -> int:
+    """
+    Hot-reload YARA rules without restarting the container.
+    Clears the compiled cache; next call to scan_content() will recompile.
+    Returns the number of .yar files found in the rules directory.
+    """
+    global _compiled_rules
+    _compiled_rules = None  # Force recompilation on next scan_content() call
+    rule_files = list(RULES_DIR.glob("*.yar"))
+    count = len(rule_files)
+    logger.info("YARA rules hot-reload triggered: %d .yar file(s) queued for recompile", count)
+    # Force immediate recompile to catch syntax errors at reload time, not at scan time
+    get_compiled_rules()
+    return count
 
 def scan_content(content: str | bytes, domain: str = "") -> list[dict]:
     """
