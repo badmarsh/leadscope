@@ -292,19 +292,10 @@ def _enrich_candidate(candidate: dict, campaign: dict, conn, settings: dict | No
 
     if pre_extracted.pop("_network_error", False):
         logger.warning("Stage 5: %s is unreachable (network error), skipping crawler entirely.", domain)
-        db.execute(
-            conn,
-            """
-            UPDATE candidates
-            SET enrichment_attempted_at  = now(),
-                enrichment_attempt_count = enrichment_attempt_count + 1
-            WHERE id = %s
-            """,
-            (candidate_id,),
-        )
-        new_attempt_count = (candidate["enrichment_attempt_count"] or 0) + 1
+        logger.warning("Stage 5: %s is unreachable (network error), skipping crawler entirely.", domain)
+        new_attempt_count = candidate.get("enrichment_attempt_count", 1)
         if new_attempt_count >= max_attempts:
-            db.execute(conn, "UPDATE candidates SET status = 'enrichment_failed' WHERE id = %s", (candidate_id,))
+            db.execute(conn, "UPDATE candidates SET status = 'enrichment_failed' WHERE id = %s AND processing_generation = %s", (candidate_id, candidate.get("processing_generation", 0)))
             return {"candidate_id": candidate_id, "outcome": "enrichment_failed", "attempts": new_attempt_count}
         return {"candidate_id": candidate_id, "outcome": "network_error_retry", "attempts": new_attempt_count}
 
@@ -338,25 +329,13 @@ def _enrich_candidate(candidate: dict, campaign: dict, conn, settings: dict | No
         screenshot_url = _screenshot_url(domain)
 
     if not page_text:
-        # STABILIZATION FIX (BUG-009): Increment attempt count ONLY on legitimate crawl failure, not before crawling
-        db.execute(
-            conn,
-            """
-            UPDATE candidates
-            SET enrichment_attempted_at  = now(),
-                enrichment_attempt_count = enrichment_attempt_count + 1
-            WHERE id = %s
-            """,
-            (candidate_id,),
-        )
-        new_attempt_count = (candidate["enrichment_attempt_count"] or 0) + 1
-
         # Crawler failed
+        new_attempt_count = candidate.get("enrichment_attempt_count", 1)
         if new_attempt_count >= max_attempts:
             db.execute(
                 conn,
-                "UPDATE candidates SET status = 'enrichment_failed' WHERE id = %s",
-                (candidate_id,),
+                "UPDATE candidates SET status = 'enrichment_failed' WHERE id = %s AND processing_generation = %s",
+                (candidate_id, candidate.get("processing_generation", 0)),
             )
             logger.warning("Stage 5: %s → enrichment_failed after %d attempts", domain, new_attempt_count)
             return {"candidate_id": candidate_id, "outcome": "enrichment_failed", "attempts": new_attempt_count}
@@ -499,9 +478,9 @@ def _enrich_candidate(candidate: dict, campaign: dict, conn, settings: dict | No
             enrichment_attempted_at = now(),
             audit_token = COALESCE(audit_token, %s),
             audit_token_created = COALESCE(audit_token_created, now())
-        WHERE id = %s
+        WHERE id = %s AND processing_generation = %s
         """,
-        (audit_token, candidate_id),
+        (audit_token, candidate_id, candidate.get("processing_generation", 0)),
     )
 
     logger.info(
@@ -561,65 +540,64 @@ def run(campaign_id: Optional[int] = None) -> dict:
 
     with db.get_conn() as conn:
         if campaign_id:
+            campaign_ids = {campaign_id}
+        else:
+            active_camps = db.fetchall(conn, "SELECT id FROM campaigns WHERE stage5_status != 'running'")
+            campaign_ids = {c["id"] for c in active_camps}
+            
+        locked_campaign_ids = set()
+        for cid in campaign_ids:
+            if not db.acquire_stage_lock(cid, "stage5"):
+                logger.info("Stage 5 already running for campaign %s", cid)
+                continue
+            locked_campaign_ids.add(cid)
+
+        approved = []
+        if locked_campaign_ids:
+            camp_placeholders = ",".join(["%s"] * len(locked_campaign_ids))
             approved = db.fetchall(
                 conn,
-                """
-                SELECT c.id, c.campaign_id, c.domain, c.company_name, c.status,
-                       c.enrichment_attempt_count, c.enrichment_attempted_at,
+                f"""
+                WITH picked AS (
+                    SELECT id FROM candidates
+                    WHERE status IN ('evaluated', 'pending_review', 'approved')
+                      AND campaign_id IN ({camp_placeholders})
+                      AND (lease_expires_at IS NULL OR lease_expires_at < now())
+                      AND (enrichment_attempted_at IS NULL OR enrichment_attempted_at < now() - interval '12 hours')
+                    ORDER BY created_at ASC
+                    FOR UPDATE SKIP LOCKED
+                    LIMIT 200
+                ),
+                updated AS (
+                    UPDATE candidates uc
+                    SET lease_id = gen_random_uuid(),
+                        lease_expires_at = now() + interval '15 minutes',
+                        processing_generation = processing_generation + 1,
+                        enrichment_attempt_count = COALESCE(enrichment_attempt_count, 0) + 1,
+                        enrichment_attempted_at = now()
+                    FROM picked
+                    WHERE uc.id = picked.id
+                    RETURNING uc.*
+                )
+                SELECT u.*,
                        camp.id as camp_id, camp.business_brief, camp.slug, camp.settings,
                        l.id as existing_lead_id,
                        l.enrichment_report as existing_enrichment_report,
                        (
                            SELECT evidence_data
                            FROM evaluations
-                           WHERE candidate_id = c.id
+                           WHERE candidate_id = u.id
                            ORDER BY created_at DESC
                            LIMIT 1
                        ) as eval_evidence
-                FROM candidates c
-                JOIN campaigns camp ON camp.id = c.campaign_id
-                LEFT JOIN leads l ON l.candidate_id = c.id
-                WHERE c.status IN ('evaluated', 'pending_review', 'approved')
-                  AND c.campaign_id = %s
-                ORDER BY c.created_at ASC
+                FROM updated u
+                JOIN campaigns camp ON camp.id = u.campaign_id
+                LEFT JOIN leads l ON l.candidate_id = u.id
                 """,
-                (campaign_id,)
+                tuple(locked_campaign_ids)
             )
-        else:
-            approved = db.fetchall(
-                conn,
-                """
-            SELECT c.id, c.campaign_id, c.domain, c.company_name, c.status,
-                   c.enrichment_attempt_count, c.enrichment_attempted_at,
-                   camp.id as camp_id, camp.business_brief, camp.slug, camp.settings,
-                   l.id as existing_lead_id,
-                   l.enrichment_report as existing_enrichment_report,
-                   (
-                       SELECT evidence_data
-                       FROM evaluations
-                       WHERE candidate_id = c.id
-                       ORDER BY created_at DESC
-                       LIMIT 1
-                   ) as eval_evidence
-            FROM candidates c
-            JOIN campaigns camp ON camp.id = c.campaign_id
-            LEFT JOIN leads l ON l.candidate_id = c.id
-            WHERE c.status IN ('evaluated', 'pending_review', 'approved')
-            ORDER BY c.created_at ASC
-            """,
-        )
 
-    campaign_ids = {c["campaign_id"] for c in approved}
-    locked_campaign_ids = set()
-    logger.info("Stage 5: Fetched %d candidates across %d campaigns", len(approved), len(campaign_ids))
-    for cid in campaign_ids:
-        if not db.acquire_stage_lock(cid, "stage5"):
-            logger.info("Stage 5 already running for campaign %s", cid)
-            continue
-        locked_campaign_ids.add(cid)
-
-    # Only process candidates belonging to campaigns we successfully locked
-    approved = [c for c in approved if c["campaign_id"] in locked_campaign_ids]
+    logger.info("Stage 5: Fetched %d candidates across %d locked campaigns", len(approved), len(locked_campaign_ids))
 
     try:
         results = []
@@ -637,14 +615,21 @@ def run(campaign_id: Optional[int] = None) -> dict:
                         )
                         return {"candidate_id": candidate["id"], "outcome": "skipped_already_enriched"}
 
-                    campaign = {
-                        "id": candidate["camp_id"],
-                        "business_brief": candidate.get("business_brief"),
-                        "slug": candidate.get("slug"),
-                        "settings": candidate.get("settings"),
-                    }
-                    campaign_settings = candidate.get("settings") or {}
-                    return _enrich_candidate(candidate, campaign, conn, settings=campaign_settings)
+                    try:
+                        campaign = {
+                            "id": candidate["camp_id"],
+                            "business_brief": candidate.get("business_brief"),
+                            "slug": candidate.get("slug"),
+                            "settings": candidate.get("settings"),
+                        }
+                        campaign_settings = candidate.get("settings") or {}
+                        return _enrich_candidate(candidate, campaign, conn, settings=campaign_settings)
+                    finally:
+                        db.execute(
+                            conn,
+                            "UPDATE candidates SET lease_id = NULL, lease_expires_at = NULL WHERE id = %s AND processing_generation = %s",
+                            (candidate["id"], candidate.get("processing_generation", 0))
+                        )
             except Exception as exc:
                 logger.error("Stage 5: unexpected error for candidate %s: %s", candidate["id"], exc)
                 return {"candidate_id": candidate["id"], "outcome": "error", "error": str(exc)}

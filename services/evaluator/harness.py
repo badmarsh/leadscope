@@ -203,7 +203,7 @@ def score_candidate(candidate_id: int) -> dict[str, Any]:
             (candidate["domain"], candidate["domain"], candidate["campaign_id"]),
         )
         if is_dnc:
-            db.execute(conn, "UPDATE candidates SET status = 'discarded' WHERE id = %s", (candidate_id,))
+            db.execute(conn, "UPDATE candidates SET status = 'discarded', lease_id = NULL, lease_expires_at = NULL WHERE id = %s AND processing_generation = %s", (candidate_id, candidate.get("processing_generation", 0)))
             return {"candidate_id": candidate_id, "score": 0, "rationale": "Domain is on Do Not Contact list."}
 
         # Check for duplicates using safe interval arithmetic
@@ -220,8 +220,8 @@ def score_candidate(candidate_id: int) -> dict[str, Any]:
         if dup:
             db.execute(
                 conn, 
-                "UPDATE candidates SET status = 'duplicate', duplicate_of_candidate_id = %s WHERE id = %s",
-                (int(dup["id"]), candidate_id)
+                "UPDATE candidates SET status = 'duplicate', duplicate_of_candidate_id = %s, lease_id = NULL, lease_expires_at = NULL WHERE id = %s AND processing_generation = %s",
+                (int(dup["id"]), candidate_id, candidate.get("processing_generation", 0))
             )
             return {"candidate_id": candidate_id, "score": 0, "rationale": f"Duplicate of candidate {dup['id']} within {config.STALE_REOPEN_DAYS} days."}
 
@@ -233,8 +233,8 @@ def score_candidate(candidate_id: int) -> dict[str, Any]:
 
         # Check budget before LLM dispatch
         if not cost_gate.check_budget(conn, campaign["id"], "stage3"):
-            logger.warning("Budget ceiling reached for campaign %s — skipping candidate %s", campaign["id"], candidate_id)
-            db.execute(conn, "UPDATE candidates SET status = 'new' WHERE id = %s", (candidate_id,))
+            logger.warning("Budget ceiling reached for campaign %s - skipping candidate %s", campaign["id"], candidate_id)
+            db.execute(conn, "UPDATE candidates SET status = 'new', lease_id = NULL, lease_expires_at = NULL WHERE id = %s AND processing_generation = %s", (candidate_id, candidate.get("processing_generation", 0)))
             return {"candidate_id": candidate_id, "score": 0, "rationale": "Budget ceiling reached."}
 
         # 5. Dispatch to the matching scorer
@@ -269,8 +269,8 @@ def score_candidate(candidate_id: int) -> dict[str, Any]:
                 )
                 db.execute(
                     conn,
-                    "UPDATE candidates SET status = 'discarded', evidence_data = jsonb_set(COALESCE(evidence_data, '{}'), '{eval_attempts}', %s::jsonb, true) WHERE id = %s",
-                    (str(attempts), candidate_id),
+                    "UPDATE candidates SET status = 'discarded', evidence_data = jsonb_set(COALESCE(evidence_data, '{}'), '{eval_attempts}', %s::jsonb, true), lease_id = NULL, lease_expires_at = NULL WHERE id = %s AND processing_generation = %s",
+                    (str(attempts), candidate_id, candidate.get("processing_generation", 0)),
                 )
                 return {"candidate_id": candidate_id, "score": 0, "rationale": f"LLM cognitive failure {attempts} times — discarded."}
             else:
@@ -281,8 +281,8 @@ def score_candidate(candidate_id: int) -> dict[str, Any]:
                 )
                 db.execute(
                     conn,
-                    "UPDATE candidates SET status = 'new', created_at = NOW(), evidence_data = jsonb_set(COALESCE(evidence_data, '{}'), '{eval_attempts}', %s::jsonb, true) WHERE id = %s",
-                    (str(attempts), candidate_id),
+                    "UPDATE candidates SET status = 'new', created_at = NOW(), evidence_data = jsonb_set(COALESCE(evidence_data, '{}'), '{eval_attempts}', %s::jsonb, true), lease_id = NULL, lease_expires_at = NULL WHERE id = %s AND processing_generation = %s",
+                    (str(attempts), candidate_id, candidate.get("processing_generation", 0)),
                 )
                 return {"candidate_id": candidate_id, "score": 0, "rationale": f"LLM cognitive failure (attempt {attempts}) — will retry."}
 
@@ -356,39 +356,32 @@ def trigger_scoring(campaign_id: int | None = None) -> dict:
             camp = db.fetchone(conn, "SELECT settings FROM campaigns WHERE id = %s", (campaign_id,))
             settings = json.loads(camp["settings"]) if camp and isinstance(camp.get("settings"), str) else (camp.get("settings") or {})
             limit = int(settings.get("evaluator_batch_size", 50))
-            new_candidates = db.fetchall(
+            new_candidates = db.claim_candidates_for_stage(
                 conn,
-                """
-                UPDATE candidates SET status = 'evaluating'
-                WHERE id IN (
-                    SELECT id
-                    FROM candidates
-                    WHERE status = 'new' AND campaign_id = %s
-                    ORDER BY (source = 'urlscan') DESC, created_at ASC
-                    FOR UPDATE SKIP LOCKED
-                    LIMIT %s
-                )
-                RETURNING id, campaign_id, domain, company_name, source, evidence_data
-                """,
-                (campaign_id, limit)
+                campaign_id=campaign_id,
+                from_statuses=["new"],
+                to_status="evaluating",
+                limit=limit,
+                order_by_source=True
             )
         else:
-            new_candidates = db.fetchall(
-                conn,
-                """
-                UPDATE candidates SET status = 'evaluating'
-                WHERE id IN (
-                    SELECT c.id
-                    FROM candidates c
-                    JOIN campaigns camp ON c.campaign_id = camp.id
-                    WHERE c.status = 'new' AND camp.status = 'active'
-                    ORDER BY (c.source = 'urlscan') DESC, c.created_at ASC
-                    FOR UPDATE SKIP LOCKED
-                    LIMIT 50
+            # NOTE: Global fetch without specific campaign_id is tricky with our new claim helper.
+            # We will just fetch active campaigns and pick the first one, or do a global claim.
+            # For simplicity, if campaign_id is None, let's fetch active campaign_ids and claim for each.
+            active_camps = db.fetchall(conn, "SELECT id FROM campaigns WHERE status = 'active'")
+            new_candidates = []
+            for camp in active_camps:
+                cands = db.claim_candidates_for_stage(
+                    conn,
+                    campaign_id=camp["id"],
+                    from_statuses=["new"],
+                    to_status="evaluating",
+                    limit=50,
+                    order_by_source=True
                 )
-                RETURNING id, campaign_id, domain, company_name, source, evidence_data
-                """
-            )
+                new_candidates.extend(cands)
+                if len(new_candidates) >= 50:
+                    break
 
     campaign_ids = {c["campaign_id"] for c in new_candidates}
     
@@ -469,15 +462,15 @@ def trigger_scoring(campaign_id: int | None = None) -> dict:
                     if is_shitty:
                         db.execute(
                             conn,
-                            "UPDATE candidates SET status = 'discarded' WHERE id = %s AND status = 'evaluating'",
-                            (cand["id"],)
+                            "UPDATE candidates SET status = 'discarded', lease_id = NULL, lease_expires_at = NULL WHERE id = %s AND processing_generation = %s",
+                            (cand["id"], cand.get("processing_generation", 0))
                         )
                         logger.info("Auto-rejected candidate %s: %s", cand["id"], reject_note)
                     else:
                         db.execute(
                             conn,
-                            "UPDATE candidates SET status = 'pending_review' WHERE id = %s AND status = 'evaluating'",
-                            (cand["id"],)
+                            "UPDATE candidates SET status = 'pending_review', lease_id = NULL, lease_expires_at = NULL WHERE id = %s AND processing_generation = %s",
+                            (cand["id"], cand.get("processing_generation", 0))
                         )
                         logger.info("Candidate %s passed evaluation (score %s >= %s) and is pending review", cand["id"], score, min_score)
                 return {"candidate_id": cand["id"], "status": "scored", "score": score}

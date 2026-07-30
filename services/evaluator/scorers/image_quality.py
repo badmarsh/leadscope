@@ -53,8 +53,8 @@ Direction: 100 = great lead (amateur photos + independent active business + sell
 {few_shot_examples}
 
 ## Candidate info
-Domain: {domain}
-Company name: {company_name}
+<DOMAIN>{domain}</DOMAIN>
+<COMPANY_NAME>{company_name}</COMPANY_NAME>
 
 ## Instructions
 Review the attached screenshots carefully.
@@ -186,7 +186,7 @@ def score(candidate: dict, campaign: dict, icp: dict, few_shot: list[dict]) -> d
 
     logger.info("Sending %d screenshots of %s to Vision AI", len(base64_images), domain)
     result, ti, to, model, provider = llm.chat_vision(
-        prompt, base64_images, temperature=0.2, response_model=ImageQualityResponse
+        prompt, base64_images, temperature=0.0, response_model=ImageQualityResponse
     )
 
     if "_raw" in result:

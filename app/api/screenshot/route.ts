@@ -35,13 +35,16 @@ async function isSafeUrl(raw: string): Promise<boolean> {
     // Perform DNS resolution to prevent DNS rebinding & mapped IPv6 bypasses
     try {
       const addresses = await dns.promises.lookup(hostname, { all: true })
+      if (!addresses || addresses.length === 0) return false
+      
       for (const addr of addresses) {
         if (isPrivateIp(addr.address)) {
           return false
         }
       }
     } catch {
-      // If DNS resolution fails, fallback to hostname pattern check
+      // If DNS resolution fails, FAIL SECURELY
+      return false
     }
 
     return true

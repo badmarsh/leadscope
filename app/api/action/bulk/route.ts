@@ -35,7 +35,12 @@ export async function POST(request: NextRequest) {
     } else if (decision === "rerun_evaluation") {
       await query(
         `UPDATE candidates 
-         SET status = 'new', enrichment_attempted_at = NULL, enrichment_attempt_count = 0
+         SET status = 'new', 
+             enrichment_attempted_at = NULL, 
+             enrichment_attempt_count = 0,
+             processing_generation = processing_generation + 1,
+             lease_id = NULL,
+             lease_expires_at = NULL
          WHERE id = ANY($1::int[])`,
         [candidate_ids]
       )
@@ -60,7 +65,10 @@ export async function POST(request: NextRequest) {
         `UPDATE candidates 
          SET status = CASE WHEN status = 'enrichment_failed' THEN 'evaluated' ELSE status END,
              enrichment_attempted_at = NULL, 
-             enrichment_attempt_count = 0 
+             enrichment_attempt_count = 0,
+             processing_generation = processing_generation + 1,
+             lease_id = NULL,
+             lease_expires_at = NULL
          WHERE id = ANY($1::int[])`,
         [candidate_ids]
       )

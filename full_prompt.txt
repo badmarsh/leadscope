@@ -1,0 +1,73 @@
+<USER_REQUEST>
+You are an elite Principal Staff Engineer and AI Systems Architect.
+
+You have previously conducted two full technical audits of the LeadScope codebase
+(a Python/FastAPI B2B lead generation pipeline using PostgreSQL, Playwright/Browserless,
+Crawl4AI, Firecrawl, and Gemini-via-OpenRouter LLMs), and issued a Phase 2 Synthesis
+Audit in response to a Red Team GPT-5.6 critique.
+
+The engineering team has now implemented all five critical bugs you identified in the
+Phase 2 Synthesis Audit. Below is a verified status report of what was actually
+fixed in the codebase (commits 5be3fe8, 932ffbd, 2a93de2 on 2026-07-30), followed
+by a detailed reading of the current state of the four most critical files.
+
+Your task has three parts, described after the codebase briefing.
+
+═══════════════════════════════════════════════════════════════
+PART A: VERIFIED FIX STATUS (read these as confirmed ground truth)
+═══════════════════════════════════════════════════════════════
+
+BUG 1 — FOR UPDATE SKIP LOCKED releasing locks early: ✅ FIXED
+The entire trigger_scoring() function in harness.py was rewritten. It now uses an
+atomic UPDATE...WHERE id IN (SELECT...FOR UPDATE SKIP LOCKED)...RETURNING pattern.
+The UPDATE and the lock acquisition happen in a single statement, so candidates are
+immediately flipped to status='evaluating' atomically — row locks are irrelevant
+because the status column flip IS the claim mechanism. Two replicas cannot claim the
+same candidate.
+
+BUG 2 — cost_gate never imported/called: ✅ FIXED
+harness.py now imports `from services.common import cost_gate` at the top of the file.
+cost_gate.check_budget(conn, campaign["id"], "stage3") is called explicitly inside
+score_candidate() right before the scorer_fn dispatch. If budget is exhausted, the
+candidate i
+<truncated 10682 bytes>
+althcheck test command targets an endpoint the proxy doesn't actually serve.
+Then tell me what to grep for to verify it's correct.
+
+TASK 3 — PHASE 3 ROADMAP (building on what was started in the previous session)
+The previous Sonnet 5 session started outlining a Phase 3 roadmap but was cut off
+mid-sentence at "Why Redis Pub/Sub and not WebSockets di...". Complete and expand
+that roadmap. The following directions were already introduced:
+
+3.1 Real-Time WebSocket/SSE streaming dashboard
+3.2 (was not reached — add it)
+3.3 (was not reached — add it)
+...
+
+For each Phase 3 initiative:
+- Give it a priority tier (P0/P1/P2) based on impact-to-effort ratio for a solo
+  dev team running LeadScope as a commercial B2B SaaS product
+- Describe the exact architecture (not hand-waving — name the libraries, the DB
+  schema changes, the API contracts, the failure modes)
+- Identify the single highest-risk implementation mistake a mid-level engineer
+  would make when building it
+- Estimate the engineering effort in engineer-days
+
+Be brutal, visionary, and extremely specific. This is a commercial product with
+real customers and a solo dev team. Prioritize ruthlessly.GitHub FireCrawl 
+</USER_REQUEST>
+<ADDITIONAL_METADATA>
+The current local time is: 2026-07-30T22:05:17+02:00.
+
+The user's current state is as follows:
+Active Document: c:\Users\marek\Documents\Jenex_AI\README.md (LANGUAGE_MARKDOWN)
+Cursor is on line: 38
+Other open documents:
+- c:\Users\marek\Documents\Jenex_AI\README.md (LANGUAGE_MARKDOWN)
+- c:\Users\marek\Documents\Jenex_AI\.agents\PIPELINE_SETTINGS_GUIDE.md (LANGUAGE_MARKDOWN)
+- c:\Users\marek\Documents\Jenex_AI\components\leads-table.tsx (LANGUAGE_TSX)
+No browser pages are currently open.
+</ADDITIONAL_METADATA>
+<USER_SETTINGS_CHANGE>
+The user changed setting `Model Selection` from Gemini 3.6 Flash (High) to Gemini 3.1 Pro (High). No need to comment on this change if the user doesn't ask about it. If reporting what model you are, please use a human readable name instead of the exact string.
+</USER_SETTINGS_CHANGE>

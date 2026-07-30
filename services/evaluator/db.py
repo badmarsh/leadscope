@@ -167,3 +167,67 @@ def check_stop_signal(campaign_id: int, stage: str) -> bool:
             if not row:
                 return False
             return row[f"{stage}_status"] == "stopping"
+
+import uuid
+
+def claim_candidates_for_stage(conn, campaign_id: int, from_statuses: list[str], to_status: str, limit: int = 50, order_by_source: bool = False):
+    """
+    Safely claims candidates using FOR UPDATE SKIP LOCKED.
+    Updates processing_generation, lease_id, and lease_expires_at (15 mins).
+    Returns list of candidate dicts with generation data.
+    """
+    lease_id = str(uuid.uuid4())
+    order_clause = "ORDER BY (source = 'urlscan') DESC, created_at ASC" if order_by_source else "ORDER BY created_at ASC"
+    
+    # Format IN clause securely
+    placeholders = ", ".join(["%s"] * len(from_statuses))
+    params = list(from_statuses) + [campaign_id, limit, to_status, lease_id]
+    
+    sql = f"""
+    WITH picked AS (
+        SELECT id FROM candidates
+        WHERE status IN ({placeholders}) AND campaign_id = %s
+          AND (lease_expires_at IS NULL OR lease_expires_at < now())
+        {order_clause}
+        FOR UPDATE SKIP LOCKED
+        LIMIT %s
+    )
+    UPDATE candidates c
+    SET status = %s,
+        lease_id = %s,
+        lease_expires_at = now() + interval '15 minutes',
+        processing_generation = processing_generation + 1
+    FROM picked
+    WHERE c.id = picked.id
+    RETURNING c.*
+    """
+    return fetchall(conn, sql, tuple(params))
+
+def update_candidate_generation(conn, candidate_id: int, generation: int, updates: dict):
+    """
+    Updates a candidate ONLY if the processing_generation matches.
+    Clears the lease upon update.
+    Returns True if update succeeded, False if generation mismatched.
+    """
+    if not updates:
+        return True
+    
+    set_clauses = []
+    params = []
+    for k, v in updates.items():
+        set_clauses.append(f"{k} = %s")
+        params.append(v)
+    
+    set_clauses.append("lease_id = NULL")
+    set_clauses.append("lease_expires_at = NULL")
+    
+    sql = f"""
+    UPDATE candidates
+    SET {', '.join(set_clauses)}
+    WHERE id = %s AND processing_generation = %s
+    """
+    params.extend([candidate_id, generation])
+    
+    with conn.cursor() as cur:
+        cur.execute(sql, tuple(params))
+        return cur.rowcount > 0

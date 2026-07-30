@@ -77,6 +77,8 @@ export interface Lead {
   mainwp_webhook_token?: string
   proof_data?: PhaseXProof | null
   exposure_scan?: PhaseXExposure | null
+  processing_generation?: number
+  enrichment_attempt_count?: number
 }
 
 export interface CampaignUsage {

@@ -366,6 +366,7 @@ export function LeadsTable({ leads, selectedId, onSelect, onFilteredChange, onBu
                     "cursor-pointer border-b border-border/60 transition-colors last:border-0 hover:bg-accent/50",
                     selectedId === lead.id && "bg-accent/70",
                     selectedIds.has(lead.id) && "bg-accent/30",
+                    (lead.processing_generation && lead.processing_generation > 0) && "opacity-50"
                   )}
                 >
                   <td className="w-10 px-4 py-3" onClick={e => e.stopPropagation()}>
@@ -421,12 +422,14 @@ export function LeadsTable({ leads, selectedId, onSelect, onFilteredChange, onBu
                   </td>
                   <td className="px-4 py-3">
                     <span
+                      title={lead.status === "enrichment_failed" && lead.enrichment_attempt_count ? `Failed after ${lead.enrichment_attempt_count} attempts` : undefined}
                       className={cn(
                         "inline-block rounded-full px-2 py-0.5 text-xs font-medium",
                         statusBadgeClasses[lead.status],
                       )}
                     >
                       {t(`status.${lead.status}`, { defaultValue: statusLabels[lead.status] })}
+                      {(lead.processing_generation && lead.processing_generation > 0) ? ` (Gen ${lead.processing_generation})` : ""}
                     </span>
                   </td>
                   <td className="whitespace-nowrap px-4 py-3 font-mono text-xs text-muted-foreground">
