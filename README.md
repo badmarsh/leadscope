@@ -42,6 +42,8 @@ A high-performance lead generation, evaluation, and AI-powered intelligence plat
 - Python 3.12+
 - Docker & Docker Compose
 
+> **Note on Browserless Integration:** We recently upgraded to be compatible with Browserless v2 (`ghcr.io/browserless/chromium`). Ensure your local Docker images are up to date if you experience screenshot or crawling failures.
+
 ### Installation & Execution
 
 1. **Environment Setup**:
@@ -142,6 +144,13 @@ To add a new campaign: insert a row into `campaigns`, create an ICP config row, 
 - **Vitest**: TypeScript unit & component tests (`pnpm test`)
 - **pytest**: Python service unit & integration tests (`pytest tests/`)
 - **Playwright**: End-to-End browser smoke tests (`pnpm test:e2e`)
+
+### Testing External APIs
+
+When writing tests for modules that interact with external services (e.g., LLM providers, URLScan, VirusTotal), **avoid relying purely on `mockFetch` or generic mocks**. Instead:
+1. Use **actual API schemas** (e.g., OpenAPI definitions) to validate request and response formats.
+2. Write **integration tests** that hit sandbox or staging environments when available.
+3. If mocking is necessary (e.g., for cost reasons), use robust HTTP mocking tools like MSW (Mock Service Worker) or Python's `responses` / `VCR.py` to record and replay real API interactions, ensuring your mocks do not drift from the actual external contracts.
 
 ```bash
 # Run TypeScript Unit Tests
