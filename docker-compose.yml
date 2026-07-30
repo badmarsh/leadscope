@@ -40,19 +40,7 @@ services:
     volumes:
       - n8n_data:/home/node/.n8n
 
-  gemini-proxy:
-    image: zhu327/gemini-openai-proxy:latest
-    restart: unless-stopped
-    ports:
-      - "127.0.0.1:8045:8080"
-    environment:
-      GEMINI_API_KEY: ${GEMINI_API_KEY}
-    healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/health 2>/dev/null || curl -sf http://localhost:8080/ || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 15s
+
 
   evaluator:
     build:
@@ -66,12 +54,10 @@ services:
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       GEMINI_PROXY_API_KEY: ${GEMINI_PROXY_API_KEY}
-      GEMINI_PROXY_ENDPOINT: http://gemini-proxy:8080
+      GEMINI_PROXY_ENDPOINT: http://host.docker.internal:8045
       CRAWLER_ENDPOINT: http://crawler:8003
     depends_on:
       postgres:
-        condition: service_healthy
-      gemini-proxy:
         condition: service_healthy
     volumes:
       - app_logs:/var/log/app
@@ -95,15 +81,13 @@ services:
       # Override DATABASE_URL and proxy endpoints to use Docker service/host names
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       GEMINI_PROXY_API_KEY: ${GEMINI_PROXY_API_KEY}
-      GEMINI_PROXY_ENDPOINT: http://gemini-proxy:8080
+      GEMINI_PROXY_ENDPOINT: http://host.docker.internal:8045
       OLLAMA_HOST: ${OLLAMA_HOST}
       CRAWLER_ENDPOINT: http://crawler:8003
     depends_on:
       postgres:
         condition: service_healthy
       crawler:
-        condition: service_healthy
-      gemini-proxy:
         condition: service_healthy
     volumes:
       - app_logs:/var/log/app
@@ -145,11 +129,9 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       DASHBOARD_SESSION_SECRET: ${DASHBOARD_SESSION_SECRET}
       GEMINI_PROXY_API_KEY: ${GEMINI_PROXY_API_KEY}
-      GEMINI_PROXY_ENDPOINT: http://gemini-proxy:8080
+      GEMINI_PROXY_ENDPOINT: http://host.docker.internal:8045
     depends_on:
       postgres:
-        condition: service_healthy
-      gemini-proxy:
         condition: service_healthy
     volumes:
       - app_logs:/var/log/app

@@ -139,7 +139,7 @@ def score(candidate: dict, campaign: dict, icp: dict, few_shot: list[dict]) -> d
         logger.warning("Browserless returned no screenshots for %s. Marking as dead domain.", domain)
         return {
             "score": 0,
-            "reasoning": "Dead domain or completely unreachable by browser.",
+            "rationale": "Dead domain or completely unreachable by browser.",
             "photo_quality": "irrelevant",
             "images_analyzed": [],
             "product_type": "other",

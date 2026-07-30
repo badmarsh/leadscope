@@ -299,7 +299,7 @@ def score_candidate(candidate_id: int) -> dict[str, Any]:
             (
                 candidate_id,
                 result["score"],
-                result["rationale"],
+                result.get("rationale", ""),
                 result.get("evidence_urls", []),
                 json.dumps(result.get("evidence_data", {})),
                 result.get("model_used", ""),
@@ -326,7 +326,7 @@ def score_candidate(candidate_id: int) -> dict[str, Any]:
             "candidate_id": candidate_id,
             "evaluation_id": eval_row["id"],
             "score": result["score"],
-            "rationale": result["rationale"],
+            "rationale": result.get("rationale", ""),
             "evidence_data": result.get("evidence_data", {}),
             "icp_version_used": icp_version,
             "model_used": result.get("model_used", ""),
