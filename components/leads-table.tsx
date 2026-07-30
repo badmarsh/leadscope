@@ -318,9 +318,6 @@ export function LeadsTable({ leads, selectedId, onSelect, onFilteredChange, onBu
                   className="size-3.5 rounded border-input bg-background text-primary"
                 />
               </th>
-              <th scope="col" className="w-8 px-2 py-2 text-center" title={t("leads_table.columns.completeness", { defaultValue: "Completeness" })}>
-                <span className="text-xs text-muted-foreground">●</span>
-              </th>
               {columns.map((col) => (
                 <th key={col.key} scope="col" className={cn("px-4 py-2 text-left", col.className)}>
                   <button
@@ -340,6 +337,9 @@ export function LeadsTable({ leads, selectedId, onSelect, onFilteredChange, onBu
                   </button>
                 </th>
               ))}
+              <th scope="col" className="w-8 px-2 py-2 text-center" title={t("leads_table.columns.completeness", { defaultValue: "Completeness" })}>
+                <span className="text-xs text-muted-foreground">●</span>
+              </th>
             </tr>
           </thead>
           <tbody>
