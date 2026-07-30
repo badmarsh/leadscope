@@ -16,32 +16,6 @@ services:
       timeout: 15s
       retries: 10
 
-  n8n:
-    image: n8nio/n8n:latest
-    restart: unless-stopped
-    ports:
-      - "5678:5678"
-    environment:
-      - N8N_BASIC_AUTH_ACTIVE=true
-      - N8N_BASIC_AUTH_USER=${N8N_BASIC_AUTH_USER}
-      - N8N_BASIC_AUTH_PASSWORD=${N8N_BASIC_AUTH_PASSWORD}
-      - DB_TYPE=postgresdb
-      - DB_POSTGRESDB_HOST=postgres
-      - DB_POSTGRESDB_PORT=5432
-      - DB_POSTGRESDB_DATABASE=${POSTGRES_DB}
-      - DB_POSTGRESDB_USER=${POSTGRES_USER}
-      - DB_POSTGRESDB_PASSWORD=${POSTGRES_PASSWORD}
-      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}
-      - INTERNAL_API_TOKEN=${INTERNAL_API_TOKEN}
-      - N8N_EXPRESSIONS_ALLOWED_ENV_VARS=INTERNAL_API_TOKEN
-    depends_on:
-      postgres:
-        condition: service_healthy
-    volumes:
-      - n8n_data:/home/node/.n8n
-
-
-
   evaluator:
     build:
       context: .
@@ -221,5 +195,4 @@ services:
 
 volumes:
   postgres_data:
-  n8n_data:
   app_logs:

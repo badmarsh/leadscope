@@ -1,9 +1,10 @@
+import dns from "dns"
 import { NextRequest, NextResponse } from "next/server"
 import { cookies } from "next/headers"
 import { getIronSession } from "iron-session"
 import { sessionOptions, type SessionData } from "@/lib/session"
 
-// Block SSRF attempts against private / link-local ranges
+// Block SSRF attempts against private / link-local / internal ranges
 const BLOCKED_HOSTNAME_PATTERNS = [
   /^localhost$/i,
   /^127\./,
@@ -11,14 +12,39 @@ const BLOCKED_HOSTNAME_PATTERNS = [
   /^192\.168\./,
   /^172\.(1[6-9]|2[0-9]|3[01])\./,
   /^169\.254\./,
+  /^0\./,
   /^::1$/,
+  /^fe80:/i,
+  /^fc00:/i,
+  /^fd[0-9a-f]{2}:/i,
+  /^::ffff:(127\.|10\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[01])\.|169\.254\.)/i,
 ]
 
-function isSafeUrl(raw: string): boolean {
+function isPrivateIp(ip: string): boolean {
+  return BLOCKED_HOSTNAME_PATTERNS.some((re) => re.test(ip))
+}
+
+async function isSafeUrl(raw: string): Promise<boolean> {
   try {
     const parsed = new URL(raw)
     if (!['http:', 'https:'].includes(parsed.protocol)) return false
-    return !BLOCKED_HOSTNAME_PATTERNS.some((re) => re.test(parsed.hostname))
+
+    const hostname = parsed.hostname.toLowerCase()
+    if (BLOCKED_HOSTNAME_PATTERNS.some((re) => re.test(hostname))) return false
+
+    // Perform DNS resolution to prevent DNS rebinding & mapped IPv6 bypasses
+    try {
+      const addresses = await dns.promises.lookup(hostname, { all: true })
+      for (const addr of addresses) {
+        if (isPrivateIp(addr.address)) {
+          return false
+        }
+      }
+    } catch {
+      // If DNS resolution fails, fallback to hostname pattern check
+    }
+
+    return true
   } catch {
     return false
   }
@@ -37,7 +63,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Missing url parameter" }, { status: 400 })
   }
 
-  if (!isSafeUrl(targetUrl)) {
+  if (!(await isSafeUrl(targetUrl))) {
     return NextResponse.json({ error: "Invalid or disallowed URL" }, { status: 400 })
   }
 

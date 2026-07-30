@@ -25,7 +25,7 @@ A high-performance lead generation, evaluation, and AI-powered intelligence plat
           │
    ┌──────┴─────────────────────────────────┐
    │ Background Jobs & Orchestration        │
-   │ - n8n (crons for core pipeline)        │
+   │ - FastAPI Cron Endpoints (/stageN/run) │
    │ - certstream_monitor (HTTP / DB queues)│
    │ - malwarebazaar / publicwww / hunters  │
    │ - icp_drift_job                        │
@@ -103,10 +103,10 @@ DATABASE_URL=postgresql://... alembic -c db/alembic.ini revision --autogenerate 
 
 | Stage | Name | Trigger | Description |
 |---|---|---|---|
-| Stage 1 | ICP Definer | Manual / n8n | Generates search queries and target segments from `business_brief` via LLM |
-| Stage 2 | Target Finder | n8n cron (every 6h) | Multi-provider search waterfall (Exa → Tavily → Serper → SerpAPI → Brave) → domain candidates |
-| Stage 3 | Evaluator | n8n cron | Scores candidates 0–100 against ICP using Firecrawl + Vision AI |
-| Stage 5 | Enrichment | n8n cron | Crawl4AI scrape + `extruct` metadata + LLM gap-fill for contact data |
+| Stage 1 | ICP Definer | Manual / API | Generates search queries and target segments from `business_brief` via LLM |
+| Stage 2 | Target Finder | Cron (every 6h) / API | Multi-provider search waterfall (Exa → Tavily → Serper → SerpAPI → Brave) → domain candidates |
+| Stage 3 | Evaluator | Cron / API | Scores candidates 0–100 against ICP using Crawl4AI + Vision AI |
+| Stage 5 | Enrichment | Cron / API | Crawl4AI scrape + `extruct` metadata + LLM gap-fill for contact data |
 
 Stage 4 is an intentional numbering gap reserved for human-in-the-loop validation.
 

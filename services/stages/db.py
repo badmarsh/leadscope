@@ -146,7 +146,7 @@ def set_stage_status(campaign_id: int, stage: str, status: str):
 
 
 def acquire_stage_lock(campaign_id: int, stage: str) -> bool:
-    """Atomic acquire: returns True only if we successfully transitioned idle→running."""
+    """Atomic acquire: uses Postgres advisory locks + status update for multi-replica concurrency."""
     _validate_stage(stage)
     conn = get_pool().getconn()
     try:
@@ -156,6 +156,12 @@ def acquire_stage_lock(campaign_id: int, stage: str) -> bool:
             if not cur.fetchone():
                 raise ValueError(f"Campaign {campaign_id} not found")
 
+            lock_key = f"{stage}_{campaign_id}"
+            cur.execute("SELECT pg_try_advisory_lock(hashtext(%s))", (lock_key,))
+            got_lock = cur.fetchone()[0]
+            if not got_lock:
+                return False
+
             cur.execute(
                 f"UPDATE campaigns SET {stage}_status = 'running', "
                 f"{stage}_last_run = NOW() "
@@ -163,10 +169,29 @@ def acquire_stage_lock(campaign_id: int, stage: str) -> bool:
                 f"RETURNING id",
                 (campaign_id,),
             )
-            return cur.rowcount == 1
+            if cur.rowcount != 1:
+                cur.execute("SELECT pg_advisory_unlock(hashtext(%s))", (lock_key,))
+                return False
+            return True
     except Exception as exc:
         logger.warning("acquire_stage_lock failed transiently: %s", exc)
         raise exc
+    finally:
+        get_pool().putconn(conn)
+
+
+def release_stage_lock(campaign_id: int, stage: str, status: str = "idle"):
+    """Release Postgres advisory lock and set stage status."""
+    _validate_stage(stage)
+    set_stage_status(campaign_id, stage, status)
+    conn = get_pool().getconn()
+    try:
+        conn.autocommit = True
+        with conn.cursor() as cur:
+            lock_key = f"{stage}_{campaign_id}"
+            cur.execute("SELECT pg_advisory_unlock(hashtext(%s))", (lock_key,))
+    except Exception as exc:
+        logger.warning("release_stage_lock failed: %s", exc)
     finally:
         get_pool().putconn(conn)
 
