@@ -1,4 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from "vitest"
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
+import dns from "dns"
 import { NextRequest } from "next/server"
 import { GET } from "../../app/api/screenshot/route"
 
@@ -14,6 +15,19 @@ describe("GET /api/screenshot", () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockGetIronSession.mockResolvedValue({ loggedIn: true })
+    
+    // Default DNS mock behavior to return safe IPs
+    vi.spyOn(dns.promises, 'lookup').mockImplementation(async (hostname) => {
+      // Mock some safe responses
+      if (hostname === 'safe-site.com' || hostname === 'safe.com') {
+        return [{ address: '8.8.8.8', family: 4 }] as any
+      }
+      return [{ address: '1.2.3.4', family: 4 }] as any
+    })
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
   })
 
   it("returns 401 when not authenticated", async () => {
@@ -42,6 +56,34 @@ describe("GET /api/screenshot", () => {
     expect(res.status).toBe(400)
     const body = await res.json()
     expect(body.error).toMatch(/invalid|disallowed/i)
+  })
+
+  it("prevents DNS rebinding TOCTOU via IP pinning", async () => {
+    const fakeJpeg = Buffer.from([0xFF, 0xD8, 0xFF])
+    mockFetch.mockResolvedValue({
+      ok: true,
+      arrayBuffer: async () => fakeJpeg.buffer,
+    })
+    
+    let lookupCount = 0
+    vi.spyOn(dns.promises, 'lookup').mockImplementation(async () => {
+      lookupCount++
+      if (lookupCount === 1) {
+        return [{ address: '8.8.8.8', family: 4 }] as any // Public IP on check
+      }
+      return [{ address: '127.0.0.1', family: 4 }] as any // Private IP on fetch
+    })
+
+    const req = new NextRequest("http://localhost/api/screenshot?url=https://attacker-rebind.com")
+    const res = await GET(req)
+    
+    expect(res.status).toBe(200)
+    
+    // The fetch should use the pinned public IP from the first lookup
+    const fetchPayload = JSON.parse(mockFetch.mock.calls[0][1].body)
+    expect(fetchPayload.url).toBe("https://8.8.8.8/")
+    // And it should preserve the original hostname in headers
+    expect(fetchPayload.setExtraHTTPHeaders.Host).toBe("attacker-rebind.com")
   })
 
   it("blocks non-http protocols", async () => {

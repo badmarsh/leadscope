@@ -24,32 +24,44 @@ function isPrivateIp(ip: string): boolean {
   return BLOCKED_HOSTNAME_PATTERNS.some((re) => re.test(ip))
 }
 
-async function isSafeUrl(raw: string): Promise<boolean> {
+async function resolveSafeUrl(raw: string): Promise<{ safe: boolean, resolvedUrl?: string, originalHostname?: string }> {
   try {
     const parsed = new URL(raw)
-    if (!['http:', 'https:'].includes(parsed.protocol)) return false
+    if (!['http:', 'https:'].includes(parsed.protocol)) return { safe: false }
 
     const hostname = parsed.hostname.toLowerCase()
-    if (BLOCKED_HOSTNAME_PATTERNS.some((re) => re.test(hostname))) return false
+    if (BLOCKED_HOSTNAME_PATTERNS.some((re) => re.test(hostname))) return { safe: false }
 
     // Perform DNS resolution to prevent DNS rebinding & mapped IPv6 bypasses
     try {
       const addresses = await dns.promises.lookup(hostname, { all: true })
-      if (!addresses || addresses.length === 0) return false
+      if (!addresses || addresses.length === 0) return { safe: false }
       
+      let selectedIp = ""
       for (const addr of addresses) {
         if (isPrivateIp(addr.address)) {
-          return false
+          return { safe: false }
         }
+        if (!selectedIp) selectedIp = addr.address
+      }
+      
+      const isIPv6 = selectedIp.includes(':')
+      const hostValue = isIPv6 ? `[${selectedIp}]` : selectedIp
+      
+      const newUrl = new URL(raw)
+      newUrl.hostname = hostValue
+      
+      return { 
+        safe: true, 
+        resolvedUrl: newUrl.toString(), 
+        originalHostname: parsed.hostname 
       }
     } catch {
       // If DNS resolution fails, FAIL SECURELY
-      return false
+      return { safe: false }
     }
-
-    return true
   } catch {
-    return false
+    return { safe: false }
   }
 }
 
@@ -66,7 +78,8 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Missing url parameter" }, { status: 400 })
   }
 
-  if (!(await isSafeUrl(targetUrl))) {
+  const validation = await resolveSafeUrl(targetUrl)
+  if (!validation.safe || !validation.resolvedUrl) {
     return NextResponse.json({ error: "Invalid or disallowed URL" }, { status: 400 })
   }
 
@@ -76,7 +89,8 @@ export async function GET(request: NextRequest) {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        url: targetUrl,
+        url: validation.resolvedUrl,
+        setExtraHTTPHeaders: { "Host": validation.originalHostname },
         bestAttempt: true,
         addScriptTag: [
           {
@@ -109,7 +123,9 @@ export async function GET(request: NextRequest) {
           timeout: 20000
         },
         options: { type: "jpeg", quality: 75, fullPage: false },
-        viewport: { width: 1280, height: 800 }
+        viewport: { width: 1280, height: 800 },
+        rejectResourceTypes: ["media", "font"],
+        context: { ignoreHTTPSErrors: true }
       })
     })
 

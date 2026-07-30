@@ -33,6 +33,15 @@ export async function POST(request: NextRequest) {
         [decision, candidate_ids]
       )
     } else if (decision === "rerun_evaluation") {
+      // Prevent race conditions with background workers
+      const lockedRows = await query(
+        `SELECT id FROM candidates WHERE id = ANY($1::int[]) FOR UPDATE SKIP LOCKED`,
+        [candidate_ids]
+      ) as any[]
+      if (lockedRows.length !== candidate_ids.length) {
+        return NextResponse.json({ error: "One or more candidates are currently processing. Please try again later." }, { status: 409 })
+      }
+
       await query(
         `UPDATE candidates 
          SET status = 'new', 
@@ -61,6 +70,15 @@ export async function POST(request: NextRequest) {
         }
       }).catch(err => console.error("Failed to trigger evaluator:", err))
     } else if (decision === "rerun_enrichment") {
+      // Prevent race conditions with background workers
+      const lockedRows = await query(
+        `SELECT id FROM candidates WHERE id = ANY($1::int[]) FOR UPDATE SKIP LOCKED`,
+        [candidate_ids]
+      ) as any[]
+      if (lockedRows.length !== candidate_ids.length) {
+        return NextResponse.json({ error: "One or more candidates are currently processing. Please try again later." }, { status: 409 })
+      }
+
       await query(
         `UPDATE candidates 
          SET status = CASE WHEN status = 'enrichment_failed' THEN 'evaluated' ELSE status END,

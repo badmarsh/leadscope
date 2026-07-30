@@ -73,7 +73,7 @@ jobs:
         run: psql postgresql://leadscope_test:leadscope_test@localhost:5432/leadscope_test -f db/schema.sql
 
       - name: Run unit tests
-        run: pytest tests/unit/ services/evaluator/tests/ services/stages/tests/ services/crawler/tests/ -v
+        run: pytest tests/unit/ services/evaluator/tests/ services/stages/tests/ services/crawler/tests/ services/jobs/tests/ -v
         env:
           PYTHONPATH: services/stages:services/evaluator:services/crawler
 

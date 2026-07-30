@@ -10,7 +10,7 @@ Curated backlog of actionable tasks. Items already completed or not recommended 
 **Origin:** Ops Audit (Phase 3)  
 **Implementation:** Updated `acquire_stage_lock` and `release_stage_lock` in `services/stages/db.py` to use Postgres `pg_try_advisory_lock` advisory locks for multi-replica concurrency.
 
-### 2. SSRF Filter Hardening (IPv6 + DNS Rebinding) ✅ Done
+### 2. SSRF Filter Hardening (IPv6 + DNS Rebinding)
 **Origin:** Phase 4 Audit  
 **Implementation:** Added server-side DNS resolution (`dns.promises.lookup`) and expanded IP blocklist regexes in `app/api/screenshot/route.ts` to cover IPv6 loopbacks, mapped IPv4, and internal CIDRs.
 
@@ -26,7 +26,7 @@ Curated backlog of actionable tasks. Items already completed or not recommended 
 **Origin:** Ops Audit (Phase 3, Issue M10)  
 **Implementation:** Sandboxed scraped website text in `<website_content>` tags and added strict safety instructions to LLM prompts in `services/stages/stage5.py`.
 
-### 5. Rerun Race Condition Guard
+### 5. Rerun Race Condition Guard ✅ Done
 **Origin:** Phase 4 Audit  
 **What:** If a user clicks "Rerun Evaluation" while a Stage 3 background worker is actively processing that candidate, both processes write conflicting results.  
 **Recommendation:** Add `SELECT ... FOR UPDATE SKIP LOCKED` on the candidate row before starting evaluation. If the row is locked, the rerun request returns a "currently processing" status instead of racing.  
@@ -46,7 +46,7 @@ Curated backlog of actionable tasks. Items already completed or not recommended 
 
 ## 🟢 Nice-to-Have — When Time Permits
 
-### 8. Fallback Company Name Extraction
+### 8. Fallback Company Name Extraction ✅ Done
 **Origin:** Phase 4  
 **What:** When the LLM fails to extract a company name during Stage 5, it falls back to the raw domain (e.g., `swapboutique.com`). This looks unprofessional in exports.  
 **Recommendation:** Before falling back to domain, try extracting from `<title>` tag, Open Graph `og:site_name`, or Schema.org `Organization.name` from the scraped metadata. Only fall back to domain as a last resort.  

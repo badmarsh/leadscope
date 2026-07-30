@@ -148,7 +148,7 @@ To add a new campaign: insert a row into `campaigns`, create an ICP config row, 
 pnpm test
 
 # Run Python Tests
-pytest tests/unit/ tests/integration/
+pytest tests/unit/ services/evaluator/tests/ services/stages/tests/ services/crawler/tests/ services/jobs/tests/ tests/integration/ -v
 
 # Run E2E Playwright Suite
 pnpm test:e2e

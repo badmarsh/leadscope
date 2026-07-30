@@ -203,7 +203,7 @@ def score_candidate(candidate_id: int) -> dict[str, Any]:
             (candidate["domain"], candidate["domain"], candidate["campaign_id"]),
         )
         if is_dnc:
-            db.execute(conn, "UPDATE candidates SET status = 'discarded', lease_id = NULL, lease_expires_at = NULL WHERE id = %s AND processing_generation = %s", (candidate_id, candidate.get("processing_generation", 0)))
+            db.update_candidate_generation(conn, candidate_id, candidate.get("processing_generation", 0), {"status": "discarded"})
             return {"candidate_id": candidate_id, "score": 0, "rationale": "Domain is on Do Not Contact list."}
 
         # Check for duplicates using safe interval arithmetic
@@ -218,11 +218,7 @@ def score_candidate(candidate_id: int) -> dict[str, Any]:
             (candidate["domain"], candidate["campaign_id"], candidate_id, config.STALE_REOPEN_DAYS)
         )
         if dup:
-            db.execute(
-                conn, 
-                "UPDATE candidates SET status = 'duplicate', duplicate_of_candidate_id = %s, lease_id = NULL, lease_expires_at = NULL WHERE id = %s AND processing_generation = %s",
-                (int(dup["id"]), candidate_id, candidate.get("processing_generation", 0))
-            )
+            db.update_candidate_generation(conn, candidate_id, candidate.get("processing_generation", 0), {"status": "duplicate", "duplicate_of_candidate_id": int(dup["id"])})
             return {"candidate_id": candidate_id, "score": 0, "rationale": f"Duplicate of candidate {dup['id']} within {config.STALE_REOPEN_DAYS} days."}
 
         # 3. Load current ICP version
@@ -234,7 +230,7 @@ def score_candidate(candidate_id: int) -> dict[str, Any]:
         # Check budget before LLM dispatch
         if not cost_gate.check_budget(conn, campaign["id"], "stage3"):
             logger.warning("Budget ceiling reached for campaign %s - skipping candidate %s", campaign["id"], candidate_id)
-            db.execute(conn, "UPDATE candidates SET status = 'new', lease_id = NULL, lease_expires_at = NULL WHERE id = %s AND processing_generation = %s", (candidate_id, candidate.get("processing_generation", 0)))
+            db.update_candidate_generation(conn, candidate_id, candidate.get("processing_generation", 0), {"status": "new"})
             return {"candidate_id": candidate_id, "score": 0, "rationale": "Budget ceiling reached."}
 
         # 5. Dispatch to the matching scorer
@@ -267,11 +263,9 @@ def score_candidate(candidate_id: int) -> dict[str, Any]:
                     "Cognitive failure for candidate %s (domain=%s): max retries (%d) exceeded.",
                     candidate_id, candidate["domain"], attempts,
                 )
-                db.execute(
-                    conn,
-                    "UPDATE candidates SET status = 'discarded', evidence_data = jsonb_set(COALESCE(evidence_data, '{}'), '{eval_attempts}', %s::jsonb, true), lease_id = NULL, lease_expires_at = NULL WHERE id = %s AND processing_generation = %s",
-                    (str(attempts), candidate_id, candidate.get("processing_generation", 0)),
-                )
+                ev_data = candidate.get("evidence_data") or {}
+                ev_data["eval_attempts"] = attempts
+                db.update_candidate_generation(conn, candidate_id, candidate.get("processing_generation", 0), {"status": "discarded", "evidence_data": json.dumps(ev_data)})
                 return {"candidate_id": candidate_id, "score": 0, "rationale": f"LLM cognitive failure {attempts} times — discarded."}
             else:
                 logger.error(
@@ -279,11 +273,9 @@ def score_candidate(candidate_id: int) -> dict[str, Any]:
                     "Resetting status to 'new' for retry on next run.",
                     candidate_id, candidate["domain"], attempts,
                 )
-                db.execute(
-                    conn,
-                    "UPDATE candidates SET status = 'new', created_at = NOW(), evidence_data = jsonb_set(COALESCE(evidence_data, '{}'), '{eval_attempts}', %s::jsonb, true), lease_id = NULL, lease_expires_at = NULL WHERE id = %s AND processing_generation = %s",
-                    (str(attempts), candidate_id, candidate.get("processing_generation", 0)),
-                )
+                ev_data = candidate.get("evidence_data") or {}
+                ev_data["eval_attempts"] = attempts
+                db.update_candidate_generation(conn, candidate_id, candidate.get("processing_generation", 0), {"status": "new", "evidence_data": json.dumps(ev_data)})
                 return {"candidate_id": candidate_id, "score": 0, "rationale": f"LLM cognitive failure (attempt {attempts}) — will retry."}
 
         # 6. Write to evaluations
@@ -460,18 +452,10 @@ def trigger_scoring(campaign_id: int | None = None) -> dict:
 
                 with db.get_conn() as conn:
                     if is_shitty:
-                        db.execute(
-                            conn,
-                            "UPDATE candidates SET status = 'discarded', lease_id = NULL, lease_expires_at = NULL WHERE id = %s AND processing_generation = %s",
-                            (cand["id"], cand.get("processing_generation", 0))
-                        )
+                        db.update_candidate_generation(conn, cand["id"], cand.get("processing_generation", 0), {"status": "discarded"})
                         logger.info("Auto-rejected candidate %s: %s", cand["id"], reject_note)
                     else:
-                        db.execute(
-                            conn,
-                            "UPDATE candidates SET status = 'pending_review', lease_id = NULL, lease_expires_at = NULL WHERE id = %s AND processing_generation = %s",
-                            (cand["id"], cand.get("processing_generation", 0))
-                        )
+                        db.update_candidate_generation(conn, cand["id"], cand.get("processing_generation", 0), {"status": "pending_review"})
                         logger.info("Candidate %s passed evaluation (score %s >= %s) and is pending review", cand["id"], score, min_score)
                 return {"candidate_id": cand["id"], "status": "scored", "score": score}
             except Exception as exc:
