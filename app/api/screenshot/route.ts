@@ -49,11 +49,37 @@ export async function GET(request: NextRequest) {
       body: JSON.stringify({
         url: targetUrl,
         bestAttempt: true,
+        addScriptTag: [
+          {
+            content: `
+              // Remove GDPR/cookie consent modals before screenshot
+              const selectors = [
+                '[id*="cookie"]','[class*="cookie"]',
+                '[id*="gdpr"]','[class*="gdpr"]',
+                '[id*="consent"]','[class*="consent"]',
+                '[id*="banner"]','[class*="banner"]',
+                '[id*="popup"]','[class*="popup"]',
+                '.cc-window','.CookieDeclaration',
+                '#onetrust-banner-sdk','#CookieConsent',
+                '#cookie-law-info-bar','#cookieChoiceInfo'
+              ]
+              selectors.forEach(sel => {
+                document.querySelectorAll(sel).forEach(el => {
+                  const style = window.getComputedStyle(el)
+                  if (style.position === 'fixed' || style.position === 'sticky') {
+                    el.remove()
+                  }
+                })
+              })
+              document.body.style.overflow = 'auto'
+            `
+          }
+        ],
         gotoOptions: {
-          waitUntil: "domcontentloaded",
-          timeout: 15000
+          waitUntil: "networkidle",
+          timeout: 20000
         },
-        options: { type: "jpeg", quality: 70, fullPage: false },
+        options: { type: "jpeg", quality: 75, fullPage: false },
         viewport: { width: 1280, height: 800 }
       })
     })

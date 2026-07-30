@@ -115,6 +115,7 @@ export function Dashboard() {
   const [isN8nOpen, setIsN8nOpen] = useState(false)
   const [page, setPage] = useState(1)
   const [totalLeads, setTotalLeads] = useState(0)
+  const [rawCandidates, setRawCandidates] = useState<Array<{id:number;domain:string;company_name:string|null;source:string;status:string;created_at:string;enrichment_attempt_count:number}>>([]) 
   const limit = 1000
   const [usage, setUsage] = useState<{
     openRouterSpend: string
@@ -158,7 +159,8 @@ export function Dashboard() {
     setLoading(true)
     try {
       const dbId = DB_CAMPAIGN_IDS[campaignId]
-      const r = await fetch(`/api/leads?campaign_id=${dbId}&page=${currentPage}&limit=${limit}`)
+      // Only fetch fully-enriched leads (with enrichment_report) for the main dashboard view
+      const r = await fetch(`/api/leads?campaign_id=${dbId}&page=${currentPage}&limit=${limit}&require_enrichment=true`)
       if (r.status === 401) { setLoggedIn(false); return }
       const data = await r.json()
       setLeads((data.leads as Record<string, unknown>[]).map(rowToLead))
@@ -169,6 +171,19 @@ export function Dashboard() {
       setLoading(false)
     }
   }, [limit])
+
+  // Fetch raw pipeline candidates
+  const fetchCandidates = useCallback(async (campaignId: CampaignId) => {
+    try {
+      const dbId = DB_CAMPAIGN_IDS[campaignId]
+      const r = await fetch(`/api/candidates?campaign_id=${dbId}&limit=200`)
+      if (!r.ok) return
+      const data = await r.json()
+      setRawCandidates(data.candidates ?? [])
+    } catch {
+      // silently degrade
+    }
+  }, [])
 
   // Fetch usage for the header
   const fetchUsage = useCallback(async (campaignId: CampaignId) => {
@@ -200,8 +215,9 @@ export function Dashboard() {
     if (loggedIn) {
       fetchLeads(activeCampaign, page)
       fetchUsage(activeCampaign)
+      fetchCandidates(activeCampaign)
     }
-  }, [loggedIn, activeCampaign, page, fetchLeads, fetchUsage])
+  }, [loggedIn, activeCampaign, page, fetchLeads, fetchUsage, fetchCandidates])
 
   function toggleDarkMode() {
     setDarkMode((d) => {
@@ -336,30 +352,33 @@ export function Dashboard() {
               Review discovered leads and approve or reject them for outreach.
             </p>
           </div>
-          <div className="flex items-center gap-2 rounded-md border border-border bg-card p-1">
-            <a
-              href="/wp-hunter"
-              title="WP Compromise Hunter Pipeline"
-              className="flex size-8 items-center justify-center rounded-md text-cyan-600 dark:text-cyan-400 transition-colors hover:bg-cyan-500/15"
-            >
-              <Crosshair className="size-4" />
-            </a>
-            <a
-              href="/seo-spam-hunter"
-              title="SEO Spam & Backdoor Hunter Pipeline"
-              className="flex size-8 items-center justify-center rounded-md text-amber-600 dark:text-amber-400 transition-colors hover:bg-amber-500/15"
-            >
-              <ShieldAlert className="size-4" />
-            </a>
-            <a
-              href="/threat-feeds"
-              title="Threat Intel Feeds"
-              className="relative flex size-8 items-center justify-center rounded-md text-violet-600 dark:text-violet-400 transition-colors hover:bg-violet-500/15"
-            >
-              <Rss className="size-4" />
-              <span className="absolute top-1.5 right-1.5 size-1.5 rounded-full bg-violet-500" />
-            </a>
-          </div>
+          {/* WP-only pipeline shortcut icons */}
+          {activeCampaign === "wp-remediation" && (
+            <div className="flex items-center gap-2 rounded-md border border-border bg-card p-1">
+              <a
+                href="/wp-hunter"
+                title="WP Compromise Hunter Pipeline"
+                className="flex size-8 items-center justify-center rounded-md text-cyan-600 dark:text-cyan-400 transition-colors hover:bg-cyan-500/15"
+              >
+                <Crosshair className="size-4" />
+              </a>
+              <a
+                href="/seo-spam-hunter"
+                title="SEO Spam & Backdoor Hunter Pipeline"
+                className="flex size-8 items-center justify-center rounded-md text-amber-600 dark:text-amber-400 transition-colors hover:bg-amber-500/15"
+              >
+                <ShieldAlert className="size-4" />
+              </a>
+              <a
+                href="/threat-feeds"
+                title="Threat Intel Feeds"
+                className="relative flex size-8 items-center justify-center rounded-md text-violet-600 dark:text-violet-400 transition-colors hover:bg-violet-500/15"
+              >
+                <Rss className="size-4" />
+                <span className="absolute top-1.5 right-1.5 size-1.5 rounded-full bg-violet-500" />
+              </a>
+            </div>
+          )}
         </div>
 
         <PipelineStatus campaignId={DB_CAMPAIGN_IDS[activeCampaign]} />
@@ -378,6 +397,8 @@ export function Dashboard() {
               onSelect={(lead) => setSelectedId(lead.id)}
               onFilteredChange={setFilteredLeads}
               onBulkAction={handleBulkAction}
+              activeCampaign={activeCampaign}
+              rawCandidates={rawCandidates}
             />
             <div className="flex items-center justify-between px-2 text-sm text-muted-foreground">
               <div>

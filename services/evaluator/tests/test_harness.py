@@ -22,6 +22,7 @@ def test_auto_reject_shitty_jenex(mock_db, mock_score):
     ]
     mock_db.fetchone.return_value = {"settings": '{"blocked_domain_terms": ["jenex"]}'}
     mock_db.check_stop_signal.return_value = False
+    mock_db.execute.return_value = 1
     
     mock_score.return_value = {
         "score": 90,
@@ -36,8 +37,8 @@ def test_auto_reject_shitty_jenex(mock_db, mock_score):
     
     calls = mock_db.execute.call_args_list
     assert len(calls) > 0
-    query = calls[0][0][1]
-    assert "UPDATE candidates SET status = 'discarded'" in query
+    queries = [c[0][1] for c in calls]
+    assert any("UPDATE candidates SET status = 'discarded'" in q for q in queries)
 
 
 @patch("harness.score_candidate")
@@ -48,6 +49,7 @@ def test_auto_approve_high_score(mock_db, mock_score):
     ]
     mock_db.fetchone.return_value = {"settings": "{}"}
     mock_db.check_stop_signal.return_value = False
+    mock_db.execute.return_value = 1
     
     mock_score.return_value = {
         "score": 75,
@@ -61,8 +63,8 @@ def test_auto_approve_high_score(mock_db, mock_score):
     trigger_scoring(campaign_id=1)
     
     calls = mock_db.execute.call_args_list
-    query = calls[0][0][1]
-    assert "UPDATE candidates SET status = 'pending_review'" in query
+    queries = [c[0][1] for c in calls]
+    assert any("UPDATE candidates SET status = 'pending_review'" in q for q in queries)
 
 
 @patch("harness.db")
@@ -70,13 +72,14 @@ def test_ignore_paused_campaigns(mock_db):
     conn_mock = MagicMock()
     mock_db.get_conn.return_value.__enter__.return_value = conn_mock
     mock_db.fetchall.return_value = []
+    mock_db.execute.return_value = 1
     
     trigger_scoring()
     
     calls = mock_db.fetchall.call_args_list
     assert len(calls) > 0
-    query = calls[0][0][1]
-    assert "camp.status = 'active'" in query
+    queries = [c[0][1] for c in calls]
+    assert any("camp.status = 'active'" in q for q in queries)
 
 @patch("harness._select_scorer")
 @patch("harness.db")

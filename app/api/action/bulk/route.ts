@@ -35,7 +35,7 @@ export async function POST(request: NextRequest) {
     } else if (decision === "rerun_evaluation") {
       await query(
         `UPDATE candidates 
-         SET status = 'new'
+         SET status = 'new', enrichment_attempted_at = NULL, enrichment_attempt_count = 0
          WHERE id = ANY($1::int[])`,
         [candidate_ids]
       )
@@ -43,10 +43,24 @@ export async function POST(request: NextRequest) {
         `DELETE FROM evaluations WHERE candidate_id = ANY($1::int[])`,
         [candidate_ids]
       )
+      await query(
+        `DELETE FROM leads WHERE candidate_id = ANY($1::int[])`,
+        [candidate_ids]
+      )
+      
+      // Trigger evaluation in the background
+      fetch(`http://evaluator:8000/score/trigger?background=true`, {
+        method: "POST",
+        headers: {
+          "X-Internal-Token": process.env.INTERNAL_API_TOKEN || ""
+        }
+      }).catch(err => console.error("Failed to trigger evaluator:", err))
     } else if (decision === "rerun_enrichment") {
       await query(
         `UPDATE candidates 
-         SET status = 'evaluated', enrichment_attempted_at = NULL, enrichment_attempt_count = 0 
+         SET status = CASE WHEN status = 'enrichment_failed' THEN 'evaluated' ELSE status END,
+             enrichment_attempted_at = NULL, 
+             enrichment_attempt_count = 0 
          WHERE id = ANY($1::int[])`,
         [candidate_ids]
       )
@@ -54,6 +68,14 @@ export async function POST(request: NextRequest) {
         `DELETE FROM leads WHERE candidate_id = ANY($1::int[])`,
         [candidate_ids]
       )
+
+      // Trigger enrichment in the background
+      fetch(`http://stages:8000/stage5/run?background=true`, {
+        method: "POST",
+        headers: {
+          "X-Internal-Token": process.env.INTERNAL_API_TOKEN || ""
+        }
+      }).catch(err => console.error("Failed to trigger stages:", err))
     } else if (decision === "junk") {
       // 1. Fetch domains for these candidates to blocklist them globally
       const res = await query(

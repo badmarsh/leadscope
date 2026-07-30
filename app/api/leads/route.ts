@@ -29,15 +29,21 @@ export async function GET(request: NextRequest) {
   }
 
   const hideBroken = searchParams.get("hide_broken") !== "false" // default true
+  const requireEnrichment = searchParams.get("require_enrichment") === "true"
 
   // Hide approved leads that don't have proper enrichment data
   const enrichmentFilter = hideBroken 
     ? `AND (c.status != 'approved' OR (l.estimated_size IS NOT NULL AND l.estimated_revenue IS NOT NULL))`
     : ``
 
+  // When require_enrichment=true, only show leads with full enrichment in the main queue
+  const enrichedFilter = requireEnrichment
+    ? `AND (c.status NOT IN ('pending_review', 'approved') OR l.enrichment_report IS NOT NULL)`
+    : ``
+
   const statusCondition = statusFilter
-    ? `AND c.status = $2 ${enrichmentFilter}`
-    : `AND c.status IN ('pending_review', 'approved', 'rejected', 'enrichment_failed') ${enrichmentFilter}`
+    ? `AND c.status = $2 ${enrichmentFilter} ${enrichedFilter}`
+    : `AND c.status IN ('pending_review', 'approved', 'rejected', 'enrichment_failed') ${enrichmentFilter} ${enrichedFilter}`
 
   const values: unknown[] = [campaignId]
   if (statusFilter) values.push(statusFilter)

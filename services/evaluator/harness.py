@@ -287,6 +287,12 @@ def score_candidate(candidate_id: int) -> dict[str, Any]:
                 return {"candidate_id": candidate_id, "score": 0, "rationale": f"LLM cognitive failure (attempt {attempts}) — will retry."}
 
         # 6. Write to evaluations
+        # Optimistic concurrency check: if user clicked "Rerun Evaluation", status was reset to 'new'
+        curr = db.fetchone(conn, "SELECT status FROM candidates WHERE id = %s", (candidate_id,))
+        if not curr or curr["status"] != 'evaluating':
+            logger.info("Candidate %s was reset during scoring. Aborting save.", candidate_id)
+            return {"candidate_id": candidate_id, "score": 0, "aborted": True}
+
         eval_row = db.execute_returning(
             conn,
             """
@@ -420,6 +426,9 @@ def trigger_scoring(campaign_id: int | None = None) -> dict:
                 
             try:
                 result = score_candidate(cand["id"])
+                
+                if result.get("aborted"):
+                    return {"candidate_id": cand["id"], "status": "aborted"}
 
                 domain = (cand.get("domain") or "").lower()
                 company_name = (cand.get("company_name") or "").lower()
@@ -460,14 +469,14 @@ def trigger_scoring(campaign_id: int | None = None) -> dict:
                     if is_shitty:
                         db.execute(
                             conn,
-                            "UPDATE candidates SET status = 'discarded' WHERE id = %s",
+                            "UPDATE candidates SET status = 'discarded' WHERE id = %s AND status = 'evaluating'",
                             (cand["id"],)
                         )
                         logger.info("Auto-rejected candidate %s: %s", cand["id"], reject_note)
                     else:
                         db.execute(
                             conn,
-                            "UPDATE candidates SET status = 'pending_review' WHERE id = %s",
+                            "UPDATE candidates SET status = 'pending_review' WHERE id = %s AND status = 'evaluating'",
                             (cand["id"],)
                         )
                         logger.info("Candidate %s passed evaluation (score %s >= %s) and is pending review", cand["id"], score, min_score)

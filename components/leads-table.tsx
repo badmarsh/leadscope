@@ -2,15 +2,24 @@
 
 import { useMemo, useState, useEffect } from "react"
 import { ArrowDown, ArrowUp, ArrowUpDown, ExternalLink, Inbox, Search } from "lucide-react"
-import type { Lead } from "@/lib/leads-data"
-import { formatDate, scoreColorClasses, statusBadgeClasses, statusLabels } from "@/lib/status"
+import type { Lead, CampaignId } from "@/lib/leads-data"
+import { formatDate, scoreColorClasses, statusBadgeClasses, statusLabels, getLeadMissingFields } from "@/lib/status"
 import { cn } from "@/lib/utils"
-
 import { useTranslation } from "@/lib/i18n"
 
 type SortKey = "company" | "domain" | "score" | "status" | "dateFound"
 type SortDir = "asc" | "desc"
-type ViewFilter = "pending" | "reviewed" | "enrichment_failed"
+type ViewFilter = "pending" | "reviewed" | "enrichment_failed" | "pipeline"
+
+interface RawCandidate {
+  id: number
+  domain: string
+  company_name: string | null
+  source: string
+  status: string
+  created_at: string
+  enrichment_attempt_count: number
+}
 
 interface LeadsTableProps {
   leads: Lead[]
@@ -18,9 +27,11 @@ interface LeadsTableProps {
   onSelect: (lead: Lead) => void
   onFilteredChange?: (leads: Lead[]) => void
   onBulkAction?: (ids: string[], action: "approved" | "rejected" | "junk" | "rerun_evaluation" | "rerun_enrichment") => Promise<void>
+  activeCampaign?: CampaignId
+  rawCandidates?: RawCandidate[]
 }
 
-export function LeadsTable({ leads, selectedId, onSelect, onFilteredChange, onBulkAction }: LeadsTableProps) {
+export function LeadsTable({ leads, selectedId, onSelect, onFilteredChange, onBulkAction, activeCampaign, rawCandidates = [] }: LeadsTableProps) {
   const { t } = useTranslation()
 
   const columns: { key: SortKey; label: string; className?: string }[] = [
@@ -31,7 +42,7 @@ export function LeadsTable({ leads, selectedId, onSelect, onFilteredChange, onBu
     { key: "dateFound", label: t("leads_table.columns.date_found", { defaultValue: "Date found" }), className: "w-32" },
   ]
 
-  const emptyStates: Record<ViewFilter, { heading: string; sub: string }> = {
+  const emptyStates: Record<"pending"|"reviewed"|"enrichment_failed", { heading: string; sub: string }> = {
     pending: {
       heading: t("leads_table.empty.pending.heading", { defaultValue: "Queue is empty — great work!" }),
       sub: t("leads_table.empty.pending.sub", { defaultValue: "All leads have been reviewed or are awaiting enrichment." }),
@@ -111,6 +122,7 @@ export function LeadsTable({ leads, selectedId, onSelect, onFilteredChange, onBu
   const pendingCount = leads.filter((l) => l.status === "pending").length
   const reviewedCount = leads.filter((l) => l.status === "approved" || l.status === "rejected").length
   const failedCount = leads.filter((l) => l.status === "enrichment_failed").length
+  const pipelineCount = rawCandidates.length
 
   const allSelected = filtered.length > 0 && selectedIds.size === filtered.length
   const someSelected = selectedIds.size > 0 && selectedIds.size < filtered.length
@@ -184,6 +196,19 @@ export function LeadsTable({ leads, selectedId, onSelect, onFilteredChange, onBu
             )}
           >
             {t("leads_table.tabs.enrich_failed", { defaultValue: "Enrichment failed" })} <span className="font-mono">({failedCount})</span>
+          </button>
+          <button
+            role="tab"
+            aria-selected={view === "pipeline"}
+            onClick={() => { setView("pipeline"); setSelectedIds(new Set()) }}
+            className={cn(
+              "rounded px-2.5 py-1 text-xs transition-colors",
+              view === "pipeline"
+                ? "bg-card font-medium text-card-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            {t("leads_table.tabs.pipeline", { defaultValue: "Pipeline" })} <span className="font-mono">({pipelineCount})</span>
           </button>
         </div>
       </div>
@@ -293,6 +318,9 @@ export function LeadsTable({ leads, selectedId, onSelect, onFilteredChange, onBu
                   className="size-3.5 rounded border-input bg-background text-primary"
                 />
               </th>
+              <th scope="col" className="w-8 px-2 py-2 text-center" title={t("leads_table.columns.completeness", { defaultValue: "Completeness" })}>
+                <span className="text-xs text-muted-foreground">●</span>
+              </th>
               {columns.map((col) => (
                 <th key={col.key} scope="col" className={cn("px-4 py-2 text-left", col.className)}>
                   <button
@@ -315,15 +343,15 @@ export function LeadsTable({ leads, selectedId, onSelect, onFilteredChange, onBu
             </tr>
           </thead>
           <tbody>
-            {filtered.length === 0 && (
+            {filtered.length === 0 && view !== "pipeline" && (
               <tr>
-                <td colSpan={columns.length + 1} className="px-4 py-12">
+                <td colSpan={columns.length + 2} className="px-4 py-12">
                   <div className="flex flex-col items-center gap-2 text-center">
                     <div className="flex size-10 items-center justify-center rounded-full bg-muted">
                       <Inbox className="size-5 text-muted-foreground" aria-hidden="true" />
                     </div>
-                    <p className="text-sm font-medium text-card-foreground">{emptyStates[view].heading}</p>
-                    <p className="text-sm text-muted-foreground">{emptyStates[view].sub}</p>
+                    <p className="text-sm font-medium text-card-foreground">{emptyStates[view as "pending"|"reviewed"|"enrichment_failed"].heading}</p>
+                    <p className="text-sm text-muted-foreground">{emptyStates[view as "pending"|"reviewed"|"enrichment_failed"].sub}</p>
                   </div>
                 </td>
               </tr>
@@ -398,11 +426,26 @@ export function LeadsTable({ leads, selectedId, onSelect, onFilteredChange, onBu
                         statusBadgeClasses[lead.status],
                       )}
                     >
-                      {statusLabels[lead.status]}
+                      {t(`status.${lead.status}`, { defaultValue: statusLabels[lead.status] })}
                     </span>
                   </td>
                   <td className="whitespace-nowrap px-4 py-3 font-mono text-xs text-muted-foreground">
                     {formatDate(lead.dateFound)}
+                  </td>
+                  <td className="px-2 py-3 text-center" onClick={(e) => e.stopPropagation()}>
+                    {(() => {
+                      const missing = getLeadMissingFields(lead)
+                      const complete = missing.length === 0
+                      return (
+                        <span
+                          title={complete ? "Complete" : `Missing: ${missing.join(", ")}`}
+                          className={cn(
+                            "inline-block size-2.5 rounded-full cursor-help",
+                            complete ? "bg-emerald-500" : "bg-red-500"
+                          )}
+                        />
+                      )
+                    })()}
                   </td>
                 </tr>
               )
@@ -410,6 +453,73 @@ export function LeadsTable({ leads, selectedId, onSelect, onFilteredChange, onBu
           </tbody>
         </table>
       </div>
+
+      {/* Pipeline tab: raw candidates pre-evaluation */}
+      {view === "pipeline" && (
+        <div className="overflow-x-auto">
+          {rawCandidates.length === 0 ? (
+            <div className="flex flex-col items-center gap-2 py-12 text-center">
+              <div className="flex size-10 items-center justify-center rounded-full bg-muted">
+                <Inbox className="size-5 text-muted-foreground" aria-hidden="true" />
+              </div>
+              <p className="text-sm font-medium text-card-foreground">{t("leads_table.empty.pipeline.heading", { defaultValue: "No candidates in pipeline" })}</p>
+              <p className="text-sm text-muted-foreground">{t("leads_table.empty.pipeline.sub", { defaultValue: "Candidates discovered by Stage 2 will appear here before evaluation." })}</p>
+            </div>
+          ) : (
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border">
+                  <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">Domain</th>
+                  <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">{t("pipeline.source", { defaultValue: "Source" })}</th>
+                  <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">{t("leads_table.columns.status", { defaultValue: "Status" })}</th>
+                  <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">{t("leads_table.columns.date_found", { defaultValue: "Date found" })}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rawCandidates.map((cand) => {
+                  const statusColorMap: Record<string, string> = {
+                    new: "bg-blue-500/10 text-blue-500",
+                    evaluating: "bg-yellow-500/10 text-yellow-600",
+                    evaluated: "bg-emerald-500/10 text-emerald-600",
+                    discarded: "bg-zinc-500/10 text-zinc-500",
+                    duplicate: "bg-zinc-500/10 text-zinc-500",
+                    enrichment_failed: "bg-orange-500/10 text-orange-500",
+                  }
+                  return (
+                    <tr key={cand.id} className="border-b border-border/60 last:border-0">
+                      <td className="px-4 py-2">
+                        <div className="flex items-center gap-2">
+                          <img
+                            src={`https://www.google.com/s2/favicons?domain=${cand.domain}&sz=32`}
+                            alt="" className="size-4 rounded bg-white" loading="lazy"
+                          />
+                          <a
+                            href={`https://${cand.domain}`}
+                            target="_blank" rel="noopener noreferrer"
+                            className="font-mono text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+                          >
+                            {cand.company_name || cand.domain}
+                          </a>
+                        </div>
+                      </td>
+                      <td className="px-4 py-2 font-mono text-xs text-muted-foreground">{cand.source}</td>
+                      <td className="px-4 py-2">
+                        <span className={cn("inline-block rounded-full px-2 py-0.5 text-xs font-medium", statusColorMap[cand.status] ?? "bg-muted text-muted-foreground")}>
+                          {t(`pipeline.status.${cand.status}`, { defaultValue: cand.status })}
+                          {cand.enrichment_attempt_count > 0 && ` (${cand.enrichment_attempt_count})`}
+                        </span>
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-2 font-mono text-xs text-muted-foreground">
+                        {formatDate(new Date(cand.created_at).toLocaleDateString("en-CA"))}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
     </section>
   )
 }

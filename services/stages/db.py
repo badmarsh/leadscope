@@ -152,6 +152,10 @@ def acquire_stage_lock(campaign_id: int, stage: str) -> bool:
     try:
         conn.autocommit = True
         with conn.cursor() as cur:
+            cur.execute("SELECT id FROM campaigns WHERE id = %s", (campaign_id,))
+            if not cur.fetchone():
+                raise ValueError(f"Campaign {campaign_id} not found")
+
             cur.execute(
                 f"UPDATE campaigns SET {stage}_status = 'running', "
                 f"{stage}_last_run = NOW() "

@@ -216,7 +216,7 @@ export function LeadDrawer({ lead, onClose, onDecision, onReopen, onNavigate, ha
         <div className="flex-1 overflow-y-auto px-5 py-4">
           <section aria-label="Rationale">
             <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Rationale
+              {t("lead_drawer.rationale", { defaultValue: "Rationale" })}
             </h3>
             <p className="mt-2 text-sm leading-relaxed text-foreground">{lead.rationale}</p>
           </section>
@@ -224,7 +224,7 @@ export function LeadDrawer({ lead, onClose, onDecision, onReopen, onNavigate, ha
           {(lead.enrichment_report || lead.contact_email || lead.contact_phone || (lead.products_sold && lead.products_sold.length > 0) || lead.screenshot_url || lead.domain || lead.estimated_size || lead.estimated_revenue || lead.estimated_traffic) && (
             <section aria-label="Company Overview" className="mt-6 border-t border-border pt-6">
               <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Company Overview
+                {t("lead_drawer.company_overview", { defaultValue: "Company Overview" })}
               </h3>
 
               {(lead.estimated_size || lead.estimated_revenue || lead.estimated_traffic) && (
@@ -232,17 +232,17 @@ export function LeadDrawer({ lead, onClose, onDecision, onReopen, onNavigate, ha
                   <div className="flex flex-col items-center justify-center rounded-md border border-border bg-card p-3 text-center">
                     <Users className="mb-1.5 size-4 text-muted-foreground" aria-hidden="true" />
                     <span className="text-xs font-medium text-foreground">{lead.estimated_size || "Unknown"}</span>
-                    <span className="mt-0.5 text-[10px] uppercase text-muted-foreground">Employees</span>
+                    <span className="mt-0.5 text-[10px] uppercase text-muted-foreground">{t("lead_drawer.employees", { defaultValue: "Employees" })}</span>
                   </div>
                   <div className="flex flex-col items-center justify-center rounded-md border border-border bg-card p-3 text-center">
                     <Euro className="mb-1.5 size-4 text-muted-foreground" aria-hidden="true" />
                     <span className="text-xs font-medium text-foreground">{lead.estimated_revenue || "Unknown"}</span>
-                    <span className="mt-0.5 text-[10px] uppercase text-muted-foreground">Revenue</span>
+                    <span className="mt-0.5 text-[10px] uppercase text-muted-foreground">{t("lead_drawer.revenue", { defaultValue: "Revenue" })}</span>
                   </div>
                   <div className="flex flex-col items-center justify-center rounded-md border border-border bg-card p-3 text-center">
                     <Activity className="mb-1.5 size-4 text-muted-foreground" aria-hidden="true" />
                     <span className="text-xs font-medium text-foreground">{lead.estimated_traffic || "Unknown"}</span>
-                    <span className="mt-0.5 text-[10px] uppercase text-muted-foreground">Web Traffic</span>
+                    <span className="mt-0.5 text-[10px] uppercase text-muted-foreground">{t("lead_drawer.web_traffic", { defaultValue: "Web Traffic" })}</span>
                   </div>
                 </div>
               )}
@@ -272,7 +272,15 @@ export function LeadDrawer({ lead, onClose, onDecision, onReopen, onNavigate, ha
                   </div>
                   <figcaption className="flex items-center gap-1.5 bg-muted px-2 py-1.5 font-mono text-xs text-muted-foreground">
                     <span className="size-1.5 rounded-full bg-emerald-500 inline-block" />
-                    {lead.domain} — Homepage
+                    <a
+                      href={`https://${lead.domain}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="hover:underline underline-offset-2 hover:text-foreground"
+                    >
+                      {lead.domain}
+                    </a>
+                    {" — "}{t("lead_drawer.homepage", { defaultValue: "Homepage" })}
                   </figcaption>
                 </figure>
               )}
@@ -286,13 +294,13 @@ export function LeadDrawer({ lead, onClose, onDecision, onReopen, onNavigate, ha
               <div className="mt-4 flex flex-col gap-2">
                 {lead.contact_name && (
                   <div className="flex items-center justify-between border-b border-border pb-2 text-sm">
-                    <span className="text-muted-foreground">Name:</span>
+                    <span className="text-muted-foreground">{t("lead_drawer.contact_name", { defaultValue: "Name" })}:</span>
                     <span className="font-medium text-foreground">{lead.contact_name}</span>
                   </div>
                 )}
                 {lead.contact_email && (
                   <div className="flex items-center justify-between border-b border-border pb-2 text-sm">
-                    <span className="text-muted-foreground">Email:</span>
+                    <span className="text-muted-foreground">{t("lead_drawer.email", { defaultValue: "Email" })}:</span>
                     <div className="flex items-center gap-1">
                       <a
                         href={`mailto:${lead.contact_email}`}
@@ -316,7 +324,7 @@ export function LeadDrawer({ lead, onClose, onDecision, onReopen, onNavigate, ha
                 )}
                 {lead.contact_phone && (
                   <div className="flex items-center justify-between border-b border-border pb-2 text-sm">
-                    <span className="text-muted-foreground">Phone:</span>
+                    <span className="text-muted-foreground">{t("lead_drawer.phone", { defaultValue: "Phone" })}:</span>
                     <div className="flex items-center gap-1">
                       <a
                         href={`tel:${lead.contact_phone}`}
@@ -342,7 +350,7 @@ export function LeadDrawer({ lead, onClose, onDecision, onReopen, onNavigate, ha
 
               {lead.products_sold && lead.products_sold.length > 0 && (
                 <div className="mt-4">
-                  <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Products/Services</span>
+                  <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{t("lead_drawer.products_services", { defaultValue: "Products / Services" })}</span>
                   <ul className="mt-2 flex flex-col gap-1 text-sm text-foreground">
                     {lead.products_sold.map((product, i) => (
                       <li key={i} className="flex items-start gap-2">
@@ -358,7 +366,7 @@ export function LeadDrawer({ lead, onClose, onDecision, onReopen, onNavigate, ha
 
           <section aria-label="Evidence" className="mt-6 border-t border-border pt-6">
             <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Evidence
+              {t("lead_drawer.evidence", { defaultValue: "Evidence" })}
             </h3>
 
             {lead.evidence.kind === "urls" && (
@@ -400,7 +408,7 @@ export function LeadDrawer({ lead, onClose, onDecision, onReopen, onNavigate, ha
               ) : (
                 <div className="mt-2 flex items-center gap-2 rounded-md border border-dashed border-border px-3 py-4 text-sm text-muted-foreground">
                   <ImageOff className="size-4" aria-hidden="true" />
-                  No photos could be scraped for this lead.
+                  {t("lead_drawer.no_photos", { defaultValue: "No product images could be scraped for this lead." })}
                 </div>
               ))}
 
@@ -428,9 +436,88 @@ export function LeadDrawer({ lead, onClose, onDecision, onReopen, onNavigate, ha
             )}
           </section>
 
-          {/* Phase X — Threat Intel Panel */}
+          {/* Campaign-conditional right panel: PDF brochure (Jenex), Product List (shoe-photo), Threat Intel (wp-remediation) */}
           {(() => {
             const ed = lead.evidence_data as Record<string, unknown> | undefined
+            const campaignId = lead.campaignId
+
+            if (campaignId === "jenex") {
+              // Jenex: show PDF Brochure / Catalogue section
+              const pdfUrl = (ed?.pdf_brochure_url ?? ed?.catalogue_url ?? ed?.brochure_url) as string | undefined
+              return (
+                <section aria-label="PDF Brochure" className="mt-6 border-t border-border pt-6">
+                  <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">
+                    {t("lead_drawer.pdf_brochure", { defaultValue: "PDF Brochure / Catalogue" })}
+                  </h3>
+                  {pdfUrl ? (
+                    <a
+                      href={pdfUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-2 rounded-md border border-border bg-card px-3 py-2 text-sm text-card-foreground transition-colors hover:bg-accent"
+                    >
+                      <ExternalLink className="size-3.5 shrink-0 text-muted-foreground" />
+                      <span className="truncate font-mono text-xs">{pdfUrl}</span>
+                    </a>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">{t("lead_drawer.no_brochure", { defaultValue: "No brochure URL found" })}</p>
+                  )}
+                </section>
+              )
+            }
+
+            if (campaignId === "shoe-photo") {
+              // Shoe-photo: show Product List section
+              const productsUrl = (ed?.products_url ?? ed?.product_list_url) as string | undefined
+              const productCount = (ed?.product_count ?? ed?.total_products) as number | undefined
+              const categories = (ed?.product_categories ?? ed?.categories) as string[] | undefined
+              const hasProductData = productsUrl || productCount !== undefined || (categories && categories.length > 0)
+              return (
+                <section aria-label="Product List" className="mt-6 border-t border-border pt-6">
+                  <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">
+                    {t("lead_drawer.product_list", { defaultValue: "Product List" })}
+                  </h3>
+                  {hasProductData ? (
+                    <div className="flex flex-col gap-2">
+                      {productsUrl && (
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-muted-foreground">{t("lead_drawer.products_url", { defaultValue: "Products URL" })}:</span>
+                          <a
+                            href={productsUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 font-mono text-xs text-primary underline-offset-2 hover:underline"
+                          >
+                            {productsUrl}
+                            <ExternalLink className="size-3" />
+                          </a>
+                        </div>
+                      )}
+                      {productCount !== undefined && (
+                        <div className="flex items-center justify-between border-t border-border pt-2 text-sm">
+                          <span className="text-muted-foreground">{t("lead_drawer.product_count", { defaultValue: "Products" })}:</span>
+                          <span className="font-medium text-foreground">{productCount}</span>
+                        </div>
+                      )}
+                      {categories && categories.length > 0 && (
+                        <div className="border-t border-border pt-2">
+                          <span className="text-xs text-muted-foreground">{t("lead_drawer.product_categories", { defaultValue: "Categories" })}:</span>
+                          <div className="mt-1.5 flex flex-wrap gap-1">
+                            {categories.map((cat, i) => (
+                              <span key={i} className="rounded-full bg-accent px-2 py-0.5 text-xs text-accent-foreground">{cat}</span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">{t("lead_drawer.no_product_data", { defaultValue: "No product data found" })}</p>
+                  )}
+                </section>
+              )
+            }
+
+            // WP-remediation (and any other campaign): Threat Intelligence panel
             const proof = (lead.proof_data ?? ed?.proof_data ?? null) as PhaseXProof | null
             const exposure = (lead.exposure_scan ?? ed?.exposure_scan ?? null) as PhaseXExposure | null
             const auditUrl = lead.audit_token ? `${typeof window !== "undefined" ? window.location.origin : ""}/audit/${lead.audit_token}` : null
@@ -440,7 +527,9 @@ export function LeadDrawer({ lead, onClose, onDecision, onReopen, onNavigate, ha
             if (!hasPhaseX) return null
             return (
               <section aria-label="Phase X Intel" className="mt-6 border-t border-border pt-6">
-                <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">Threat Intelligence</h3>
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">
+                  {t("lead_drawer.threat_intel", { defaultValue: "Threat Intelligence" })}
+                </h3>
                 <div className="flex flex-col gap-3">
                   {firmographicScore !== undefined && (
                     <div className="rounded-md border border-blue-500/30 bg-blue-500/5 p-3">
@@ -523,7 +612,7 @@ export function LeadDrawer({ lead, onClose, onDecision, onReopen, onNavigate, ha
           {lead.status === "approved" && (
             <section aria-label="Draft Email" className="mt-6 border-t border-border pt-6">
               <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Draft Email
+                {t("lead_drawer.draft_email", { defaultValue: "Draft Email" })}
               </h3>
               {lead.draft_email ? (
                 <div className="group relative mt-3 rounded-md border border-border bg-card p-3">

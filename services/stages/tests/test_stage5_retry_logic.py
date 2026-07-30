@@ -73,7 +73,7 @@ class TestEnrichmentAttemptCountOnSuccess:
             # Patch db.fetchone to simulate no DNC and no cooldown check needed
             with patch("stage5.db.fetchone", return_value=None), \
                  patch("stage5.db.execute", side_effect=fake_db_execute), \
-                 patch("stage5._crawler_scrape", return_value=("Rich page content for a great website that has lots of detail and many words", [])), \
+                 patch("stage5._crawler_scrape", return_value=("Rich page content for a great website that has lots of detail and many words. " * 10, [])), \
                  patch("stage5._extract_structured_data", return_value={}), \
                  patch("stage5._enrich_info", return_value=({
                      "company_overview_sk": "Test firma",

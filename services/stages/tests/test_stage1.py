@@ -12,8 +12,8 @@ def _mock_icp_json():
         "target_segments": [
             {"name": "E-commerce", "description": "Online stores.", "priority": "high"}
         ],
-        "keywords_hu": ["webáruház", "online bolt"],
-        "keywords_en": ["online store", "ecommerce"],
+        "keywords_hu": ["magyar webáruház", "online bolt"],
+        "keywords_en": ["online store", "ecommerce site"],
         "disqualifiers": {
             "exclude_if": ["B2B"],
             "sectors_out": ["Government"]

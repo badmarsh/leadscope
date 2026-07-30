@@ -1,9 +1,20 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { POST } from '../../app/api/wp-hunter/run/route'
 import fs from 'fs/promises'
-import * as child_process from 'child_process'
 
-// Mock dependencies
+const mockedExecAsync = vi.hoisted(() => vi.fn().mockResolvedValue({ stdout: 'mocked stdout', stderr: '' }))
+
+vi.mock('child_process', () => {
+  const customSymbol = Symbol.for('nodejs.util.promisify.custom')
+  const mockExec = Object.assign(vi.fn(), {
+    [customSymbol]: mockedExecAsync,
+  })
+  return {
+    default: { exec: mockExec, spawn: vi.fn() },
+    exec: mockExec,
+    spawn: vi.fn(),
+  }
+})
+
 vi.mock('fs/promises', () => {
   return {
     default: {
@@ -13,24 +24,7 @@ vi.mock('fs/promises', () => {
   }
 })
 
-const mockedExecAsync = vi.fn().mockResolvedValue({ stdout: 'mocked stdout', stderr: '' })
-
-vi.mock('util', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('util')>()
-  return {
-    ...actual,
-    promisify: () => mockedExecAsync
-  }
-})
-
-vi.mock('child_process', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('child_process')>()
-  return {
-    ...actual,
-    exec: vi.fn(),
-    spawn: vi.fn(),
-  }
-})
+import { POST } from '../../app/api/wp-hunter/run/route'
 
 describe('POST /api/wp-hunter/run', () => {
   beforeEach(() => {
@@ -64,6 +58,10 @@ describe('POST /api/wp-hunter/run', () => {
     })
     
     const res = await POST(req)
+    const json = await res.json()
+    if (res.status !== 200) {
+      console.log('TEST ERROR RESPONSE:', json)
+    }
     expect(res.status).toBe(200)
     
     expect(mockedExecAsync).toHaveBeenCalled()

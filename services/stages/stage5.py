@@ -423,6 +423,12 @@ def _enrich_candidate(candidate: dict, campaign: dict, conn, settings: dict | No
     mx_valid = _has_valid_mx(email_domain) if email_domain else None
 
     # ── Insert into leads ─────────────────────────────────────────────────────
+    # Optimistic concurrency check: if user clicked "Rerun Enrichment", enrichment_attempt_count was reset to 0
+    curr = db.fetchone(conn, "SELECT enrichment_attempt_count FROM candidates WHERE id = %s", (candidate_id,))
+    if curr and curr["enrichment_attempt_count"] == 0:
+        logger.info("Stage 5: Candidate %s was reset by dashboard during enrichment. Aborting save.", candidate_id)
+        return {"candidate_id": candidate_id, "outcome": "aborted_reset"}
+
     db.execute(
         conn,
         """

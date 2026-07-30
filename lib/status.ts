@@ -1,4 +1,4 @@
-import type { LeadStatus } from "@/lib/leads-data"
+import type { Lead, LeadStatus } from "@/lib/leads-data"
 
 export const statusLabels: Record<LeadStatus, string> = {
   pending: "Pending",
@@ -43,4 +43,38 @@ export function formatTimestamp(iso: string | null | undefined): string {
     hour12: false,
     timeZone: "UTC",
   })
+}
+
+/** Returns list of missing required field labels for a lead, empty = complete (green). */
+export function getLeadMissingFields(lead: Lead): string[] {
+  const missing: string[] = []
+  const ed = (lead.evidence_data ?? {}) as Record<string, unknown>
+
+  // Universal checks
+  if (!lead.rationale) missing.push("Rationale")
+  if (!lead.enrichment_report) missing.push("Company overview")
+  if (!lead.screenshot_url) missing.push("Screenshot")
+  if (!lead.contact_email) missing.push("Email")
+  if (!lead.contact_phone) missing.push("Phone")
+  if (!lead.products_sold || lead.products_sold.length === 0) missing.push("Products/Services")
+
+  // Evidence check
+  if (lead.campaignId === "jenex") {
+    if (lead.evidence.kind !== "urls" || (lead.evidence as { kind: "urls"; urls: string[] }).urls.length === 0) {
+      missing.push("Evidence URLs")
+    }
+    // PDF brochure is nice-to-have, not hard required for green
+  } else if (lead.campaignId === "shoe-photo") {
+    if (lead.evidence.kind !== "photos" || (lead.evidence as { kind: "photos"; photos: unknown[] }).photos.length === 0) {
+      missing.push("Product images")
+    }
+  } else if (lead.campaignId === "wp-remediation") {
+    if (lead.evidence.kind !== "malware") missing.push("Malware evidence")
+  }
+
+  return missing
+}
+
+export function isLeadComplete(lead: Lead): boolean {
+  return getLeadMissingFields(lead).length === 0
 }

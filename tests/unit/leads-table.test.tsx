@@ -94,3 +94,89 @@ describe('LeadsTable Component', () => {
     expect(screen.getByText('Duna Épületgépészet Zrt.')).toBeInTheDocument();
   });
 });
+
+describe('Pipeline tab', () => {
+  const rawCandidates = [
+    { id: 1, domain: 'pipelinesite.sk', company_name: 'Pipeline Co', source: 'publicwww', 
+      status: 'new', created_at: '2026-07-01T00:00:00Z', enrichment_attempt_count: 0 },
+    { id: 2, domain: 'failed.sk', company_name: null, source: 'manual',
+      status: 'enrichment_failed', created_at: '2026-07-02T00:00:00Z', enrichment_attempt_count: 3 },
+  ];
+
+  it('shows Pipeline tab with count badge', () => {
+    render(
+      <LeadsTable leads={leads} selectedId={null} onSelect={vi.fn()} rawCandidates={rawCandidates} />
+    );
+    expect(screen.getByRole('tab', { name: /Pipeline/i })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /Pipeline/i }).textContent).toContain('2');
+  });
+
+  it('renders pipeline candidates when tab is clicked', () => {
+    render(
+      <LeadsTable leads={leads} selectedId={null} onSelect={vi.fn()} rawCandidates={rawCandidates} />
+    );
+    fireEvent.click(screen.getByRole('tab', { name: /Pipeline/i }));
+    expect(screen.getByText('Pipeline Co')).toBeInTheDocument();
+  });
+
+  it('shows empty state when no rawCandidates', () => {
+    render(
+      <LeadsTable leads={leads} selectedId={null} onSelect={vi.fn()} rawCandidates={[]} />
+    );
+    fireEvent.click(screen.getByRole('tab', { name: /Pipeline/i }));
+    expect(screen.getByText(/No candidates in pipeline/i)).toBeInTheDocument();
+  });
+
+  it('shows attempt count for enrichment_failed candidates', () => {
+    render(
+      <LeadsTable leads={leads} selectedId={null} onSelect={vi.fn()} rawCandidates={rawCandidates} />
+    );
+    fireEvent.click(screen.getByRole('tab', { name: /Pipeline/i }));
+    expect(screen.getAllByText(/\(3\)/).length).toBeGreaterThanOrEqual(1);
+  });
+});
+
+describe('Completeness dot', () => {
+  it('renders a dot cell for each lead row', () => {
+    render(<LeadsTable leads={leads} selectedId={null} onSelect={vi.fn()} />);
+    const dots = document.querySelectorAll('.bg-emerald-500, .bg-red-500');
+    expect(dots.length).toBeGreaterThan(0);
+  });
+
+  it('dot is green for complete lead', () => {
+    const completeLead = {
+      ...leads[0],
+      status: 'pending' as const,
+      rationale: 'Good fit',
+      enrichment_report: 'Overview',
+      screenshot_url: 'https://ss.example.com/img.jpg',
+      contact_email: 'a@b.com',
+      contact_phone: '+421900000000',
+      products_sold: ['Product'],
+      evidence: { kind: 'urls' as const, urls: ['https://example.com'] },
+      campaignId: 'jenex' as const,
+    };
+    render(<LeadsTable leads={[completeLead]} selectedId={null} onSelect={vi.fn()} />);
+    const greenDot = document.querySelector('.bg-emerald-500');
+    expect(greenDot).toBeTruthy();
+  });
+
+  it('dot is red for incomplete lead', () => {
+    const incompleteLead = {
+      ...leads[0],
+      status: 'pending' as const,
+      contact_email: undefined,
+      screenshot_url: undefined,
+    };
+    render(<LeadsTable leads={[incompleteLead]} selectedId={null} onSelect={vi.fn()} />);
+    const redDot = document.querySelector('.bg-red-500');
+    expect(redDot).toBeTruthy();
+  });
+
+  it('dot tooltip lists missing fields', () => {
+    const incompleteLead = { ...leads[0], status: 'pending' as const, contact_email: undefined };
+    render(<LeadsTable leads={[incompleteLead]} selectedId={null} onSelect={vi.fn()} />);
+    const redDot = document.querySelector('.bg-red-500');
+    expect(redDot?.getAttribute('title')).toContain('Email');
+  });
+});

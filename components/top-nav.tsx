@@ -110,7 +110,7 @@ export function TopNav({
               onClick={onDncOpen}
               title="Exclusions (Do Not Contact)"
               aria-label="Exclusions"
-              className="flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/80 hover:text-destructive"
+              className="flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-red-500/15 hover:text-red-600 dark:hover:text-red-400"
             >
               <ShieldBan className="size-4" />
             </button>
