@@ -117,10 +117,12 @@ describe("GET /api/screenshot", () => {
   })
 
   it("returns 502 when browserless returns 5xx", async () => {
+    const consoleSpy = vi.spyOn(console, "warn").mockImplementation(() => {})
     mockFetch.mockResolvedValue({ ok: false, status: 503, statusText: "Service Unavailable" })
     const req = new NextRequest("http://localhost/api/screenshot?url=https://safe.com")
     const res = await GET(req)
     expect(res.status).toBe(502)
+    consoleSpy.mockRestore()
   })
 
   it("returns Cache-Control header on success", async () => {

@@ -269,7 +269,8 @@ def _enrich_candidate(candidate: dict, campaign: dict, conn, settings: dict | No
     retry_hours = int(effective_settings.get("enrichment_retry_hours", config.ENRICHMENT_RETRY_HOURS))
     max_attempts = int(effective_settings.get("max_enrichment_attempts", config.MAX_ENRICHMENT_ATTEMPTS))
 
-    if candidate.get("enrichment_attempted_at") is not None:
+    # If candidate was NOT claimed via lease_id, verify cooldown in DB
+    if candidate.get("enrichment_attempted_at") is not None and not candidate.get("lease_id"):
         cooling = db.fetchone(
             conn,
             """
