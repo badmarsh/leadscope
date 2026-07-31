@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { Terminal, X } from 'lucide-react'
+import { Terminal, X, ArrowDown } from 'lucide-react'
 
 export function LogViewer() {
   const [isOpen, setIsOpen] = useState(false)
@@ -20,7 +20,7 @@ export function LogViewer() {
           const res = await fetch('/api/logs')
           const data = await res.json()
           if (data.logs) {
-            setLogs(data.logs)
+            setLogs((prev) => (prev === data.logs ? prev : data.logs))
           }
         } catch (err) {
           console.error('Failed to fetch logs', err)
@@ -28,7 +28,7 @@ export function LogViewer() {
       }
 
       fetchLogs()
-      interval = setInterval(fetchLogs, 2000)
+      interval = setInterval(fetchLogs, 3000)
     }
 
     return () => {
@@ -39,13 +39,20 @@ export function LogViewer() {
   const handleScroll = () => {
     if (!scrollContainerRef.current) return
     const { scrollTop, scrollHeight, clientHeight } = scrollContainerRef.current
-    const isAtBottom = Math.abs(scrollHeight - scrollTop - clientHeight) < 50
+    const isAtBottom = Math.abs(scrollHeight - scrollTop - clientHeight) < 60
     setAutoScroll(isAtBottom)
+  }
+
+  const scrollToBottom = () => {
+    if (endRef.current) {
+      endRef.current.scrollIntoView({ behavior: 'auto' })
+      setAutoScroll(true)
+    }
   }
 
   useEffect(() => {
     if (isOpen && autoScroll && endRef.current) {
-      endRef.current.scrollIntoView({ behavior: 'smooth' })
+      endRef.current.scrollIntoView({ behavior: 'auto' })
     }
   }, [logs, isOpen, autoScroll])
 
@@ -118,12 +125,23 @@ export function LogViewer() {
                 <Terminal className="size-4 text-[#22d3ee]" />
                 <h2 className="text-sm font-medium text-slate-200 uppercase tracking-wider">System Logs</h2>
               </div>
-              <button
-                onClick={() => setIsOpen(false)}
-                className="rounded-md p-1.5 text-slate-400 transition-colors hover:bg-slate-700 hover:text-white"
-              >
-                <X className="size-4" />
-              </button>
+              <div className="flex items-center gap-2">
+                {!autoScroll && (
+                  <button
+                    onClick={scrollToBottom}
+                    className="flex items-center gap-1 text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 px-2.5 py-1 rounded border border-slate-700 transition-colors"
+                  >
+                    <ArrowDown className="size-3 text-[#22d3ee]" />
+                    <span>Scroll to latest</span>
+                  </button>
+                )}
+                <button
+                  onClick={() => setIsOpen(false)}
+                  className="rounded-md p-1.5 text-slate-400 transition-colors hover:bg-slate-700 hover:text-white"
+                >
+                  <X className="size-4" />
+                </button>
+              </div>
             </div>
             
             <div 
