@@ -8,7 +8,10 @@ export default function AdminHealthDashboard() {
 
   useEffect(() => {
     fetch("/api/admin/health")
-      .then(res => res.json())
+      .then(res => {
+        if (!res.ok) throw new Error("Failed to fetch health data")
+        return res.json()
+      })
       .then(json => {
         if (json.ok) setData(json.data)
         setLoading(false)

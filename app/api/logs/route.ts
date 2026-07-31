@@ -21,15 +21,18 @@ export async function GET() {
 
     // Read only the tail (last MAX_BYTES) without shelling out
     const fd = await fs.open(LOG_FILE, 'r')
-    const start = Math.max(0, stat.size - MAX_BYTES)
-    const buffer = Buffer.alloc(stat.size - start)
-    await fd.read(buffer, 0, buffer.length, start)
-    await fd.close()
+    try {
+      const start = Math.max(0, stat.size - MAX_BYTES)
+      const buffer = Buffer.alloc(stat.size - start)
+      await fd.read(buffer, 0, buffer.length, start)
 
-    const logs = buffer.toString('utf-8')
-    // If we started mid-line, trim to first newline for cleanliness
-    const firstNl = logs.indexOf('\n')
-    return NextResponse.json({ logs: start > 0 && firstNl > -1 ? logs.slice(firstNl + 1) : logs })
+      const logs = buffer.toString('utf-8')
+      // If we started mid-line, trim to first newline for cleanliness
+      const firstNl = logs.indexOf('\n')
+      return NextResponse.json({ logs: start > 0 && firstNl > -1 ? logs.slice(firstNl + 1) : logs })
+    } finally {
+      await fd.close()
+    }
   } catch (error) {
     console.error('Failed to read logs:', error)
     return NextResponse.json({ logs: 'Error reading system logs.' }, { status: 500 })
