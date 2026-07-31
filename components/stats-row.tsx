@@ -20,9 +20,10 @@ interface StatsRowProps {
   leads: Lead[]
   usage: CampaignUsage
   rawCandidates?: RawCandidate[]
+  totalCandidates?: number
 }
 
-export function StatsRow({ leads, usage, rawCandidates = [] }: StatsRowProps) {
+export function StatsRow({ leads, usage, rawCandidates = [], totalCandidates }: StatsRowProps) {
   const { t } = useTranslation()
 
   const stats = [
@@ -36,7 +37,7 @@ export function StatsRow({ leads, usage, rawCandidates = [] }: StatsRowProps) {
     for_review: leads.filter((l) => l.status === "enriched").length,
     approved: leads.filter((l) => l.status === "approved").length,
     discarded: leads.filter((l) => l.status === "invalid" || l.status === "discarded" || l.status === "enrichment_failed").length,
-    pipeline: rawCandidates.filter((cand) => cand.status !== "enriched" && cand.status !== "approved" && cand.status !== "rejected" && cand.status !== "junk" && cand.status !== "discarded" && cand.status !== "invalid").length,
+    pipeline: totalCandidates ?? rawCandidates.filter((cand) => cand.status !== "enriched" && cand.status !== "approved" && cand.status !== "rejected" && cand.status !== "junk" && cand.status !== "discarded" && cand.status !== "invalid").length,
   }
 
   const pct = Math.round((usage.publicWwwUsed / usage.publicWwwLimit) * 100)

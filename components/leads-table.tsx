@@ -31,9 +31,10 @@ interface LeadsTableProps {
   onBulkAction?: (ids: string[], action: "approved" | "rejected" | "junk" | "rerun_evaluation" | "rerun_enrichment") => Promise<void>
   activeCampaign?: CampaignId
   rawCandidates?: RawCandidate[]
+  totalCandidates?: number
 }
 
-export function LeadsTable({ leads, selectedId, onSelect, onFilteredChange, onBulkAction, activeCampaign, rawCandidates = [] }: LeadsTableProps) {
+export function LeadsTable({ leads, selectedId, onSelect, onFilteredChange, onBulkAction, activeCampaign, rawCandidates = [], totalCandidates }: LeadsTableProps) {
   const { t } = useTranslation()
 
   const columns: { key: SortKey; label: string; className?: string }[] = [
@@ -186,7 +187,7 @@ export function LeadsTable({ leads, selectedId, onSelect, onFilteredChange, onBu
   const approvedCount = leads.filter((l) => l.status === "approved").length
   const discardedCount = leads.filter((l) => l.status === "invalid" || l.status === "discarded" || l.status === "enrichment_failed").length
   const rejectedCount = leads.filter((l) => l.status === "rejected" || l.status === "junk").length
-  const pipelineCount = rawCandidates.filter((cand) => cand.status !== "enriched" && cand.status !== "approved" && cand.status !== "rejected" && cand.status !== "junk" && cand.status !== "discarded" && cand.status !== "invalid").length
+  const pipelineCount = totalCandidates ?? rawCandidates.filter((cand) => cand.status !== "enriched" && cand.status !== "approved" && cand.status !== "rejected" && cand.status !== "junk" && cand.status !== "discarded" && cand.status !== "invalid").length
 
   const allSelected = filtered.length > 0 && selectedIds.size === filtered.length
   const someSelected = selectedIds.size > 0 && selectedIds.size < filtered.length
@@ -343,11 +344,10 @@ export function LeadsTable({ leads, selectedId, onSelect, onFilteredChange, onBu
             className="rounded-md border border-input bg-background px-2 py-1 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-ring/50"
             aria-label="Filter candidates by status"
           >
-            <option value="all">All Candidate Statuses ({rawCandidates.length})</option>
+            <option value="all">All Candidate Statuses ({pipelineCount})</option>
             <option value="new">New</option>
+            <option value="evaluating">Evaluating</option>
             <option value="evaluated">Evaluated</option>
-            <option value="enriched">Enriched</option>
-            <option value="invalid">Invalid</option>
           </select>
         )}
         

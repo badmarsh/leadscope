@@ -48,12 +48,12 @@ describe("GET /api/candidates", () => {
     expect(mockQuery.mock.calls[0][1]).toContain(5)
   })
 
-  it("respects limit param (max 200)", async () => {
+  it("respects limit param (max 2000)", async () => {
     mockQuery.mockResolvedValueOnce([{ count: "0" }]).mockResolvedValueOnce([])
     const req = new NextRequest("http://localhost/api/candidates?campaign_id=1&limit=9999")
     await GET(req)
-    // Data query should have limit = 200 (capped)
-    expect(mockQuery.mock.calls[1][1]).toContain(200)
+    // Data query should have limit = 2000 (capped)
+    expect(mockQuery.mock.calls[1][1]).toContain(2000)
   })
 
   it("queries active pre-review pipeline statuses", async () => {

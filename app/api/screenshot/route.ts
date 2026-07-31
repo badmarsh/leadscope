@@ -110,9 +110,7 @@ export async function GET(request: NextRequest) {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        url: validation.resolvedUrl,
-        setExtraHTTPHeaders: { "Host": validation.originalHostname },
-        extraHTTPHeaders: { "Host": validation.originalHostname },
+        url: targetUrl,
         gotoOptions: { waitUntil: "domcontentloaded", timeout: 15000 },
         options: { type: "jpeg", quality: 75, fullPage: false },
         viewport: { width: 1280, height: 800 },

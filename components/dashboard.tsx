@@ -133,6 +133,7 @@ export function Dashboard() {
   const [isN8nOpen, setIsN8nOpen] = useState(false)
   const [page, setPage] = useState(1)
   const [totalLeads, setTotalLeads] = useState(0)
+  const [totalCandidates, setTotalCandidates] = useState(0)
   const [rawCandidates, setRawCandidates] = useState<Array<{id:number;domain:string;company_name:string|null;source:string;status:string;created_at:string;last_seen_at?:string;enrichment_attempt_count:number}>>([]) 
   const limit = 1000
   const [usage, setUsage] = useState<{
@@ -193,10 +194,11 @@ export function Dashboard() {
   const fetchCandidates = useCallback(async (campaignId: CampaignId) => {
     try {
       const dbId = DB_CAMPAIGN_IDS[campaignId]
-      const r = await fetch(`/api/candidates?campaign_id=${dbId}&limit=200`)
+      const r = await fetch(`/api/candidates?campaign_id=${dbId}&limit=1000`)
       if (!r.ok) return
       const data = await r.json()
       setRawCandidates(data.candidates ?? [])
+      setTotalCandidates(data.total ?? (data.candidates ?? []).length)
     } catch {
       // silently degrade
     }
@@ -410,7 +412,7 @@ export function Dashboard() {
 
         <PipelineStatus campaignId={DB_CAMPAIGN_IDS[activeCampaign]} />
 
-        <StatsRow leads={campaignLeads} usage={usage} rawCandidates={rawCandidates} />
+        <StatsRow leads={campaignLeads} usage={usage} rawCandidates={rawCandidates} totalCandidates={totalCandidates} />
 
         {loading ? (
           <div className="flex h-40 items-center justify-center text-sm text-muted-foreground">
@@ -426,6 +428,7 @@ export function Dashboard() {
               onBulkAction={handleBulkAction}
               activeCampaign={activeCampaign}
               rawCandidates={rawCandidates}
+              totalCandidates={totalCandidates}
             />
             <div className="flex items-center justify-between px-2 text-sm text-muted-foreground">
               <div>
