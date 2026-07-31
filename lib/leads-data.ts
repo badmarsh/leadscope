@@ -406,7 +406,10 @@ export function rowToLead(row: Record<string, unknown>): Lead {
     const images = (evidenceData.images_analyzed as string[] | undefined) ?? []
     evidence = {
       kind: "photos",
-      photos: images.slice(0, 4).map((src) => ({ src, label: "Product image" })),
+      photos: images.slice(0, 4).map((src, idx) => ({ 
+        src, 
+        label: idx === 0 ? "Homepage Analysis" : idx === 1 ? "Product Page Analysis" : `Additional Analysis ${idx+1}` 
+      })),
     }
   } else if (
     evaluatorType === "threat_intel" ||

@@ -389,17 +389,19 @@ export function LeadDrawer({ lead, onClose, onDecision, onReopen, onNavigate, ha
 
             {lead.evidence.kind === "photos" &&
               (lead.evidence.photos.length > 0 ? (
-                <div className="mt-2 grid grid-cols-2 gap-2">
+                <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-4">
                   {lead.evidence.photos.map((photo) => (
-                    <figure key={photo.src} className="overflow-hidden rounded-md border border-border bg-card">
-                      <Image
-                        src={photo.src || "/placeholder.svg"}
-                        alt={`Scraped product photo: ${photo.label}`}
-                        width={320}
-                        height={240}
-                        className="aspect-[4/3] w-full object-cover"
-                      />
-                      <figcaption className="px-2 py-1.5 font-mono text-xs text-muted-foreground">
+                    <figure key={photo.src} className="flex flex-col overflow-hidden rounded-md border border-border bg-card">
+                      <div className="relative w-full overflow-y-auto max-h-[300px] bg-muted custom-scrollbar">
+                        <Image
+                          src={photo.src || "/placeholder.svg"}
+                          alt={`Scraped photo: ${photo.label}`}
+                          width={1280}
+                          height={2000}
+                          className="w-full h-auto object-top"
+                        />
+                      </div>
+                      <figcaption className="px-3 py-2 font-mono text-xs font-semibold text-muted-foreground border-t border-border">
                         {photo.label}
                       </figcaption>
                     </figure>
