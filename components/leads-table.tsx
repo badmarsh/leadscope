@@ -18,7 +18,7 @@ interface RawCandidate {
   source: string
   status: string
   created_at: string
-  updated_at: string
+  updated_at?: string
   enrichment_attempt_count: number
 }
 
