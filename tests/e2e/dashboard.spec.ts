@@ -43,10 +43,10 @@ test.describe('Dashboard E2E Tests', () => {
 
     test('should switch tabs and display leads', async ({ page }) => {
       const leadsSection = page.locator('section[aria-label="Leads"]');
-      await leadsSection.getByRole('tab', { name: /pending/i }).click();
-      await leadsSection.getByRole('tab', { name: /reviewed/i }).click();
-      await leadsSection.getByRole('tab', { name: /enrich/i }).click();
-      await leadsSection.getByRole('tab', { name: /pending/i }).click();
+      await leadsSection.getByRole('tab', { name: /For review/i }).click();
+      await leadsSection.getByRole('tab', { name: /Approved/i }).click();
+      await leadsSection.getByRole('tab', { name: /Discarded/i }).click();
+      await leadsSection.getByRole('tab', { name: /For review/i }).click();
     });
 
     test('should switch between campaigns using the top navigation', async ({ page }) => {
