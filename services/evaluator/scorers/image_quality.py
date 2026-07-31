@@ -99,7 +99,7 @@ def take_screenshots(domain: str, product_paths: list[str]) -> list[str]:
                     context = browser.new_context(viewport={"width": 1280, "height": 1080})
                     page = context.new_page()
                     try:
-                        response = page.goto(url, timeout=30000, wait_until="networkidle")
+                        response = page.goto(url, timeout=30000, wait_until="domcontentloaded")
                         if not response or not response.ok:
                             logger.warning("Failed to load %s: HTTP %s", url, response.status if response else "Unknown")
                             continue

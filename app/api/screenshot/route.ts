@@ -111,7 +111,7 @@ export async function GET(request: NextRequest) {
         url: validation.resolvedUrl,
         setExtraHTTPHeaders: { "Host": validation.originalHostname },
         bestAttempt: true,
-        gotoOptions: { waitUntil: "networkidle" },
+        gotoOptions: { waitUntil: "domcontentloaded" },
         options: { type: "jpeg", quality: 75, fullPage: false },
         viewport: { width: 1280, height: 800 },
         rejectResourceTypes: ["media", "font"],

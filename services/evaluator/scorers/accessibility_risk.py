@@ -34,7 +34,7 @@ def score(candidate: dict, campaign: dict, icp: dict, few_shot: list) -> dict:
                 page = context.new_page()
 
                 try:
-                    resp = page.goto(url, timeout=30000, wait_until="networkidle")
+                    resp = page.goto(url, timeout=30000, wait_until="domcontentloaded")
                     if not resp or not resp.ok:
                         return _no_data_result(domain, f"HTTP {resp.status if resp else 'unknown'}")
 
