@@ -48,11 +48,11 @@ export function HelpModal({ isOpen, onClose }: HelpModalProps) {
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
               {[
-                { stage: 1, title: "ICP Definition", desc: "Define the Ideal Customer Profile and generate search queries." },
-                { stage: 2, title: "Target Finding", desc: "Scrape search engines to find potential domains matching the queries." },
-                { stage: 3, title: "Evaluation", desc: "Deeply scrape domains and use LLM to score them against the ICP." },
-                { stage: 4, title: "Human Review", desc: "You review the scored candidates in this dashboard (Approve/Reject)." },
-                { stage: 5, title: "Enrichment", desc: "Approved leads are enriched with contacts, tech stack, and CRM sync." },
+                { stage: "1", title: "ICP Definition", desc: "Define the Ideal Customer Profile and generate search queries." },
+                { stage: "2", title: "Target Finding", desc: "Scrape search engines to find potential domains matching the queries." },
+                { stage: "3", title: "Evaluation", desc: "Deeply scrape domains and use LLM to score them. Successful evaluations become 'Evaluated'." },
+                { stage: "5", title: "Enrichment", desc: "Evaluated candidates are automatically enriched with contact data and sent to the 'For review' queue." },
+                { stage: "Review", title: "Human Review", desc: "Review enriched leads (Approve/Reject). Failed enrichments appear in Pipeline as 'Evaluated (5)' and can be retried." },
               ].map((s) => (
                 <div key={s.stage} className="bg-muted/50 p-4 rounded-lg border border-border/50">
                   <div className="text-xs font-bold text-muted-foreground uppercase mb-1">Stage {s.stage}</div>
@@ -86,7 +86,7 @@ export function HelpModal({ isOpen, onClose }: HelpModalProps) {
                       <li><strong>Auto-Discard:</strong> If the LLM score is below the configured threshold (e.g., 20) or if JENEX is detected, the lead is silently marked as <code>discarded</code> and hidden from the dashboard.</li>
                     </ul>
                   </li>
-                  <li><strong>Enrichment:</strong> After human approval, it runs Crawl4AI to scrape the site, extracts deterministic metadata via <code>extruct</code>, normalizes phone numbers, and uses an LLM to fill data gaps (email, revenue/size estimates).</li>
+                  <li><strong>Enrichment:</strong> Automatically runs on 'Evaluated' candidates. Uses Crawl4AI to scrape the site, extracts deterministic metadata via <code>extruct</code>, normalizes phone numbers, and uses an LLM to fill data gaps (email, revenue/size estimates). The enriched lead is then sent to the dashboard for your review.</li>
                 </ul>
               </div>
 

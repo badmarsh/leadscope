@@ -123,6 +123,7 @@ export function Dashboard() {
   const [activeCampaign, setActiveCampaign] = useState<CampaignId>("wp-remediation")
   const [leads, setLeads] = useState<Lead[]>([])
   const [filteredLeads, setFilteredLeads] = useState<Lead[]>([])
+  const [tableState, setTableState] = useState({ view: "for_review", count: 0 })
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [darkMode, setDarkMode] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -424,7 +425,10 @@ export function Dashboard() {
               leads={campaignLeads}
               selectedId={selectedId}
               onSelect={(lead) => setSelectedId(lead.id)}
-              onFilteredChange={setFilteredLeads}
+              onFilteredChange={(leads, view, candCount) => {
+                setFilteredLeads(leads)
+                setTableState({ view, count: view === "pipeline" ? candCount : leads.length })
+              }}
               onBulkAction={handleBulkAction}
               activeCampaign={activeCampaign}
               rawCandidates={rawCandidates}
@@ -432,9 +436,9 @@ export function Dashboard() {
             />
             <div className="flex items-center justify-between px-2 text-sm text-muted-foreground">
               <div>
-                {totalLeads === 0
-                  ? t("leads_table.no_leads")
-                  : `Showing ${(page - 1) * limit + 1}–${Math.min(page * limit, totalLeads)} of ${totalLeads} leads`
+                {tableState.count === 0
+                  ? (tableState.view === "pipeline" ? t("leads_table.empty.pipeline.heading", { defaultValue: "No candidates found" }) : t("leads_table.no_leads"))
+                  : `Showing ${tableState.count} ${tableState.view === "pipeline" ? "candidates" : "leads"}`
                 }
               </div>
               <div className="flex gap-2">

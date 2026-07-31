@@ -108,6 +108,7 @@
   "lead_drawer.screenshot_unavailable": "Screenshot unavailable",
   "lead_drawer.no_photos": "No product images could be scraped for this lead.",
   "pipeline.status.new": "New",
+  "pipeline.status.evaluating": "Evaluating",
   "pipeline.status.evaluated": "Evaluated",
   "pipeline.status.enriched": "Enriched",
   "pipeline.status.invalid": "Invalid",

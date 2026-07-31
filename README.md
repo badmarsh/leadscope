@@ -107,11 +107,13 @@ DATABASE_URL=postgresql://... alembic -c db/alembic.ini revision --autogenerate 
 |---|---|---|---|
 | Stage 1 | ICP Definer | Manual / API | Generates search queries and target segments from `business_brief` via LLM |
 | Stage 2 | Target Finder | Cron (every 6h) / API | Multi-provider search waterfall (Exa → Tavily → Serper → SerpAPI → Brave) → domain candidates |
-| Stage 3 | Evaluator | Cron / API | Scores candidates 0–100 against ICP using Crawl4AI + Vision AI |
-| Stage 5 | Enrichment | Cron / API | Crawl4AI scrape + `extruct` metadata + LLM gap-fill for contact data |
+| Stage 3 | Evaluator | Cron / API | Scores candidates 0–100 against ICP using Crawl4AI + Vision AI. Successful evaluations are marked `evaluated`. |
+| Stage 5 | Enrichment | Cron / API | Automatically polls `evaluated` candidates for contact enrichment (Crawl4AI + `extruct` + LLM). Successful enrichments are marked `enriched` and sent to the "For review" queue. |
 
-Stage 4 is an intentional numbering gap reserved for human-in-the-loop validation.
-
+**Note on Pipeline States & Failures:**
+The pipeline automatically pushes candidates through the flow: `New` &rarr; `Evaluated` &rarr; `Enriched` (which then appears in the "For review" tab). 
+If a candidate gets stuck in the Pipeline tab with a status like `Evaluated (5)`, this means it **failed** the automatic Stage 5 enrichment process 5 times (e.g., due to a Firecrawl timeout, network error, or missing data). 
+When this happens, the system pauses enrichment for that candidate. To force a retry, select the candidate(s) in the Pipeline tab and click **Rerun Enrichment**.
 ---
 
 ## 🌍 Multi-Campaign Support

@@ -27,7 +27,7 @@ interface LeadsTableProps {
   leads: Lead[]
   selectedId: string | null
   onSelect: (lead: Lead) => void
-  onFilteredChange?: (leads: Lead[]) => void
+  onFilteredChange?: (leads: Lead[], view: string, candidateCount: number) => void
   onBulkAction?: (ids: string[], action: "approved" | "rejected" | "junk" | "rerun_evaluation" | "rerun_enrichment") => Promise<void>
   activeCampaign?: CampaignId
   rawCandidates?: RawCandidate[]
@@ -162,8 +162,8 @@ export function LeadsTable({ leads, selectedId, onSelect, onFilteredChange, onBu
   }, [rawCandidates, search, pipelineStatusFilter, pipelineSortKey, pipelineSortDir])
 
   useEffect(() => {
-    onFilteredChange?.(filtered)
-  }, [filtered, onFilteredChange])
+    onFilteredChange?.(filtered, view, filteredCandidates.length)
+  }, [filtered, view, filteredCandidates.length, onFilteredChange])
 
   function toggleSort(key: SortKey) {
     if (key === sortKey) {
