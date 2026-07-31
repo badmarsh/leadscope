@@ -5,26 +5,38 @@ import type { CampaignUsage, Lead } from "@/lib/leads-data"
 import { cn } from "@/lib/utils"
 import { useTranslation } from "@/lib/i18n"
 
+interface RawCandidate {
+  id: number
+  domain: string
+  company_name: string | null
+  source: string
+  status: string
+  created_at: string
+  last_seen_at?: string
+  enrichment_attempt_count: number
+}
+
 interface StatsRowProps {
   leads: Lead[]
   usage: CampaignUsage
+  rawCandidates?: RawCandidate[]
 }
 
-export function StatsRow({ leads, usage }: StatsRowProps) {
+export function StatsRow({ leads, usage, rawCandidates = [] }: StatsRowProps) {
   const { t } = useTranslation()
 
   const stats = [
-    { key: "pending", label: t("dashboard.stats.pending"), dot: "bg-amber-500" },
-    { key: "approved", label: t("dashboard.stats.approved"), dot: "bg-emerald-500" },
-    { key: "rejected", label: t("dashboard.stats.discarded"), dot: "bg-red-500" },
-    { key: "enrichment_failed", label: "Enrich failed", dot: "bg-muted-foreground/50" },
+    { key: "for_review", label: t("dashboard.stats.for_review", { defaultValue: "For review" }), dot: "bg-purple-500" },
+    { key: "approved", label: t("dashboard.stats.approved", { defaultValue: "Approved" }), dot: "bg-emerald-500" },
+    { key: "discarded", label: t("dashboard.stats.discarded", { defaultValue: "Discarded" }), dot: "bg-zinc-400" },
+    { key: "pipeline", label: t("dashboard.stats.pipeline", { defaultValue: "Pipeline" }), dot: "bg-blue-500" },
   ] as const
 
   const counts = {
-    pending: leads.filter((l) => l.status === "pending").length,
+    for_review: leads.filter((l) => l.status === "enriched" || l.status === "evaluated" || l.status === "pending").length,
     approved: leads.filter((l) => l.status === "approved").length,
-    rejected: leads.filter((l) => l.status === "rejected").length,
-    enrichment_failed: leads.filter((l) => l.status === "enrichment_failed").length,
+    discarded: leads.filter((l) => l.status === "invalid" || l.status === "discarded" || l.status === "enrichment_failed").length,
+    pipeline: rawCandidates.length,
   }
 
   const pct = Math.round((usage.publicWwwUsed / usage.publicWwwLimit) * 100)

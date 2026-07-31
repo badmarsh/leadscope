@@ -268,11 +268,17 @@ export function LeadDrawer({ lead, onClose, onDecision, onReopen, onNavigate, ha
                           fb.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 9h6M9 13h4"/></svg>Screenshot unavailable`
                           parent.appendChild(fb)
                         }
+                        const figure = parent?.closest("figure")
+                        const dot = figure?.querySelector(".ss-status-dot")
+                        if (dot) {
+                          dot.classList.remove("bg-emerald-500")
+                          dot.classList.add("bg-amber-500")
+                        }
                       }}
                     />
                   </div>
                   <figcaption className="flex items-center gap-1.5 bg-muted px-2 py-1.5 font-mono text-xs text-muted-foreground">
-                    <span className="size-1.5 rounded-full bg-emerald-500 inline-block" />
+                    <span className="ss-status-dot size-1.5 rounded-full bg-emerald-500 inline-block" />
                     <a
                       href={`https://${lead.domain}`}
                       target="_blank"

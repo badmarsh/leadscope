@@ -402,7 +402,7 @@ export function Dashboard() {
 
         <PipelineStatus campaignId={DB_CAMPAIGN_IDS[activeCampaign]} />
 
-        <StatsRow leads={campaignLeads} usage={usage} />
+        <StatsRow leads={campaignLeads} usage={usage} rawCandidates={rawCandidates} />
 
         {loading ? (
           <div className="flex h-40 items-center justify-center text-sm text-muted-foreground">
