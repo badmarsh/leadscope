@@ -174,7 +174,7 @@ export function LeadsTable({ leads, selectedId, onSelect, onFilteredChange, onBu
                 : "text-muted-foreground hover:text-foreground",
             )}
           >
-            {t("leads_table.tabs.pending", { defaultValue: "Pending review" })} <span className="font-mono">({pendingCount})</span>
+            {t("leads_table.tabs.pending", { defaultValue: "Evaluated" })} <span className="font-mono">({pendingCount})</span>
           </button>
           <button
             role="tab"

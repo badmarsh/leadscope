@@ -12,6 +12,7 @@ No LLM needed - pure automated compliance check.
 """
 import logging
 import threading
+import os
 from playwright.sync_api import sync_playwright
 
 logger = logging.getLogger(__name__)

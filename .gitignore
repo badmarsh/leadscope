@@ -50,3 +50,8 @@ temp*.csv
 run_dbg*.py
 *.swp
 .DS_Store
+
+# Database dumps
+backup_before_reset.sql
+*.sql.gz
+

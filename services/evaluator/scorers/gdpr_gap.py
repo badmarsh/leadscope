@@ -15,6 +15,7 @@ Note: Self-hosted Browserless at ws://browserless:3000
 """
 import logging
 import threading
+import os
 from playwright.sync_api import sync_playwright
 
 logger = logging.getLogger(__name__)
