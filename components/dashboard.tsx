@@ -65,12 +65,21 @@ function rowToLead(row: Record<string, unknown>): Lead {
     }
   }
 
-  // Map DB status to Lead status
+  // Map DB status to Lead status — keep in sync with lib/leads-data.ts statusMap
   const statusMap: Record<string, Lead["status"]> = {
     pending_review: "pending",
+    evaluating: "pending",           // actively being scored — show as pending
+    new: "pending",                  // discovered, not yet evaluated
+    evaluated: "evaluated",          // scored by LLM — ready for human review!
+    enriched: "enriched",            // fully enriched — ready for human review!
     approved: "approved",
     rejected: "rejected",
+    discarded: "discarded",          // auto-rejected by scorer
+    junk: "junk",                    // manually marked junk by operator
+    stale: "rejected",
     enrichment_failed: "enrichment_failed",
+    invalid: "enrichment_failed",
+    duplicate: "rejected",
   }
 
   return {
