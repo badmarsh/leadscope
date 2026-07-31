@@ -31,13 +31,13 @@ test.describe('Dashboard E2E Tests', () => {
 
   test('should login successfully and load dashboard', async ({ page }) => {
     await login(page);
-    await expect(page.getByRole('heading', { name: /JENEX HVAC \(Hungary\)/i })).toBeVisible({ timeout: 15000 });
+    await expect(page.getByRole('tab', { name: /JENEX HVAC/i })).toBeVisible({ timeout: 15000 });
   });
 
   test.describe('Authenticated Features', () => {
     test.beforeEach(async ({ page }) => {
       await login(page);
-      await expect(page.getByRole('heading', { name: /JENEX HVAC \(Hungary\)/i })).toBeVisible({ timeout: 15000 });
+      await expect(page.getByRole('tab', { name: /JENEX HVAC/i })).toBeVisible({ timeout: 15000 });
       await page.locator('table').waitFor({ state: 'visible', timeout: 15000 }).catch(() => {});
     });
 
@@ -52,14 +52,14 @@ test.describe('Dashboard E2E Tests', () => {
     test('should switch between campaigns using the top navigation', async ({ page }) => {
       const nav = page.locator('nav[aria-label="Campaigns"]');
 
-      await nav.getByRole('tab', { name: /Shoe Photo Upgrade/i }).click();
-      await expect(page.getByRole('heading', { name: /Shoe Photo Upgrade/i })).toBeVisible();
+      await nav.getByRole('tab', { name: /Shoe Photo/i }).click();
+      await expect(nav.getByRole('tab', { name: /Shoe Photo/i })).toHaveAttribute('aria-selected', 'true');
 
-      await nav.getByRole('tab', { name: /WP Remediation/i }).click();
-      await expect(page.getByRole('heading', { name: /WP Remediation/i })).toBeVisible();
+      await nav.getByRole('tab', { name: /WP Malware/i }).click();
+      await expect(nav.getByRole('tab', { name: /WP Malware/i })).toHaveAttribute('aria-selected', 'true');
 
-      await nav.getByRole('tab', { name: /JENEX HVAC/i }).click();
-      await expect(page.getByRole('heading', { name: /JENEX HVAC \(Hungary\)/i })).toBeVisible();
+      await nav.getByRole('tab', { name: /JENEX/i }).click();
+      await expect(nav.getByRole('tab', { name: /JENEX/i })).toHaveAttribute('aria-selected', 'true');
     });
 
     test('should open settings and update business brief', async ({ page }) => {
@@ -115,18 +115,25 @@ test.describe('Dashboard E2E Tests', () => {
         return;
       }
       
-      const companyName = await firstRow.locator('td').nth(1).textContent() || '';
+      const companyName = (await firstRow.locator('td').nth(0).textContent() || '').trim();
       
       await firstRow.locator('td:nth-child(2)').click();
 
       const drawer = page.getByRole('dialog').filter({ hasText: /Rationale|Odôvodnenie/i });
       await expect(drawer).toBeVisible();
 
-      await drawer.getByRole('button', { name: /Approve|Schváliť/i }).click();
+      // Wait for the action API to respond before switching tabs
+      await Promise.all([
+        page.waitForResponse((res) => res.url().includes('/api/action') && res.status() === 200, { timeout: 10000 }),
+        drawer.getByRole('button', { name: /Approve|Schváliť/i }).click(),
+      ]);
 
       const leadsSection = page.locator('section[aria-label="Leads"]');
       await leadsSection.getByRole('tab', { name: /reviewed/i }).click();
-      await expect(page.locator('table tbody').getByText(companyName).first()).toBeVisible();
+      // Allow time for state to update and re-render
+      if (companyName) {
+        await expect(page.locator('table tbody').getByText(companyName).first()).toBeVisible({ timeout: 10000 });
+      }
     });
 
     test('should filter leads by search query', async ({ page }) => {

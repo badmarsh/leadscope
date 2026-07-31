@@ -22,8 +22,19 @@ import json
 import time
 import requests
 from datetime import datetime
+from pathlib import Path
+
+# Auto-load .env if DATABASE_URL or INTERNAL_API_TOKEN not already set
+_env_path = Path(__file__).parent.parent / ".env"
+if _env_path.exists():
+    for _line in _env_path.read_text(encoding="utf-8").splitlines():
+        _line = _line.strip()
+        if _line and not _line.startswith("#") and "=" in _line:
+            _k, _v = _line.split("=", 1)
+            os.environ.setdefault(_k.strip(), _v.strip())
 
 STAGES_URL = os.environ.get("STAGES_URL", "http://localhost:8002")
+INTERNAL_API_TOKEN = os.environ.get("INTERNAL_API_TOKEN", "")
 
 JENEX_CAMPAIGN_ID = 1
 SHOE_CAMPAIGN_ID = 2
@@ -43,14 +54,18 @@ def check(label, passed, detail=""):
 
 
 def post(path, body=None):
-    resp = requests.post(f"{STAGES_URL}{path}", json=body, timeout=180)
+    headers = {}
+    if INTERNAL_API_TOKEN:
+        headers["X-Internal-Token"] = INTERNAL_API_TOKEN
+    resp = requests.post(f"{STAGES_URL}{path}", json=body, headers=headers, timeout=180)
     return resp.status_code, resp.json()
 
 
 def get_db():
     import psycopg2
     import psycopg2.extras
-    return psycopg2.connect(os.environ["DATABASE_URL"])
+    db_url = os.environ.get("DATABASE_URL", "postgresql://leadscope:leadscope_dev@localhost:5432/leadscope")
+    return psycopg2.connect(db_url)
 
 
 print("=" * 60)

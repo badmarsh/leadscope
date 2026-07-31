@@ -16,6 +16,16 @@ import sys
 import json
 import time
 import requests
+from pathlib import Path
+
+# Auto-load .env
+_env_path = Path(__file__).parent.parent / ".env"
+if _env_path.exists():
+    for _line in _env_path.read_text(encoding="utf-8").splitlines():
+        _line = _line.strip()
+        if _line and not _line.startswith("#") and "=" in _line:
+            _k, _v = _line.split("=", 1)
+            os.environ.setdefault(_k.strip(), _v.strip())
 
 EVALUATOR_URL = os.environ.get("EVALUATOR_URL", "http://localhost:8001")
 STAGES_URL = os.environ.get("STAGES_URL", "http://localhost:8002")
@@ -36,7 +46,8 @@ def check(label, passed, detail=""):
 def get_db():
     import psycopg2
     import psycopg2.extras
-    return psycopg2.connect(os.environ["DATABASE_URL"])
+    db_url = os.environ.get("DATABASE_URL", "postgresql://leadscope:leadscope_dev@localhost:5432/leadscope")
+    return psycopg2.connect(db_url)
 
 
 print("=" * 60)

@@ -5,7 +5,7 @@ import threading
 import time
 from services.common.db_utils import update_candidate_generation, claim_candidates_for_stage
 
-DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql://leadscope_test:leadscope_test@localhost:5432/leadscope_test")
+DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql://leadscope:leadscope_dev@localhost:5432/leadscope")
 
 @pytest.fixture
 def conn():
