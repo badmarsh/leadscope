@@ -288,14 +288,14 @@ export function LeadsTable({ leads, selectedId, onSelect, onFilteredChange, onBu
             <button
               onClick={() => handleBulkAction("rerun_evaluation")}
               disabled={isBulkActing}
-              className="rounded px-2.5 py-1 text-xs font-medium bg-slate-600/10 text-slate-300 transition-colors hover:bg-slate-600/20 disabled:opacity-50"
+              className="rounded px-2.5 py-1 text-xs font-medium bg-slate-600/10 text-slate-700 dark:text-slate-300 transition-colors hover:bg-slate-600/20 disabled:opacity-50"
             >
               {t("leads_table.bulk.rerun_eval", { defaultValue: "Rerun Evaluation" })}
             </button>
             <button
               onClick={() => handleBulkAction("rerun_enrichment")}
               disabled={isBulkActing}
-              className="rounded px-2.5 py-1 text-xs font-medium bg-slate-600/10 text-slate-300 transition-colors hover:bg-slate-600/20 disabled:opacity-50"
+              className="rounded px-2.5 py-1 text-xs font-medium bg-slate-600/10 text-slate-700 dark:text-slate-300 transition-colors hover:bg-slate-600/20 disabled:opacity-50"
             >
               {t("leads_table.bulk.rerun_enrich", { defaultValue: "Rerun Enrichment" })}
             </button>
