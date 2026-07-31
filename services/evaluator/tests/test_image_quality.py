@@ -94,3 +94,25 @@ def test_score_handles_non_json_response(mock_llm, mock_firecrawl, mock_take_scr
 
     result = score(candidate, campaign, icp, [])
     assert result["score"] == 50
+
+@patch('scorers.image_quality.sync_playwright')
+def test_take_screenshots_uses_domcontentloaded(mock_playwright):
+    from scorers.image_quality import take_screenshots
+    mock_p = MagicMock()
+    mock_playwright.return_value.__enter__.return_value = mock_p
+    mock_browser = MagicMock()
+    mock_p.chromium.connect_over_cdp.return_value = mock_browser
+    mock_context = MagicMock()
+    mock_browser.new_context.return_value = mock_context
+    mock_page = MagicMock()
+    mock_context.new_page.return_value = mock_page
+    mock_resp = MagicMock()
+    mock_resp.ok = True
+    mock_page.goto.return_value = mock_resp
+    mock_page.screenshot.return_value = b"fake_bytes"
+
+    images = take_screenshots("example.com", ["/product1"])
+    assert len(images) == 2
+    assert mock_page.goto.call_count == 2
+    mock_page.goto.assert_any_call("https://example.com", timeout=30000, wait_until="domcontentloaded")
+    mock_page.goto.assert_any_call("https://example.com/product1", timeout=30000, wait_until="domcontentloaded")

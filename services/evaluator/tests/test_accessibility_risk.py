@@ -35,6 +35,8 @@ def test_accessibility_risk_scoring_success(mock_playwright):
     candidate = {"domain": "test-shop.com"}
     res = accessibility_risk.score(candidate, {}, {}, [])
 
+    mock_page.goto.assert_called_once_with("https://test-shop.com", timeout=30000, wait_until="domcontentloaded")
+
     # Score formula: 1 * 20 (critical) + 1 * 10 (serious) + 1 * 3 (moderate) = 33
     assert res["score"] == 33
     assert res["evidence_data"]["total_violations"] == 3
