@@ -155,7 +155,7 @@ async def crawl(req: CrawlRequest):
             import httpx
             import json
             try:
-                system_prompt = "You are an AI that extracts product images from e-commerce product grids. Extract up to 10 high-quality product image URLs from markdown image tags (![alt](url)). Return ONLY actual physical products. Do not extract site logos, UI layout elements, shipping partner logos (like GLS, Packeta), payment icons, or blog banners. Ensure the URLs point directly to image files (e.g., .jpg, .png, .webp) and not to HTML pages. Return ONLY valid JSON in this format: {\"urls\": [\"url1\", \"url2\"]}"
+                system_prompt = "You are an AI that extracts product images from e-commerce product grids. Extract up to 10 high-quality product image URLs from markdown image tags (![alt](url)). Return ONLY actual physical products (e.g., a shoe on a white background). Do NOT extract site logos, UI layout elements, shipping partner logos, payment icons, blog banners, lifestyle images (e.g., kids on a beach, hands holding a phone/box), or brand promotional banners (e.g., '50 Years', 'Geox'). Ensure the URLs point directly to image files (e.g., .jpg, .png, .webp) and not to HTML pages. Return ONLY valid JSON in this format: {\"urls\": [\"url1\", \"url2\"]}"
                 headers = {}
                 api_key = os.environ.get("GEMINI_PROXY_API_KEY") or os.environ.get("OPENROUTER_API_KEY") or ""
                 if api_key:

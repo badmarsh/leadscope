@@ -252,7 +252,7 @@ export function LeadDrawer({ lead, onClose, onDecision, onReopen, onNavigate, ha
                 <figure className="mt-3 overflow-hidden rounded-md border border-border bg-muted">
                   <div className="relative w-full" style={{ aspectRatio: "16/10" }}>
                     <Image
-                      src={lead.screenshot_url || `https://api.microlink.io/?url=${encodeURIComponent(`https://${lead.domain}`)}&screenshot=true&meta=false&embed=screenshot.url`}
+                      src={lead.screenshot_url || `/api/screenshot?url=${encodeURIComponent(`https://${lead.domain}`)}`}
                       alt={`Screenshot of ${lead.company}'s website`}
                       fill
                       className="object-cover object-top"

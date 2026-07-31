@@ -83,6 +83,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Invalid or disallowed URL" }, { status: 400 })
   }
 
+  try {
     const token = process.env.BROWSERLESS_TOKEN || ""
     const defaultUrl = token
       ? `http://browserless:3000/screenshot?token=${token}`
