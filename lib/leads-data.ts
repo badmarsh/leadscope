@@ -459,6 +459,7 @@ export function rowToLead(row: Record<string, unknown>): Lead {
     junk: "junk",                 // manually marked junk by operator
     stale: "rejected",            // stale candidate not re-evaluated; treat as rejected
     enrichment_failed: "enrichment_failed",
+    invalid: "enrichment_failed", // failed enrichment after max attempts
     duplicate: "rejected",        // duplicate of another candidate in window
   }
 

@@ -78,7 +78,7 @@ describe("POST /api/action/bulk", () => {
 
     // Rerun enrichment executes 3 queries: lock candidate rows, update candidate status, delete from leads
     expect(mockQuery).toHaveBeenCalledTimes(3)
-    expect(mockQuery.mock.calls[1][0]).toContain("CASE WHEN status = 'enrichment_failed' THEN 'evaluated'")
+    expect(mockQuery.mock.calls[1][0]).toContain("CASE WHEN status IN ('enrichment_failed', 'invalid') THEN 'evaluated'")
     expect(mockQuery.mock.calls[1][0]).toContain("processing_generation = processing_generation + 1")
     expect(mockQuery.mock.calls[1][0]).toContain("lease_id = NULL")
     expect(mockQuery.mock.calls[2][0]).toContain("DELETE FROM leads")

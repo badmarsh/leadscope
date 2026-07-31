@@ -62,8 +62,8 @@ describe("GET /api/candidates", () => {
     const sql = mockQuery.mock.calls[0][0]
     expect(sql).toContain("'new'")
     expect(sql).toContain("'evaluating'")
-    expect(sql).toContain("'discarded'")
-    expect(sql).toContain("'pending_review'")
-    expect(sql).toContain("'approved'")
+    expect(sql).toContain("'evaluated'")
+    expect(sql).toContain("'enriched'")
+    expect(sql).toContain("'invalid'")
   })
 })

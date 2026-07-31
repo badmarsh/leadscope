@@ -25,26 +25,28 @@ describe('LeadsTable Component', () => {
   });
 
   it('renders only pending leads by default', () => {
+    const reviewLeads = leads.map(l => l.id === 'jx-001' ? { ...l, status: 'enriched' as const, rationale: 'R', enrichment_report: 'R', screenshot_url: 'http://s', contact_email: 'e@a.com', contact_phone: '123', products_sold: ['P'], evidence: { kind: 'urls' as const, urls: ['u'] } } : l)
     render(
       <LeadsTable
-        leads={leads}
+        leads={reviewLeads}
         selectedId={null}
         onSelect={vi.fn()}
       />
     );
 
-    // Budapesti Klíma Kft. is pending
+    // Budapesti Klíma Kft. is for review (enriched + complete)
     expect(screen.getByText('Budapesti Klíma Kft.')).toBeInTheDocument();
     
-    // Duna Épületgépészet Zrt. is approved (reviewed tab)
+    // Duna Épületgépészet Zrt. is approved (approved tab)
     expect(screen.queryByText('Duna Épületgépészet Zrt.')).not.toBeInTheDocument();
   });
 
   it('calls onSelect when a row is clicked', () => {
     const handleSelect = vi.fn();
+    const reviewLeads = leads.map(l => l.id === 'jx-001' ? { ...l, status: 'enriched' as const, rationale: 'R', enrichment_report: 'R', screenshot_url: 'http://s', contact_email: 'e@a.com', contact_phone: '123', products_sold: ['P'], evidence: { kind: 'urls' as const, urls: ['u'] } } : l)
     render(
       <LeadsTable
-        leads={leads}
+        leads={reviewLeads}
         selectedId={null}
         onSelect={handleSelect}
       />
@@ -60,15 +62,16 @@ describe('LeadsTable Component', () => {
   });
 
   it('filters by search query', () => {
+    const reviewLeads = leads.map(l => (l.id === 'jx-001' || l.id === 'jx-002') ? { ...l, status: 'enriched' as const, rationale: 'R', enrichment_report: 'R', screenshot_url: 'http://s', contact_email: 'e@a.com', contact_phone: '123', products_sold: ['P'], evidence: { kind: 'urls' as const, urls: ['u'] } } : l)
     render(
       <LeadsTable
-        leads={leads}
+        leads={reviewLeads}
         selectedId={null}
         onSelect={vi.fn()}
       />
     );
 
-    const searchInput = screen.getByPlaceholderText(/Search by company or domain/i);
+    const searchInput = screen.getByPlaceholderText('Search by company or domain…');
     fireEvent.change(searchInput, { target: { value: 'Pannon' } });
 
     expect(screen.getByText('Pannon Hűtéstechnika')).toBeInTheDocument();
@@ -84,7 +87,7 @@ describe('LeadsTable Component', () => {
       />
     );
 
-    const reviewedTab = screen.getByRole('tab', { name: /Reviewed/i });
+    const reviewedTab = screen.getByRole('tab', { name: /Approved/i });
     fireEvent.click(reviewedTab);
 
     // Now pending leads shouldn't be there
@@ -156,7 +159,8 @@ describe('Pipeline tab', () => {
 
 describe('Completeness dot', () => {
   it('renders a dot cell for each lead row', () => {
-    render(<LeadsTable leads={leads} selectedId={null} onSelect={vi.fn()} />);
+    const reviewLeads = leads.map(l => ({ ...l, status: 'enriched' as const, rationale: 'R', enrichment_report: 'R', screenshot_url: 'http://s', contact_email: 'e@a.com', contact_phone: '123', products_sold: ['P'], evidence: { kind: 'urls' as const, urls: ['u'] } }))
+    render(<LeadsTable leads={reviewLeads} selectedId={null} onSelect={vi.fn()} />);
     const dots = document.querySelectorAll('.bg-emerald-500, .bg-red-500');
     expect(dots.length).toBeGreaterThan(0);
   });
@@ -164,7 +168,7 @@ describe('Completeness dot', () => {
   it('dot is green for complete lead', () => {
     const completeLead = {
       ...leads[0],
-      status: 'pending' as const,
+      status: 'enriched' as const,
       rationale: 'Good fit',
       enrichment_report: 'Overview',
       screenshot_url: 'https://ss.example.com/img.jpg',
@@ -187,7 +191,7 @@ describe('Completeness dot', () => {
       screenshot_url: undefined,
     };
     render(<LeadsTable leads={[incompleteLead]} selectedId={null} onSelect={vi.fn()} />);
-    fireEvent.click(screen.getByRole('tab', { name: /Reviewed/i }));
+    fireEvent.click(screen.getByRole('tab', { name: /Approved/i }));
     const redDot = document.querySelector('.bg-red-500');
     expect(redDot).toBeTruthy();
   });
@@ -195,7 +199,7 @@ describe('Completeness dot', () => {
   it('dot tooltip lists missing fields', () => {
     const incompleteLead = { ...leads[0], status: 'approved' as const, contact_email: undefined };
     render(<LeadsTable leads={[incompleteLead]} selectedId={null} onSelect={vi.fn()} />);
-    fireEvent.click(screen.getByRole('tab', { name: /Reviewed/i }));
+    fireEvent.click(screen.getByRole('tab', { name: /Approved/i }));
     const redDot = document.querySelector('.bg-red-500');
     expect(redDot?.getAttribute('title')).toContain('Email');
   });

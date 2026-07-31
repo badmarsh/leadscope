@@ -139,7 +139,7 @@ describe("/api/action", () => {
       const body = await res.json()
       expect(body.ok).toBe(true)
 
-      const resetCandidateCall = mockClientQuery.mock.calls.find((c: any[]) => c[0].includes("SET status = 'pending_review'"))
+      const resetCandidateCall = mockClientQuery.mock.calls.find((c: any[]) => c[0].includes("SET status = 'evaluated'"))
       expect(resetCandidateCall).toBeDefined()
       expect(resetCandidateCall![1][0]).toBe(42)
     })

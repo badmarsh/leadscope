@@ -7,7 +7,7 @@ import { getIronSession } from "iron-session"
 import { sessionOptions, type SessionData } from "@/lib/session"
 
 // Routes that don't require a session
-const PUBLIC_PATHS = ["/", "/audit", "/api/audit", "/seo-spam-hunter", "/api/seo-spam-hunter", "/wp-hunter", "/api/wp-hunter", "/threat-feeds", "/login", "/api/login", "/api/session", "/_next", "/favicon.ico"]
+const PUBLIC_PATHS = ["/", "/audit", "/api/audit", "/login", "/api/login", "/api/session", "/api/health", "/_next", "/favicon.ico"]
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl

@@ -25,10 +25,10 @@ function makeCompleteLead(overrides: Partial<Lead> = {}): Lead {
 describe('status utility', () => {
   describe('statusLabels', () => {
     it('maps statuses correctly', () => {
-      expect(statusLabels.pending).toBe('Pending');
+      expect(statusLabels.pending).toBe('Evaluated');
       expect(statusLabels.approved).toBe('Approved');
       expect(statusLabels.rejected).toBe('Rejected');
-      expect(statusLabels.enrichment_failed).toBe('Enrich failed');
+      expect(statusLabels.enrichment_failed).toBe('Invalid');
     });
   });
 
