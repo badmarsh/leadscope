@@ -66,7 +66,7 @@ def extract_domain(url: str) -> str | None:
         host = (parsed.netloc or parsed.path).split(":")[0].strip()
         import tldextract
         ext = tldextract.extract(host)
-        top_domain = ext.top_domain_under_public_suffix if hasattr(ext, "top_domain_under_public_suffix") and ext.top_domain_under_public_suffix else f"{ext.domain}.{ext.suffix}" if ext.domain and ext.suffix else ext.domain
+        top_domain = f"{ext.domain}.{ext.suffix}" if ext.domain and ext.suffix else ""
         if top_domain:
             return top_domain.lower()
         return None
