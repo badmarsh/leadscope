@@ -4,7 +4,7 @@
 
 export type CampaignId = "jenex" | "shoe-photo" | "wp-remediation"
 
-export type LeadStatus = "pending" | "approved" | "rejected" | "enrichment_failed" | "junk"
+export type LeadStatus = "pending" | "approved" | "rejected" | "enrichment_failed" | "junk" | "discarded"
 
 export type CampaignStatus = "active" | "paused" | "draft"
 
@@ -448,10 +448,18 @@ export function rowToLead(row: Record<string, unknown>): Lead {
   }
 
   const statusMap: Record<string, Lead["status"]> = {
+    // DB statuses → UI LeadStatus
     pending_review: "pending",
+    evaluating: "pending",        // actively being scored — show as pending in UI
+    new: "pending",               // discovered, not yet evaluated
     approved: "approved",
+    enriched: "approved",         // fully enriched approved leads
     rejected: "rejected",
+    discarded: "discarded",       // auto-rejected by scorer (low score / blocked term)
+    junk: "junk",                 // manually marked junk by operator
+    stale: "rejected",            // stale candidate not re-evaluated; treat as rejected
     enrichment_failed: "enrichment_failed",
+    duplicate: "rejected",        // duplicate of another candidate in window
   }
 
   const dbCampaignId = row.campaign_id as number

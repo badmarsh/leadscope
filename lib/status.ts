@@ -6,6 +6,7 @@ export const statusLabels: Record<LeadStatus, string> = {
   rejected: "Rejected",
   enrichment_failed: "Enrich failed",
   junk: "Junk",
+  discarded: "Discarded",
 }
 
 export const statusBadgeClasses: Record<LeadStatus, string> = {
@@ -14,6 +15,7 @@ export const statusBadgeClasses: Record<LeadStatus, string> = {
   rejected: "bg-red-500/10 text-red-500 border-red-500/20",
   enrichment_failed: "bg-orange-500/10 text-orange-500 border-orange-500/20",
   junk: "bg-zinc-500/10 text-zinc-500 border-zinc-500/20",
+  discarded: "bg-zinc-500/10 text-zinc-400 border-zinc-500/20",
 }
 
 export function scoreColorClasses(score: number): { text: string; bar: string } {

@@ -65,7 +65,8 @@ export async function GET(request: NextRequest) {
   const offsetParamIdx = queryValues.length + 2
   queryValues.push(limit, offset)
 
-  // Count total matching leads (must include the joins to filter by l.estimated_size)
+  // Count total matching leads — uses same WHERE conditions as main query (excluding cursor
+  // and LIMIT/OFFSET which are pagination-only and don't affect total count).
   const countRow = await query<{ count: string }>(
     `
     SELECT COUNT(*) 
@@ -74,7 +75,7 @@ export async function GET(request: NextRequest) {
     LEFT JOIN leads l ON c.id = l.candidate_id
     WHERE c.campaign_id = $1 ${statusCondition}
     `,
-    values
+    values  // uses base values (without cursor) — cursor only offsets which page to show, not total count
   )
   const total = parseInt(countRow[0]?.count ?? "0", 10)
 

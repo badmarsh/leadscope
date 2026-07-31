@@ -3,6 +3,8 @@ watchdog.py — Stage health watchdog.
 
 Alerts via Slack webhook (or logs a critical warning) if any campaign stage
 has been in 'running' status for more than WATCHDOG_TIMEOUT_MINUTES.
+Also reclaims expired candidate leases so stale pipeline runs don't block
+future Stage 5 enrichment cycles.
 Called from the main FastAPI startup and periodically from the scheduler.
 """
 import logging
@@ -16,12 +18,43 @@ logger = logging.getLogger(__name__)
 WATCHDOG_TIMEOUT_MINUTES = int(os.environ.get("WATCHDOG_TIMEOUT_MINUTES", "30"))
 SLACK_WEBHOOK_URL = os.environ.get("SLACK_WEBHOOK_URL", "")
 
+# Lease expiry grace period: clear leases that expired more than this many minutes ago
+LEASE_EXPIRY_GRACE_MINUTES = 5
+
+
+def reclaim_expired_leases():
+    """
+    Clear lease_id and lease_expires_at on candidates whose leases have
+    expired. This unblocks future Stage 5 enrichment runs from skipping
+    candidates that were abandoned mid-processing due to a crash or timeout.
+    """
+    try:
+        with db.get_conn() as conn:
+            cleared = db.execute(
+                conn,
+                """
+                UPDATE candidates
+                SET lease_id = NULL, lease_expires_at = NULL
+                WHERE lease_expires_at < now() - make_interval(mins => %s)
+                  AND lease_id IS NOT NULL
+                """,
+                (LEASE_EXPIRY_GRACE_MINUTES,),
+            )
+            if cleared > 0:
+                logger.info("Watchdog: reclaimed %d expired candidate leases.", cleared)
+    except Exception as exc:
+        logger.error("Watchdog lease reclamation failed: %s", exc)
+
 
 def check_stuck_stages():
     """
     Find campaigns with stages stuck in 'running' for longer than WATCHDOG_TIMEOUT_MINUTES.
     Logs a CRITICAL warning and optionally sends a Slack alert.
+    Also reclaims expired candidate leases on every check cycle.
     """
+    # Always reclaim expired leases on each watchdog cycle
+    reclaim_expired_leases()
+
     try:
         with db.get_conn() as conn:
             stuck = db.fetchall(

@@ -287,6 +287,27 @@ def _enrich_candidate(candidate: dict, campaign: dict, conn, settings: dict | No
             )
             return {"candidate_id": candidate_id, "outcome": "skipped_cooldown"}
 
+    # ── Pre-increment attempt counter BEFORE any network calls ────────────────
+    # This ensures a crash during crawling/extruct still counts as an attempt,
+    # preventing infinite retry loops on broken or permanently unreachable sites.
+    db.execute(
+        conn,
+        """
+        UPDATE candidates
+        SET enrichment_attempt_count = enrichment_attempt_count + 1,
+            enrichment_attempted_at = now()
+        WHERE id = %s
+        """,
+        (candidate_id,),
+    )
+    # Refresh local value so subsequent max_attempts checks below use accurate count
+    candidate = dict(candidate)
+    candidate["enrichment_attempt_count"] = (candidate.get("enrichment_attempt_count") or 0) + 1
+    logger.debug(
+        "Stage 5: %s — attempt %d/%d starting",
+        domain, candidate["enrichment_attempt_count"], max_attempts,
+    )
+
     # ── Step 1: extruct — deterministic structured data extraction ────────────
     pre_extracted = _extract_structured_data(domain)
     cost_log.log_call(conn, "stage5", "crawler", campaign_id=campaign_id, query_count=1)

@@ -109,6 +109,12 @@ services:
         condition: service_healthy
     volumes:
       - app_logs:/var/log/app
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/api/session"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
 
   job-budget-monitor:
     build:
@@ -116,6 +122,7 @@ services:
       dockerfile: services/stages/Dockerfile
     profiles:
       - jobs
+    restart: on-failure
     env_file:
       - .env
     environment:
@@ -133,6 +140,7 @@ services:
       dockerfile: services/stages/Dockerfile
     profiles:
       - jobs
+    restart: on-failure
     env_file:
       - .env
     environment:
@@ -151,6 +159,7 @@ services:
       dockerfile: services/evaluator/Dockerfile
     profiles:
       - jobs
+    restart: on-failure
     env_file:
       - .env
     environment:
@@ -162,14 +171,13 @@ services:
       postgres:
         condition: service_healthy
 
-
-
   job-rescore-icp:
     build:
       context: .
       dockerfile: services/stages/Dockerfile
     profiles:
       - jobs
+    restart: on-failure
     env_file:
       - .env
     environment:
@@ -186,8 +194,9 @@ services:
     image: ghcr.io/browserless/chromium:latest
     restart: unless-stopped
     ports:
-      - "8047:3000"
+      - "127.0.0.1:8047:3000"   # security: bind to localhost only (was 0.0.0.0)
     environment:
+      - TOKEN=${BROWSERLESS_TOKEN:-dev_browserless_token_change_in_prod}
       - CONNECTION_TIMEOUT=300000
       - MAX_CONCURRENT_SESSIONS=40
       - PREVENT_REJECT=true
