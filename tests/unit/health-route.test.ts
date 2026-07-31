@@ -39,11 +39,13 @@ describe("/api/admin/health", () => {
   })
 
   it("returns 500 when database error occurs", async () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {})
     vi.mocked(query).mockRejectedValue(new Error("DB connection lost"))
     const res = await GET()
     expect(res.status).toBe(500)
     const body = await res.json()
     expect(body.ok).toBe(false)
     expect(body.error).toBe("Internal server error")
+    consoleSpy.mockRestore()
   })
 })

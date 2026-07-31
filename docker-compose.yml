@@ -189,9 +189,12 @@ services:
       - "8047:3000"
     environment:
       - CONNECTION_TIMEOUT=300000
-      - MAX_CONCURRENT_SESSIONS=25
+      - MAX_CONCURRENT_SESSIONS=40
+      - PREVENT_REJECT=true
+      - MAX_QUEUE_LENGTH=100
+      - QUEUED_TIMEOUT=60000
       - DEFAULT_IGNORE_HTTPS_ERRORS=true
-      - TIMEOUT=60000
+      - TIMEOUT=30000
 
 volumes:
   postgres_data:

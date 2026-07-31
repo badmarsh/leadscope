@@ -8,6 +8,7 @@ Architecture:
     Crawl4AI (full Playwright) for JS-heavy SPAs.
   - URL validated as http/https only via Pydantic HttpUrl.
 """
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 from typing import Optional
@@ -23,6 +24,9 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 GEMINI_PROXY_ENDPOINT = os.environ.get("GEMINI_PROXY_ENDPOINT", "http://host.docker.internal:8045").rstrip("/")
+
+# Limit concurrent Crawl4AI sessions to 5 to protect Browserless
+_CRAWLER_SEMAPHORE = asyncio.Semaphore(5)
 
 # ── Persistent browser instance (reused across all requests) ──────────────────
 
@@ -130,8 +134,13 @@ async def crawl(req: CrawlRequest):
             kwargs["css_selector"] = req.css_selector
 
         config = BrowserConfig(cdp_url="ws://browserless:3000")
-        async with AsyncWebCrawler(config=config, verbose=False) as crawler:
-            result = await crawler.arun(url=url_str, **kwargs)
+        try:
+            async with _CRAWLER_SEMAPHORE:
+                async with AsyncWebCrawler(config=config, verbose=False) as crawler:
+                    result = await crawler.arun(url=url_str, **kwargs)
+        except Exception as crawl_err:
+            logger.warning("Crawl4AI navigation error for %s: %s", url_str, crawl_err)
+            return {"success": False, "error": str(crawl_err), "renderer": "playwright"}
 
         extracted_data = None
         if req.extract_images and result.success and result.markdown:
