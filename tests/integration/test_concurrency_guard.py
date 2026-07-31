@@ -18,7 +18,7 @@ def conn():
 def setup_candidate(conn):
     with conn.cursor() as cur:
         # Create a campaign
-        cur.execute("INSERT INTO campaigns (name, business_brief, icp_prompt) VALUES ('Test Camp', 'Brief', 'Prompt') RETURNING id")
+        cur.execute("INSERT INTO campaigns (name, business_brief, finder_type, evaluator_type) VALUES ('Test Camp', 'Brief', 'keyword_search', 'content_relevance') RETURNING id")
         camp_id = cur.fetchone()[0]
         # Insert a candidate
         cur.execute("INSERT INTO candidates (campaign_id, domain, status, processing_generation) VALUES (%s, 'testlock.com', 'new', 0) RETURNING id", (camp_id,))
