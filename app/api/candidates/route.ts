@@ -1,4 +1,4 @@
-﻿/**
+/**
  * GET /api/candidates?campaign_id=1
  * Returns raw candidates (pre-evaluation pipeline) for the Pipeline tab.
  * Shows candidates with status: new, evaluating, evaluated, discarded, duplicate, enrichment_failed
@@ -36,6 +36,7 @@ export async function GET(request: NextRequest) {
     source: string
     status: string
     created_at: string
+    updated_at: string
     enrichment_attempt_count: number
     duplicate_of_candidate_id: number | null
   }>(
@@ -46,12 +47,13 @@ export async function GET(request: NextRequest) {
        c.source,
        c.status,
        c.created_at,
+       c.updated_at,
        c.enrichment_attempt_count,
        c.duplicate_of_candidate_id
      FROM candidates c
      WHERE c.campaign_id = $1
        AND c.status IN ('new', 'evaluating', 'evaluated', 'discarded', 'duplicate', 'enrichment_failed')
-     ORDER BY c.created_at DESC
+     ORDER BY c.updated_at DESC NULLS LAST, c.created_at DESC
      LIMIT $2 OFFSET $3`,
     [campaignId, limit, offset]
   )

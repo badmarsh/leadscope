@@ -18,6 +18,7 @@ interface RawCandidate {
   source: string
   status: string
   created_at: string
+  updated_at: string
   enrichment_attempt_count: number
 }
 
@@ -477,7 +478,7 @@ export function LeadsTable({ leads, selectedId, onSelect, onFilteredChange, onBu
                   <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">Domain</th>
                   <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">{t("pipeline.source", { defaultValue: "Source" })}</th>
                   <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">{t("leads_table.columns.status", { defaultValue: "Status" })}</th>
-                  <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">{t("leads_table.columns.date_found", { defaultValue: "Date found" })}</th>
+                  <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">{t("leads_table.columns.date_modified", { defaultValue: "Date modified" })}</th>
                 </tr>
               </thead>
               <tbody>
@@ -515,7 +516,7 @@ export function LeadsTable({ leads, selectedId, onSelect, onFilteredChange, onBu
                         </span>
                       </td>
                       <td className="whitespace-nowrap px-4 py-2 font-mono text-xs text-muted-foreground">
-                        {formatDate(new Date(cand.created_at).toLocaleDateString("en-CA"))}
+                        {formatDate(new Date(cand.updated_at || cand.created_at).toLocaleDateString("en-CA"))}
                       </td>
                     </tr>
                   )
