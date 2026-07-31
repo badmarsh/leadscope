@@ -293,7 +293,6 @@ def _enrich_candidate(candidate: dict, campaign: dict, conn, settings: dict | No
 
     if pre_extracted.pop("_network_error", False):
         logger.warning("Stage 5: %s is unreachable (network error), skipping crawler entirely.", domain)
-        logger.warning("Stage 5: %s is unreachable (network error), skipping crawler entirely.", domain)
         new_attempt_count = candidate.get("enrichment_attempt_count", 1)
         if new_attempt_count >= max_attempts:
             db.execute(conn, "UPDATE candidates SET status = 'enrichment_failed' WHERE id = %s AND processing_generation = %s", (candidate_id, candidate.get("processing_generation", 0)))
@@ -398,7 +397,12 @@ def _enrich_candidate(candidate: dict, campaign: dict, conn, settings: dict | No
 
     # Merge crawled product images into evidence for dashboard display
     existing_evidence_images = eval_evidence.get("images_analyzed") or []
-    merged_images = list(dict.fromkeys(existing_evidence_images + (crawl_images or [])))[:20]
+    valid_http_images = [img for img in existing_evidence_images if isinstance(img, str) and img.startswith("http")]
+    if crawl_images:
+        for img in crawl_images:
+            if isinstance(img, str) and img.startswith("http") and img not in valid_http_images:
+                valid_http_images.append(img)
+    merged_images = valid_http_images[:20]
 
     email_quality = email_validator.classify_email(email) if email else None
     email_domain = email.split("@")[-1] if email and "@" in email else None
@@ -447,7 +451,7 @@ def _enrich_candidate(candidate: dict, campaign: dict, conn, settings: dict | No
     )
 
     # Update evaluations evidence with merged product images for dashboard display
-    if crawl_images:
+    if merged_images:
         db.execute(
             conn,
             """

@@ -261,7 +261,7 @@ def extract_image_urls(markdown: str, evaluator_type: str = "content_relevance")
     return valid_urls
 
 
-def extract_product_grid_images(html: str) -> list[str]:
+def extract_product_grid_images(html: str, domain: str = "") -> list[str]:
     """
     Extract product grid images by parsing HTML with BeautifulSoup.
     Looks for repeated images in common grid structures and filters aggressively.
@@ -298,10 +298,8 @@ def extract_product_grid_images(html: str) -> list[str]:
             
         if src.startswith("//"):
             src = "https:" + src
-        elif src.startswith("/"):
-            # We can't perfectly resolve relative without the domain, but Firecrawl usually resolves them.
-            # If it didn't, we skip or attempt. Most good grids have absolute CDN links.
-            pass
+        elif src.startswith("/") and domain:
+            src = f"https://{domain.rstrip('/')}{src}"
             
         if not src.startswith("http"):
             continue

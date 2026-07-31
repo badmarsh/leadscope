@@ -139,21 +139,91 @@ def take_screenshots(domain: str, product_paths: list[str]) -> list[str]:
         
     return base64_images
 
+def extract_direct_product_images(domain: str, product_paths: list[str]) -> list[str]:
+    """
+    Extracts direct product image URLs (HTTP/HTTPS) from the store / product listing page.
+    Uses crawler extraction, extruct (JSON-LD, OpenGraph), and BeautifulSoup grid parsing.
+    Returns a deduplicated list of HTTP/HTTPS product image URLs.
+    """
+    product_images = []
+    
+    # 1. Try crawler LLM extraction on best product path and homepage
+    target_urls = []
+    if product_paths:
+        target_urls.append(f"https://{domain}{product_paths[0]}")
+    target_urls.append(f"https://{domain}")
+
+    for target_url in target_urls:
+        try:
+            crawler_imgs = firecrawl_client.extract_product_grid_images_via_crawler(target_url)
+            if crawler_imgs:
+                for img in crawler_imgs:
+                    if isinstance(img, str) and img.startswith("http") and img not in product_images:
+                        product_images.append(img)
+                if len(product_images) >= 4:
+                    break
+        except Exception as e:
+            logger.warning("Crawler grid extraction failed for %s: %s", target_url, e)
+
+    # 2. Fallback to HTML / extruct / OpenGraph parsing if fewer than 4 images found
+    if len(product_images) < 4:
+        for target_url in target_urls:
+            try:
+                import requests, extruct
+                from w3lib.html import get_base_url
+                resp = requests.get(target_url, timeout=10, headers={"User-Agent": "Mozilla/5.0"})
+                if resp.status_code == 200:
+                    base_url = get_base_url(resp.text, resp.url)
+                    html_imgs = firecrawl_client.extract_product_grid_images(resp.text, domain=domain)
+                    for img in html_imgs:
+                        if isinstance(img, str) and img.startswith("http") and img not in product_images:
+                            product_images.append(img)
+
+                    data = extruct.extract(resp.text, base_url=base_url, syntaxes=["json-ld", "opengraph", "microdata"])
+                    for item in data.get("json-ld", []):
+                        img = item.get("image")
+                        if isinstance(img, str) and img.startswith("http") and img not in product_images:
+                            product_images.append(img)
+                        elif isinstance(img, list):
+                            for i in img:
+                                if isinstance(i, str) and i.startswith("http") and i not in product_images:
+                                    product_images.append(i)
+                    for og in data.get("opengraph", []):
+                        og_img = og.get("og:image")
+                        if isinstance(og_img, str) and og_img.startswith("http") and og_img not in product_images:
+                            product_images.append(og_img)
+            except Exception as e:
+                logger.warning("HTML/extruct extraction failed for %s: %s", target_url, e)
+
+    ignore_terms = ["logo", "icon", "banner", "gls", "packeta", "visa", "mastercard", "paypal", "stripe", ".svg", "avatar", "badge", "trust", "hero"]
+    filtered_images = [
+        url for url in product_images
+        if not any(b in url.lower() for b in ignore_terms)
+    ]
+    return list(dict.fromkeys(filtered_images))[:10]
+
 def score(candidate: dict, campaign: dict, icp: dict, few_shot: list[dict]) -> dict:
     domain = candidate["domain"]
 
     # 1. Discover product paths via Firecrawl Map API
     product_paths = firecrawl_client._discover_product_paths(domain)
     
-    # 2. Take screenshots via Browserless
-    base64_images = take_screenshots(domain, product_paths)
+    # 2. Extract direct product images from shop / product listing page
+    direct_product_images = extract_direct_product_images(domain, product_paths)
     
-    # Fail fast on dead domains
-    if not base64_images:
-        logger.warning("Browserless returned no screenshots for %s. Marking as dead domain.", domain)
+    # Fallback to take_screenshots if direct extraction yields nothing (e.g. in test mocks or JS-heavy SPA without crawler)
+    base64_screenshots = []
+    if not direct_product_images:
+        base64_screenshots = take_screenshots(domain, product_paths)
+    
+    images_to_analyze = direct_product_images if direct_product_images else base64_screenshots
+    
+    # Fail fast on dead domains or sites with no images
+    if not images_to_analyze:
+        logger.warning("No product images found for %s. Marking as dead/no-product domain.", domain)
         return {
             "score": 0,
-            "rationale": "Dead domain or completely unreachable by browser.",
+            "rationale": "Dead domain or no product images found on shop / product listing page.",
             "photo_quality": "irrelevant",
             "images_analyzed": [],
             "product_type": "other",
@@ -198,9 +268,9 @@ def score(candidate: dict, campaign: dict, icp: dict, few_shot: list[dict]) -> d
         issues_found: list[str]
         cold_email_hook: str
 
-    logger.info("Sending %d screenshots of %s to Vision AI", len(base64_images), domain)
+    logger.info("Sending %d product images of %s to Vision AI", len(images_to_analyze), domain)
     result, ti, to, model, provider = llm.chat_vision(
-        prompt, base64_images, temperature=0.0, response_model=ImageQualityResponse
+        prompt, images_to_analyze, temperature=0.0, response_model=ImageQualityResponse
     )
 
     if "_raw" in result:
@@ -208,7 +278,7 @@ def score(candidate: dict, campaign: dict, icp: dict, few_shot: list[dict]) -> d
         return {
             "score": 50, "rationale": "LLM returned non-parseable response",
             "evidence_urls": [f"https://{domain}"],
-            "evidence_data": {"raw_response": result["_raw"][:500], "images_found": len(base64_images)},
+            "evidence_data": {"raw_response": result["_raw"][:500], "images_found": len(images_to_analyze)},
             "model_used": model, "provider": provider,
             "tokens_in": ti, "tokens_out": to,
         }
@@ -224,7 +294,8 @@ def score(candidate: dict, campaign: dict, icp: dict, few_shot: list[dict]) -> d
             "product_count_estimate": result.get("product_count_estimate", 0) if isinstance(result, dict) else getattr(result, "product_count_estimate", 0),
             "issues_found": result.get("issues_found", []) if isinstance(result, dict) else getattr(result, "issues_found", []),
             "cold_email_hook": result.get("cold_email_hook", "") if isinstance(result, dict) else getattr(result, "cold_email_hook", ""),
-            "images_analyzed": base64_images,
+            "images_analyzed": images_to_analyze,
+            "product_images": direct_product_images,
         },
         "model_used": model,
         "provider": provider,

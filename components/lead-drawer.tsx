@@ -390,19 +390,19 @@ export function LeadDrawer({ lead, onClose, onDecision, onReopen, onNavigate, ha
 
             {lead.evidence.kind === "photos" &&
               (lead.evidence.photos.length > 0 ? (
-                <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {lead.evidence.photos.map((photo) => (
-                    <figure key={photo.src} className="flex flex-col overflow-hidden rounded-md border border-border bg-card">
-                      <div className="relative w-full overflow-y-auto max-h-[300px] bg-muted custom-scrollbar">
+                <div className="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  {lead.evidence.photos.map((photo, idx) => (
+                    <figure key={`${photo.src}-${idx}`} className="group flex flex-col overflow-hidden rounded-md border border-border bg-card transition-all hover:border-primary/50">
+                      <div className="relative aspect-square w-full overflow-hidden bg-muted">
                         <Image
                           src={photo.src || "/placeholder.svg"}
-                          alt={`Scraped photo: ${photo.label}`}
-                          width={1280}
-                          height={2000}
-                          className="w-full h-auto object-top"
+                          alt={`Product photo: ${photo.label}`}
+                          fill
+                          sizes="(max-width: 640px) 50vw, 25vw"
+                          className="object-cover transition-transform duration-200 group-hover:scale-105"
                         />
                       </div>
-                      <figcaption className="px-3 py-2 font-mono text-xs font-semibold text-muted-foreground border-t border-border">
+                      <figcaption className="truncate px-2.5 py-1.5 font-mono text-[11px] font-medium text-muted-foreground border-t border-border">
                         {photo.label}
                       </figcaption>
                     </figure>

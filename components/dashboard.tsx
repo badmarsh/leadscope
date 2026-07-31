@@ -30,11 +30,20 @@ function rowToLead(row: Record<string, unknown>): Lead {
 
   let evidence: Lead["evidence"]
 
-  if (evaluatorType === "image_quality" || evidenceData.images_analyzed) {
-    const images = (evidenceData.images_analyzed as string[] | undefined) ?? []
+  if (evaluatorType === "image_quality" || evidenceData.product_images || evidenceData.scraped_product_images || evidenceData.images_analyzed) {
+    const rawImages = [
+      ...((evidenceData.product_images as string[] | undefined) ?? []),
+      ...((evidenceData.scraped_product_images as string[] | undefined) ?? []),
+      ...((evidenceData.images_analyzed as string[] | undefined) ?? []),
+    ]
+    const directImages = Array.from(new Set(rawImages.filter((src) => typeof src === "string" && (src.startsWith("http://") || src.startsWith("https://")))))
+
     evidence = {
       kind: "photos",
-      photos: images.slice(0, 4).map((src) => ({ src, label: "Product image" })),
+      photos: directImages.slice(0, 8).map((src, i) => ({
+        src,
+        label: `Product Image ${i + 1}`,
+      })),
     }
   } else if (
     evaluatorType === "threat_intel" ||

@@ -403,12 +403,13 @@ export function rowToLead(row: Record<string, unknown>): Lead {
   let evidence: Lead["evidence"]
 
   if (evaluatorType === "image_quality" || evidenceData.images_analyzed) {
-    const images = (evidenceData.images_analyzed as string[] | undefined) ?? []
+    const rawImages = (evidenceData.images_analyzed as string[] | undefined) ?? []
+    const httpImages = rawImages.filter((img) => typeof img === "string" && img.startsWith("http"))
     evidence = {
       kind: "photos",
-      photos: images.slice(0, 4).map((src, idx) => ({ 
+      photos: httpImages.slice(0, 8).map((src, idx) => ({ 
         src, 
-        label: idx === 0 ? "Homepage Analysis" : idx === 1 ? "Product Page Analysis" : `Additional Analysis ${idx+1}` 
+        label: `Product Image ${idx + 1}`
       })),
     }
   } else if (

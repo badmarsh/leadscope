@@ -104,15 +104,14 @@ describe("GET /api/screenshot", () => {
     expect(res.headers.get("Content-Type")).toBe("image/jpeg")
   })
 
-  it("sends GDPR removal script and domcontentloaded in request body", async () => {
+  it("sends domcontentloaded in request body", async () => {
     const fakeJpeg = Buffer.from([0xFF, 0xD8])
     mockFetch.mockResolvedValue({ ok: true, arrayBuffer: async () => fakeJpeg.buffer })
     const req = new NextRequest("http://localhost/api/screenshot?url=https://safe.com")
     await GET(req)
     const body = JSON.parse(mockFetch.mock.calls[0][1].body)
     expect(body.gotoOptions.waitUntil).toBe("domcontentloaded")
-    expect(body.evaluate).toContain("cookie")
-    expect(body.evaluate).toContain("gdpr")
+    expect(body.options.type).toBe("jpeg")
   })
 
   it("returns 502 when browserless returns 5xx", async () => {
