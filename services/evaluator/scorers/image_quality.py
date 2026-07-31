@@ -96,10 +96,24 @@ def take_screenshots(domain: str, product_paths: list[str]) -> list[str]:
                 
                 for url in urls_to_capture:
                     logger.info("Capturing screenshot of %s", url)
-                    context = browser.new_context(viewport={"width": 1280, "height": 1080})
+                    context = browser.new_context(
+                        viewport={"width": 1280, "height": 1080},
+                        ignore_https_errors=True
+                    )
                     page = context.new_page()
                     try:
-                        response = page.goto(url, timeout=30000, wait_until="domcontentloaded")
+                        response = None
+                        try:
+                            response = page.goto(url, timeout=15000, wait_until="domcontentloaded")
+                        except Exception as e:
+                            err_msg = str(e)
+                            if "https://" in url and any(err in err_msg for err in ["ERR_CONNECTION_REFUSED", "ERR_SSL", "SSL", "ERR_CERT", "Connection refused"]):
+                                http_url = url.replace("https://", "http://", 1)
+                                logger.info("HTTPS failed (%s). Retrying with HTTP: %s", err_msg, http_url)
+                                response = page.goto(http_url, timeout=15000, wait_until="domcontentloaded")
+                            else:
+                                raise
+
                         if not response or not response.ok:
                             logger.warning("Failed to load %s: HTTP %s", url, response.status if response else "Unknown")
                             continue

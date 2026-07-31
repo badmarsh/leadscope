@@ -114,5 +114,33 @@ def test_take_screenshots_uses_domcontentloaded(mock_playwright):
     images = take_screenshots("example.com", ["/product1"])
     assert len(images) == 2
     assert mock_page.goto.call_count == 2
-    mock_page.goto.assert_any_call("https://example.com", timeout=30000, wait_until="domcontentloaded")
-    mock_page.goto.assert_any_call("https://example.com/product1", timeout=30000, wait_until="domcontentloaded")
+    mock_page.goto.assert_any_call("https://example.com", timeout=15000, wait_until="domcontentloaded")
+    mock_page.goto.assert_any_call("https://example.com/product1", timeout=15000, wait_until="domcontentloaded")
+
+@patch('scorers.image_quality.sync_playwright')
+def test_take_screenshots_falls_back_to_http_on_connection_refused(mock_playwright):
+    from scorers.image_quality import take_screenshots
+    mock_p = MagicMock()
+    mock_playwright.return_value.__enter__.return_value = mock_p
+    mock_browser = MagicMock()
+    mock_p.chromium.connect_over_cdp.return_value = mock_browser
+    mock_context = MagicMock()
+    mock_browser.new_context.return_value = mock_context
+    mock_page = MagicMock()
+    mock_context.new_page.return_value = mock_page
+
+    mock_resp = MagicMock()
+    mock_resp.ok = True
+
+    # HTTPS fails with connection refused, HTTP succeeds
+    def side_effect(url, **kwargs):
+        if url.startswith("https://"):
+            raise Exception("Page.goto: net::ERR_CONNECTION_REFUSED at " + url)
+        return mock_resp
+
+    mock_page.goto.side_effect = side_effect
+    mock_page.screenshot.return_value = b"fake_bytes"
+
+    images = take_screenshots("example.com", [])
+    assert len(images) == 1
+    mock_page.goto.assert_any_call("http://example.com", timeout=15000, wait_until="domcontentloaded")

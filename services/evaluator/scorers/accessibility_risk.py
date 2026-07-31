@@ -30,11 +30,25 @@ def score(candidate: dict, campaign: dict, icp: dict, few_shot: list) -> dict:
         with _BROWSER_SEMAPHORE:
             with sync_playwright() as p:
                 browser = p.chromium.connect_over_cdp("ws://browserless:3000")
-                context = browser.new_context(viewport={"width": 1280, "height": 800})
+                context = browser.new_context(
+                    viewport={"width": 1280, "height": 800},
+                    ignore_https_errors=True
+                )
                 page = context.new_page()
 
                 try:
-                    resp = page.goto(url, timeout=30000, wait_until="domcontentloaded")
+                    resp = None
+                    try:
+                        resp = page.goto(url, timeout=15000, wait_until="domcontentloaded")
+                    except Exception as e:
+                        err_msg = str(e)
+                        if "https://" in url and any(err in err_msg for err in ["ERR_CONNECTION_REFUSED", "ERR_SSL", "SSL", "ERR_CERT", "Connection refused"]):
+                            http_url = url.replace("https://", "http://", 1)
+                            logger.info("HTTPS failed (%s). Retrying with HTTP: %s", err_msg, http_url)
+                            resp = page.goto(http_url, timeout=15000, wait_until="domcontentloaded")
+                        else:
+                            raise
+
                     if not resp or not resp.ok:
                         return _no_data_result(domain, f"HTTP {resp.status if resp else 'unknown'}")
 
