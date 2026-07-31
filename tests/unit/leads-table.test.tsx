@@ -93,6 +93,24 @@ describe('LeadsTable Component', () => {
     // But approved leads should
     expect(screen.getByText('Duna Épületgépészet Zrt.')).toBeInTheDocument();
   });
+
+  it('hides incomplete pending leads from Pending Review tab', () => {
+    const incompletePendingLead = {
+      ...leads[0],
+      id: 'jx-inc',
+      company: 'Incomplete Corp',
+      status: 'pending' as const,
+      contact_email: undefined,
+    };
+    render(
+      <LeadsTable
+        leads={[incompletePendingLead]}
+        selectedId={null}
+        onSelect={vi.fn()}
+      />
+    );
+    expect(screen.queryByText('Incomplete Corp')).not.toBeInTheDocument();
+  });
 });
 
 describe('Pipeline tab', () => {
@@ -164,18 +182,20 @@ describe('Completeness dot', () => {
   it('dot is red for incomplete lead', () => {
     const incompleteLead = {
       ...leads[0],
-      status: 'pending' as const,
+      status: 'approved' as const,
       contact_email: undefined,
       screenshot_url: undefined,
     };
     render(<LeadsTable leads={[incompleteLead]} selectedId={null} onSelect={vi.fn()} />);
+    fireEvent.click(screen.getByRole('tab', { name: /Reviewed/i }));
     const redDot = document.querySelector('.bg-red-500');
     expect(redDot).toBeTruthy();
   });
 
   it('dot tooltip lists missing fields', () => {
-    const incompleteLead = { ...leads[0], status: 'pending' as const, contact_email: undefined };
+    const incompleteLead = { ...leads[0], status: 'approved' as const, contact_email: undefined };
     render(<LeadsTable leads={[incompleteLead]} selectedId={null} onSelect={vi.fn()} />);
+    fireEvent.click(screen.getByRole('tab', { name: /Reviewed/i }));
     const redDot = document.querySelector('.bg-red-500');
     expect(redDot?.getAttribute('title')).toContain('Email');
   });

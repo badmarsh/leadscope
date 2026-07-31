@@ -111,6 +111,11 @@ export const leads: Lead[] = [
     dateFound: "2026-07-14",
     rationale:
       "Mid-size HVAC installer in Budapest with 25+ employees per their team page. Currently lists Daikin and Mitsubishi as partners but no premium residential heat-pump line. Multiple service pages mention supply delays with their current distributor. Strong fit for JENEX distribution partnership.",
+    enrichment_report: "Budapesti Klíma Kft. is a leading HVAC contractor in Budapest providing residential and commercial climate solutions.",
+    screenshot_url: "/api/screenshot?url=https%3A%2F%2Fbudapestiklima.hu",
+    contact_email: "info@budapestiklima.hu",
+    contact_phone: "+3612345678",
+    products_sold: ["HVAC Installation", "Climate Systems", "Heat Pumps"],
     evidence: {
       kind: "urls",
       urls: [
@@ -130,6 +135,11 @@ export const leads: Lead[] = [
     dateFound: "2026-07-13",
     rationale:
       "Regional refrigeration and climate contractor covering Transdanubia. Recent job postings indicate expansion into residential AC installs. No exclusive brand tie-in detected on site; pricing page suggests they source ad hoc from wholesalers.",
+    enrichment_report: "Pannon Hűtéstechnika specializes in industrial refrigeration and climate control installations.",
+    screenshot_url: "/api/screenshot?url=https%3A%2F%2Fpannonhutes.hu",
+    contact_email: "kapcsolat@pannonhutes.hu",
+    contact_phone: "+3696543210",
+    products_sold: ["Industrial Cooling", "AC Installation"],
     evidence: {
       kind: "urls",
       urls: ["https://pannonhutes.hu/szolgaltatasok", "https://pannonhutes.hu/karrier"],
@@ -145,6 +155,11 @@ export const leads: Lead[] = [
     dateFound: "2026-07-12",
     rationale:
       "Smaller installer in Szeged, roughly 8 employees. Active on tenders portal for public building retrofits — heat-pump demand likely. Site mentions interest in new supplier relationships on their contact page.",
+    enrichment_report: "Alföld Klíma és Fűtés handles public tender HVAC retrofits and residential heat pump installations in Szeged.",
+    screenshot_url: "/api/screenshot?url=https%3A%2F%2Falfoldklima.hu",
+    contact_email: "iroda@alfoldklima.hu",
+    contact_phone: "+3662111222",
+    products_sold: ["Heat Pumps", "Boilers"],
     evidence: {
       kind: "urls",
       urls: [

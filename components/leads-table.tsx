@@ -3,7 +3,7 @@
 import { useMemo, useState, useEffect } from "react"
 import { ArrowDown, ArrowUp, ArrowUpDown, ExternalLink, Inbox, Search } from "lucide-react"
 import type { Lead, CampaignId } from "@/lib/leads-data"
-import { formatDate, scoreColorClasses, statusBadgeClasses, statusLabels, getLeadMissingFields } from "@/lib/status"
+import { formatDate, scoreColorClasses, statusBadgeClasses, statusLabels, getLeadMissingFields, isLeadComplete } from "@/lib/status"
 import { cn } from "@/lib/utils"
 import { useTranslation } from "@/lib/i18n"
 
@@ -83,9 +83,13 @@ export function LeadsTable({ leads, selectedId, onSelect, onFilteredChange, onBu
 
   const filtered = useMemo(() => {
     const subset = leads.filter((l) => {
-      if (view === "pending") { if (l.status !== "pending") return false }
+      if (view === "pending") {
+        if (l.status !== "pending") return false
+        if (!isLeadComplete(l)) return false
+      }
       else if (view === "reviewed") { if (l.status !== "approved" && l.status !== "rejected") return false }
-      else { if (l.status !== "enrichment_failed") return false }
+      else if (view === "enrichment_failed") { if (l.status !== "enrichment_failed") return false }
+      else if (view === "pipeline") { return false }
       if (search) {
         const q = search.toLowerCase()
         if (!l.company.toLowerCase().includes(q) && !l.domain.toLowerCase().includes(q)) return false
@@ -120,7 +124,7 @@ export function LeadsTable({ leads, selectedId, onSelect, onFilteredChange, onBu
     }
   }
 
-  const pendingCount = leads.filter((l) => l.status === "pending").length
+  const pendingCount = leads.filter((l) => l.status === "pending" && isLeadComplete(l)).length
   const reviewedCount = leads.filter((l) => l.status === "approved" || l.status === "rejected").length
   const failedCount = leads.filter((l) => l.status === "enrichment_failed").length
   const pipelineCount = rawCandidates.length

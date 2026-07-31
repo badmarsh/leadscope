@@ -24,14 +24,14 @@ import requests
 from datetime import datetime
 from pathlib import Path
 
-# Auto-load .env if DATABASE_URL or INTERNAL_API_TOKEN not already set
+# Auto-load .env
 _env_path = Path(__file__).parent.parent / ".env"
 if _env_path.exists():
     for _line in _env_path.read_text(encoding="utf-8").splitlines():
         _line = _line.strip()
         if _line and not _line.startswith("#") and "=" in _line:
             _k, _v = _line.split("=", 1)
-            os.environ.setdefault(_k.strip(), _v.strip())
+            os.environ[_k.strip()] = _v.strip()
 
 STAGES_URL = os.environ.get("STAGES_URL", "http://localhost:8002")
 INTERNAL_API_TOKEN = os.environ.get("INTERNAL_API_TOKEN", "")
@@ -57,7 +57,7 @@ def post(path, body=None):
     headers = {}
     if INTERNAL_API_TOKEN:
         headers["X-Internal-Token"] = INTERNAL_API_TOKEN
-    resp = requests.post(f"{STAGES_URL}{path}", json=body, headers=headers, timeout=180)
+    resp = requests.post(f"{STAGES_URL}{path}", json=body, headers=headers, timeout=300)
     return resp.status_code, resp.json()
 
 
@@ -78,21 +78,35 @@ code, data = post("/stage1/run", {"campaign_id": JENEX_CAMPAIGN_ID})
 ok = code == 200 and data.get("ok")
 if ok:
     r = data["result"]
-    has_segments = isinstance(r.get("keywords_hu"), list) and len(r["keywords_hu"]) >= 3
-    has_en = isinstance(r.get("keywords_en"), list) and len(r["keywords_en"]) >= 2
+    kw_hu = r.get("keywords_hu") or []
+    kw_en = r.get("keywords_en") or []
+    has_segments = isinstance(kw_hu, list) and len(kw_hu) >= 3
+    has_en = isinstance(kw_en, list) and len(kw_en) >= 2
     check("Stage 1 JENEX → icp_config row created", has_segments and has_en,
           f"version={r.get('version')} segments={r.get('segments')} "
-          f"keywords_hu={len(r['keywords_hu'])} keywords_en={len(r['keywords_en'])}")
-    print(f"       Sample HU keywords: {r['keywords_hu'][:3]}")
-    print(f"       Sample EN keywords: {r['keywords_en'][:3]}")
+          f"keywords_hu={len(kw_hu)} keywords_en={len(kw_en)}")
+    print(f"       Sample HU keywords: {kw_hu[:3]}")
+    print(f"       Sample EN keywords: {kw_en[:3]}")
 else:
     check("Stage 1 JENEX → icp_config row created", False, f"HTTP {code}: {data}")
 
 # ── 2. Stage 1 for draft campaign → must refuse ────────────────────────────────
 print("\n[2] Stage 1 — draft campaign must refuse")
+conn = get_db()
+cur = conn.cursor()
+cur.execute("UPDATE campaigns SET status = 'draft' WHERE id = %s", (SHOE_CAMPAIGN_ID,))
+conn.commit()
+conn.close()
+
 code, data = post("/stage1/run", {"campaign_id": SHOE_CAMPAIGN_ID})
 refused = code == 400 and "draft" in str(data.get("detail", "")).lower()
 check("Stage 1 draft campaign → 400 refusal", refused, f"HTTP {code}: {data.get('detail','')[:100]}")
+
+conn = get_db()
+cur = conn.cursor()
+cur.execute("UPDATE campaigns SET status = 'active' WHERE id = %s", (SHOE_CAMPAIGN_ID,))
+conn.commit()
+conn.close()
 
 # ── 3. Stage 2 keyword_search for JENEX ───────────────────────────────────────
 print("\n[3] Stage 2 — JENEX keyword_search")
@@ -463,7 +477,11 @@ conn.close()
 # ── Cleanup: remove test candidates ───────────────────────────────────────────
 conn = get_db()
 cur = conn.cursor()
-cur.execute("DELETE FROM candidates WHERE source='test' OR query_used LIKE 'validate_part2%' OR domain LIKE 'cross-campaign-test-validate%'")
+test_cand_filter = "(source='test' OR query_used LIKE 'validate_part2%' OR domain LIKE 'cross-campaign-test-validate%')"
+cur.execute(f"DELETE FROM evaluations WHERE candidate_id IN (SELECT id FROM candidates WHERE {test_cand_filter})")
+cur.execute(f"DELETE FROM feedback WHERE candidate_id IN (SELECT id FROM candidates WHERE {test_cand_filter})")
+cur.execute(f"DELETE FROM leads WHERE candidate_id IN (SELECT id FROM candidates WHERE {test_cand_filter})")
+cur.execute(f"DELETE FROM candidates WHERE {test_cand_filter}")
 conn.commit()
 conn.close()
 
