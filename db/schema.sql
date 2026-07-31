@@ -61,7 +61,7 @@ CREATE TABLE candidates (
   source TEXT,
   query_used TEXT,
   evidence_data JSONB,                    -- discovery-time evidence (e.g. which signature(s) matched)
-  status TEXT DEFAULT 'new',              -- new | evaluated | pending_review | approved | rejected | enriched | stale | enrichment_failed
+  status TEXT DEFAULT 'new',              -- new | evaluating | evaluated | enriched | approved | rejected | junk | discarded | invalid
   enrichment_attempted_at TIMESTAMPTZ,     -- tracks Stage 5 attempts so Firecrawl failures don't loop silently
   enrichment_attempt_count INT DEFAULT 0,  -- caps retries (Part 2, Stage 5) — see MAX_ENRICHMENT_ATTEMPTS
   evaluated_at TIMESTAMPTZ,                -- tracks when Stage 3 / find_malware completed domain evaluation

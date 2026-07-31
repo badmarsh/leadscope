@@ -1,7 +1,7 @@
 """
 stage5.py — Stage 5: Enrichment.
 
-Polls candidates with status 'pending_review' or 'approved', for each:
+Polls candidates with status 'evaluated', 'enriched', or 'approved', for each:
   1. Check do_not_contact — skip if suppressed
   2. Skip if lead already has enrichment_report (already enriched — do not repeat)
   3. Skip if enrichment_attempted_at < ENRICHMENT_RETRY_HOURS ago (avoid hammering crawler)
@@ -9,10 +9,10 @@ Polls candidates with status 'pending_review' or 'approved', for each:
   5. Crawl4AI scrapes the domain's homepage (JS-rendered, returns markdown + images)
   6. extruct extracts JSON-LD/Schema.org metadata deterministically (avoids LLM tokens)
   7. LLM fills remaining gaps: company overview in Slovak, estimates, buying signals
-  8. On success: upsert into leads table — candidate status is NOT changed (user reviews manually)
+  8. On success: upsert into leads table — candidate status set to 'enriched'
   9. On failure:
        - attempt_count < MAX_ENRICHMENT_ATTEMPTS → leave status unchanged (retry next cycle)
-       - attempt_count >= MAX_ENRICHMENT_ATTEMPTS → set 'enrichment_failed'
+       - attempt_count >= MAX_ENRICHMENT_ATTEMPTS → set 'invalid'
 
 Key improvement over v1 (Firecrawl):
   - Self-hosted Crawl4AI correctly renders JS/React storefronts (Firecrawl returned 20 chars; Crawl4AI returned 95k chars + 682 images for the same page)

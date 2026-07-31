@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
   const countRow = await query<{ count: string }>(
     `SELECT COUNT(*) FROM candidates
      WHERE campaign_id = $1
-       AND status IN ('new', 'evaluating', 'evaluated', 'pending_review', 'approved', 'rejected', 'junk', 'discarded', 'duplicate', 'enrichment_failed')`,
+       AND status IN ('new', 'evaluating', 'evaluated', 'enriched', 'invalid', 'approved', 'rejected', 'junk', 'discarded', 'duplicate')`,
     [campaignId]
   )
   const total = parseInt(countRow[0]?.count ?? "0", 10)
@@ -52,7 +52,7 @@ export async function GET(request: NextRequest) {
        c.duplicate_of_candidate_id
      FROM candidates c
      WHERE c.campaign_id = $1
-       AND c.status IN ('new', 'evaluating', 'evaluated', 'pending_review', 'approved', 'rejected', 'junk', 'discarded', 'duplicate', 'enrichment_failed')
+       AND c.status IN ('new', 'evaluating', 'evaluated', 'enriched', 'invalid', 'approved', 'rejected', 'junk', 'discarded', 'duplicate')
      ORDER BY c.last_seen_at DESC NULLS LAST, c.created_at DESC
      LIMIT $2 OFFSET $3`,
     [campaignId, limit, offset]

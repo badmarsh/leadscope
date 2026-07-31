@@ -70,7 +70,7 @@ def health():
 @app.post("/score/trigger", dependencies=[Depends(require_internal_token)])
 def trigger_scoring(req: Optional[CampaignRequest] = None, background_tasks: BackgroundTasks = None, background: bool = False):
     """
-    Poll for candidates with status='new', score each, flip to 'pending_review'.
+    Poll for candidates with status='new', score each, flip to 'evaluated'.
     """
     try:
         camp_id = req.campaign_id if req else None

@@ -90,7 +90,7 @@ def reverify():
     cur.execute("""
         SELECT id, domain, evidence_data
         FROM candidates
-        WHERE campaign_id = %s AND status IN ('approved', 'pending_review')
+        WHERE campaign_id = %s AND status IN ('approved', 'evaluated', 'enriched')
     """, (campaign_id,))
     
     candidates = cur.fetchall()

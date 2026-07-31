@@ -38,12 +38,12 @@ export async function GET(request: NextRequest) {
 
   // When require_enrichment=true, only show leads with full enrichment in the main queue
   const enrichedFilter = requireEnrichment
-    ? `AND (c.status NOT IN ('pending_review', 'approved') OR l.enrichment_report IS NOT NULL)`
+    ? `AND (c.status NOT IN ('evaluated', 'enriched', 'approved') OR l.enrichment_report IS NOT NULL)`
     : ``
 
   const statusCondition = statusFilter
     ? `AND c.status = $2 ${enrichmentFilter} ${enrichedFilter}`
-    : `AND c.status IN ('pending_review', 'approved', 'rejected', 'enrichment_failed') ${enrichmentFilter} ${enrichedFilter}`
+    : `AND c.status IN ('evaluated', 'enriched', 'approved', 'rejected', 'junk', 'invalid', 'discarded') ${enrichmentFilter} ${enrichedFilter}`
 
   const values: unknown[] = [campaignId]
   if (statusFilter) values.push(statusFilter)

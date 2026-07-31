@@ -896,12 +896,12 @@ def run(campaign_id: int) -> dict:
                 """
                 UPDATE candidates
                 SET status = 'discarded'
-                WHERE status = 'pending_review'
+                WHERE status = 'evaluated'
                   AND created_at < now() - interval '14 days'
                 """
             )
             if rows_discarded > 0:
-                logger.info("Stage 2: Auto-discarded %d stale 'pending_review' candidates", rows_discarded)
+                logger.info("Stage 2: Auto-discarded %d stale 'evaluated' candidates", rows_discarded)
 
         db.set_stage_status(campaign_id, "stage2", "idle")
         return result

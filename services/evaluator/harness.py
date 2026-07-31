@@ -336,9 +336,9 @@ def score_candidate(candidate_id: int) -> dict[str, Any]:
 
 def trigger_scoring(campaign_id: int | None = None) -> dict:
     """
-    Poll for candidates with status='new', score each, flip to 'pending_review'.
+    Poll for candidates with status='new', score each, flip to 'evaluated'.
     This is the bridge between Stage 2 (produces 'new') and the dashboard
-    (displays 'pending_review').
+    (displays 'evaluated').
     """
     with db.get_conn() as conn:
         _recover_stuck_evaluations(conn)

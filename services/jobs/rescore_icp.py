@@ -17,7 +17,7 @@ def rescore_outdated_candidates():
     conn = get_db()
     cur = conn.cursor()
 
-    # Find candidates in ('new', 'pending_review') whose latest evaluation 
+    # Find candidates in ('new', 'evaluated') whose latest evaluation 
     # used an older icp_config version than the current one for their campaign.
     
     # current icp version per campaign
@@ -39,7 +39,7 @@ def rescore_outdated_candidates():
             FROM evaluations
             GROUP BY candidate_id
         ) e ON c.id = e.candidate_id
-        WHERE c.status IN ('new', 'pending_review')
+        WHERE c.status IN ('new', 'evaluated')
     """)
     candidates = cur.fetchall()
 
@@ -52,14 +52,14 @@ def rescore_outdated_candidates():
         # If the candidate has NO evaluation yet (eval_icp_version is None), 
         # it will be picked up by the regular trigger_scoring job for 'new' candidates.
         # But if we want to force it here, we can. The megaprompt says:
-        # "re-run Stage 3 only on candidates still in 'new'/'pending_review' (not yet in feedback)"
+        # "re-run Stage 3 only on candidates still in 'new'/'evaluated' (not yet in feedback)"
         if eval_icp_version is not None and eval_icp_version < curr_version:
             print(f"Candidate {cid} (campaign {camp_id}) evaluated with v{eval_icp_version}, current is v{curr_version}. Re-scoring...")
             try:
                 r = requests.post(f"http://{EVALUATOR_HOST}/score/{cid}", timeout=60)
                 r.raise_for_status()
                 rescore_count += 1
-                # The evaluator harness will insert a NEW evaluation row and flip status to pending_review
+                # The evaluator harness will insert a NEW evaluation row and flip status to evaluated
                 # Optional: we could delete or deprecate the old evaluation rows, but the DB 
                 # allows multiple and usually we just ORDER BY created_at DESC for the active one.
                 # To be clean, let's delete older evaluations for this candidate so the dashboard only sees one.
