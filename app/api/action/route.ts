@@ -15,6 +15,7 @@ import { sessionOptions, type SessionData } from "@/lib/session"
 import { pool } from "@/lib/db"
 import { z } from "zod"
 import crypto from "crypto"
+import dns from "dns"
 
 const BLOCKED_HOSTNAME_PATTERNS = [
   /^localhost$/i,
@@ -23,14 +24,39 @@ const BLOCKED_HOSTNAME_PATTERNS = [
   /^192\.168\./,
   /^172\.(1[6-9]|2[0-9]|3[01])\./,
   /^169\.254\./,
+  /^0\./,
   /^::1$/,
+  /^fe80:/i,
+  /^fc00:/i,
+  /^fd[0-9a-f]{2}:/i,
+  /^::ffff:(127\.|10\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[01])\.|169\.254\.)/i,
 ]
 
-function isSafeUrl(raw: string): boolean {
+function isPrivateIp(ip: string): boolean {
+  return BLOCKED_HOSTNAME_PATTERNS.some((re) => re.test(ip))
+}
+
+async function isSafeUrl(raw: string): Promise<boolean> {
   try {
     const parsed = new URL(raw)
     if (!['http:', 'https:'].includes(parsed.protocol)) return false
-    return !BLOCKED_HOSTNAME_PATTERNS.some((re) => re.test(parsed.hostname))
+    const hostname = parsed.hostname.toLowerCase()
+    if (BLOCKED_HOSTNAME_PATTERNS.some((re) => re.test(hostname))) return false
+
+    // DNS resolution check for SSRF protection
+    try {
+      const addresses = await dns.promises.lookup(hostname, { all: true })
+      if (!addresses || addresses.length === 0) return false
+
+      for (const addr of addresses) {
+        if (isPrivateIp(addr.address)) {
+          return false
+        }
+      }
+      return true
+    } catch {
+      return false
+    }
   } catch {
     return false
   }
@@ -149,7 +175,7 @@ export async function POST(request: NextRequest) {
       try { settings = JSON.parse(settings) } catch { settings = {} }
     }
     const webhookUrl = settings?.webhook_url
-    if (webhookUrl && isSafeUrl(webhookUrl)) {
+    if (webhookUrl && await isSafeUrl(webhookUrl)) {
       const tsMinute = Math.floor(Date.now() / 60000)
       const idempotencyKey = crypto.createHash('sha256').update(`${candidate_id}:${tsMinute}`).digest('hex')
       try {
@@ -168,6 +194,8 @@ export async function POST(request: NextRequest) {
             mainwp_token: mainwpToken
           }),
           signal: controller.signal
+        }).then(res => {
+          if (!res.ok) console.error(`Webhook fetch failed with status ${res.status}`)
         }).catch((e) => console.error("Webhook fetch error:", e))
           .finally(() => clearTimeout(timeoutId))
       } catch (e) {

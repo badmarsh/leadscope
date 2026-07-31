@@ -7,16 +7,23 @@ export default function AdminHealthDashboard() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    let active = true
     fetch("/api/admin/health")
-      .then(res => res.json())
+      .then(res => {
+        if (!res.ok) throw new Error("Network response was not ok")
+        return res.json()
+      })
       .then(json => {
+        if (!active) return
         if (json.ok) setData(json.data)
         setLoading(false)
       })
       .catch(e => {
+        if (!active) return
         console.error(e)
         setLoading(false)
       })
+    return () => { active = false }
   }, [])
 
   if (loading) return <div className="p-8">Loading...</div>

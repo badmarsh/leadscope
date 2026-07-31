@@ -52,6 +52,7 @@ export default function WpHunterPage() {
   const fetchCampaigns = async () => {
     try {
       const res = await fetch("/api/wp-hunter/campaigns")
+      if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`)
       const data = await res.json()
       if (data.campaigns) {
         setCampaigns(data.campaigns)
@@ -74,6 +75,7 @@ export default function WpHunterPage() {
         ? `/api/wp-hunter/findings?campaignId=${encodeURIComponent(targetCid)}`
         : "/api/wp-hunter/findings"
       const res = await fetch(url)
+      if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`)
       const data = await res.json()
       if (data.findings) {
         setFindings(data.findings)
@@ -89,6 +91,7 @@ export default function WpHunterPage() {
         ? `/api/wp-hunter/reports?dir=${encodeURIComponent(dir)}`
         : "/api/wp-hunter/reports"
       const res = await fetch(url)
+      if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`)
       const data = await res.json()
       if (data.reports) {
         setReportList(data.reports)
@@ -166,8 +169,9 @@ export default function WpHunterPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(updatedFields),
       })
+      if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`)
       const data = await res.json()
-      if (data.campaign) {
+      if (data.ok) {
         setCampaigns((prev) =>
           prev.map((c) => (c.id === campaignId ? { ...c, ...data.campaign } : c))
         )

@@ -23,8 +23,11 @@ export async function GET() {
     const fd = await fs.open(LOG_FILE, 'r')
     const start = Math.max(0, stat.size - MAX_BYTES)
     const buffer = Buffer.alloc(stat.size - start)
-    await fd.read(buffer, 0, buffer.length, start)
-    await fd.close()
+    try {
+      await fd.read(buffer, 0, buffer.length, start)
+    } finally {
+      await fd.close()
+    }
 
     const logs = buffer.toString('utf-8')
     // If we started mid-line, trim to first newline for cleanliness

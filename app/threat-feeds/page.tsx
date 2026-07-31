@@ -38,6 +38,7 @@ export default function ThreatFeedsPage() {
   const fetchCandidates = async () => {
     try {
       const res = await fetch("/api/threat-feeds")
+      if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`)
       const data = await res.json()
       if (data.candidates) setCandidates(data.candidates)
     } catch (err) {
@@ -51,6 +52,7 @@ export default function ThreatFeedsPage() {
         fetch("/api/wp-hunter/campaigns"),
         fetch("/api/seo-spam-hunter/campaigns")
       ])
+      if (!wpRes.ok || !seoRes.ok) throw new Error("HTTP error!")
       const wpData = await wpRes.json()
       const seoData = await seoRes.json()
       

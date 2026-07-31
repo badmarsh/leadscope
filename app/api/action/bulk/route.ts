@@ -63,11 +63,13 @@ export async function POST(request: NextRequest) {
       )
       
       // Trigger evaluation in the background
-      fetch(`http://evaluator:8000/score/trigger?background=true`, {
+      await fetch(`http://evaluator:8000/score/trigger?background=true`, {
         method: "POST",
         headers: {
           "X-Internal-Token": process.env.INTERNAL_API_TOKEN || ""
         }
+      }).then(res => {
+        if (!res.ok) console.error(`Evaluator trigger returned ${res.status}`)
       }).catch(err => console.error("Failed to trigger evaluator:", err))
     } else if (decision === "rerun_enrichment") {
       // Prevent race conditions with background workers
@@ -96,11 +98,13 @@ export async function POST(request: NextRequest) {
       )
 
       // Trigger enrichment in the background
-      fetch(`http://stages:8000/stage5/run?background=true`, {
+      await fetch(`http://stages:8000/stage5/run?background=true`, {
         method: "POST",
         headers: {
           "X-Internal-Token": process.env.INTERNAL_API_TOKEN || ""
         }
+      }).then(res => {
+        if (!res.ok) console.error(`Stages trigger returned ${res.status}`)
       }).catch(err => console.error("Failed to trigger stages:", err))
     } else if (decision === "junk") {
       // 1. Fetch domains for these candidates to blocklist them globally
