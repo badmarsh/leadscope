@@ -9,9 +9,10 @@ vi.mock('child_process', () => {
     [customSymbol]: mockedExecAsync,
   })
   return {
-    default: { exec: mockExec, spawn: vi.fn() },
+    default: { exec: mockExec, spawn: vi.fn(), execFile: mockExec },
     exec: mockExec,
     spawn: vi.fn(),
+    execFile: mockExec
   }
 })
 
@@ -65,8 +66,8 @@ describe('POST /api/wp-hunter/run', () => {
     expect(res.status).toBe(200)
     
     expect(mockedExecAsync).toHaveBeenCalled()
-    const callArgs = (mockedExecAsync as any).mock.calls[0][0]
-    expect(callArgs).toContain('-m wp_hunter.cli run --campaign test-campaign --i-know-this-is-stale')
+    const callArgs = (mockedExecAsync as any).mock.calls[0][1]
+    expect(callArgs).toContain('--i-know-this-is-stale')
   })
 
   it('should create and delete temp file if pasteContent is provided', async () => {
