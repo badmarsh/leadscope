@@ -452,8 +452,9 @@ export function rowToLead(row: Record<string, unknown>): Lead {
     pending_review: "pending",
     evaluating: "pending",        // actively being scored — show as pending in UI
     new: "pending",               // discovered, not yet evaluated
+    evaluated: "evaluated",       // evaluated by LLM — ready for review/enrichment!
     approved: "approved",
-    enriched: "approved",         // fully enriched approved leads
+    enriched: "enriched",         // fully enriched approved leads
     rejected: "rejected",
     discarded: "discarded",       // auto-rejected by scorer (low score / blocked term)
     junk: "junk",                 // manually marked junk by operator

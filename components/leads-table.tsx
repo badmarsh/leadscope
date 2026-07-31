@@ -92,8 +92,7 @@ export function LeadsTable({ leads, selectedId, onSelect, onFilteredChange, onBu
   const filtered = useMemo(() => {
     const subset = leads.filter((l) => {
       if (view === "for_review") {
-        if (l.status !== "enriched") return false
-        if (!isLeadComplete(l)) return false
+        if (l.status !== "enriched" && l.status !== "evaluated") return false
       }
       else if (view === "approved") {
         if (l.status !== "approved") return false
@@ -182,7 +181,7 @@ export function LeadsTable({ leads, selectedId, onSelect, onFilteredChange, onBu
     }
   }
 
-  const forReviewCount = leads.filter((l) => l.status === "enriched" && isLeadComplete(l)).length
+  const forReviewCount = leads.filter((l) => l.status === "enriched" || l.status === "evaluated").length
   const approvedCount = leads.filter((l) => l.status === "approved").length
   const discardedCount = leads.filter((l) => l.status === "invalid" || l.status === "discarded" || l.status === "enrichment_failed").length
   const rejectedCount = leads.filter((l) => l.status === "rejected" || l.status === "junk").length
