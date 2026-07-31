@@ -94,7 +94,8 @@ describe("/api/action", () => {
 
       // Ensure UPDATE candidate status called with 'rejected'
       const updateCall = mockClientQuery.mock.calls.find((c: any[]) => c[0].includes("UPDATE candidates SET status = $1"))
-      expect(updateCall[1][0]).toBe("rejected")
+      expect(updateCall).toBeDefined()
+      expect(updateCall![1][0]).toBe("rejected")
     })
 
     it("returns 500 when transaction fails", async () => {
@@ -139,7 +140,8 @@ describe("/api/action", () => {
       expect(body.ok).toBe(true)
 
       const resetCandidateCall = mockClientQuery.mock.calls.find((c: any[]) => c[0].includes("SET status = 'pending_review'"))
-      expect(resetCandidateCall[1][0]).toBe(42)
+      expect(resetCandidateCall).toBeDefined()
+      expect(resetCandidateCall![1][0]).toBe(42)
     })
   })
 })

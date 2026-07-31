@@ -154,9 +154,9 @@ export function Dashboard() {
       .catch(() => setLoggedIn(false))
   }, [])
 
-  // Fetch leads when campaign or page changes
-  const fetchLeads = useCallback(async (campaignId: CampaignId, currentPage: number = 1) => {
-    setLoading(true)
+  // Fetch leads when campaign or page changes (supports silent background AJAX updates)
+  const fetchLeads = useCallback(async (campaignId: CampaignId, currentPage: number = 1, silent: boolean = false) => {
+    if (!silent) setLoading(true)
     try {
       const dbId = DB_CAMPAIGN_IDS[campaignId]
       // Only fetch fully-enriched leads (with enrichment_report) for the main dashboard view
@@ -168,7 +168,7 @@ export function Dashboard() {
     } catch {
       // silently degrade — keep current leads
     } finally {
-      setLoading(false)
+      if (!silent) setLoading(false)
     }
   }, [limit])
 
@@ -213,15 +213,17 @@ export function Dashboard() {
 
   useEffect(() => {
     if (loggedIn) {
-      fetchLeads(activeCampaign, page)
+      // Initial fetch with loading state
+      fetchLeads(activeCampaign, page, false)
       fetchUsage(activeCampaign)
       fetchCandidates(activeCampaign)
 
+      // Silent AJAX background updates every 10s (no UI flicker/loading skeleton)
       const interval = setInterval(() => {
-        fetchLeads(activeCampaign, page)
+        fetchLeads(activeCampaign, page, true)
         fetchUsage(activeCampaign)
         fetchCandidates(activeCampaign)
-      }, 5000)
+      }, 10000)
 
       return () => clearInterval(interval)
     }
@@ -263,10 +265,10 @@ export function Dashboard() {
       })
       if (!r.ok) {
         // Revert optimistic update on failure
-        await fetchLeads(activeCampaign, page)
+        await fetchLeads(activeCampaign, page, true)
       }
     } catch {
-      await fetchLeads(activeCampaign, page)
+      await fetchLeads(activeCampaign, page, true)
     }
   }
 
@@ -282,10 +284,10 @@ export function Dashboard() {
         body: JSON.stringify({ candidate_id: parseInt(id, 10) }),
       })
       if (!r.ok) {
-        await fetchLeads(activeCampaign, page)
+        await fetchLeads(activeCampaign, page, true)
       }
     } catch {
-      await fetchLeads(activeCampaign, page)
+      await fetchLeads(activeCampaign, page, true)
     }
   }
 
@@ -305,10 +307,10 @@ export function Dashboard() {
         body: JSON.stringify({ candidate_ids: ids.map(id => parseInt(id, 10)), decision: action }),
       })
       if (!r.ok || action === "rerun_evaluation" || action === "rerun_enrichment") {
-        await fetchLeads(activeCampaign, page)
+        await fetchLeads(activeCampaign, page, true)
       }
     } catch {
-      await fetchLeads(activeCampaign, page)
+      await fetchLeads(activeCampaign, page, true)
     }
   }
 
