@@ -216,6 +216,14 @@ export function Dashboard() {
       fetchLeads(activeCampaign, page)
       fetchUsage(activeCampaign)
       fetchCandidates(activeCampaign)
+
+      const interval = setInterval(() => {
+        fetchLeads(activeCampaign, page)
+        fetchUsage(activeCampaign)
+        fetchCandidates(activeCampaign)
+      }, 5000)
+
+      return () => clearInterval(interval)
     }
   }, [loggedIn, activeCampaign, page, fetchLeads, fetchUsage, fetchCandidates])
 

@@ -36,9 +36,11 @@ export function PipelineStatus({ campaignId }: { campaignId: number }) {
 
   useEffect(() => {
     fetchStatus()
-    const interval = setInterval(fetchStatus, 15000) // Poll every 15s
+    const isAnyRunning = state?.stage1_status === "running" || state?.stage2_status === "running" || state?.stage3_status === "running" || state?.stage5_status === "running"
+    const pollTime = isAnyRunning ? 3000 : 10000
+    const interval = setInterval(fetchStatus, pollTime)
     return () => clearInterval(interval)
-  }, [fetchStatus])
+  }, [fetchStatus, state?.stage1_status, state?.stage2_status, state?.stage3_status, state?.stage5_status])
 
   if (!state) return null
 

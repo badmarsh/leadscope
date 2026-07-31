@@ -54,12 +54,16 @@ export async function GET(
     [id]
   )
 
+  const isStage2Running = row.stage2_status === 'running' || row.stage2_status === 'stopping'
+  const isStage3Running = row.stage3_status === 'running' || row.stage3_status === 'stopping'
+  const isStage5Running = row.stage5_status === 'running' || row.stage5_status === 'stopping'
+
   return NextResponse.json({ 
     status: {
       ...row,
-      stage2_processing: finderRow ? `Found: ${finderRow.domain}` : undefined,
-      stage3_processing: evalRow ? `Evaluating ${evalRow.domain}...` : undefined,
-      stage5_processing: enrichRow ? `Enriching ${enrichRow.domain}...` : undefined,
+      stage2_processing: isStage2Running && finderRow ? `Found: ${finderRow.domain}` : undefined,
+      stage3_processing: isStage3Running && evalRow ? `Evaluating ${evalRow.domain}...` : undefined,
+      stage5_processing: isStage5Running && enrichRow ? `Enriching ${enrichRow.domain}...` : undefined,
     } 
   })
 }
