@@ -114,6 +114,20 @@ jobs:
     name: Playwright E2E smoke
     runs-on: ubuntu-latest
     needs: [nextjs]
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: leadscope_test
+          POSTGRES_PASSWORD: leadscope_test
+          POSTGRES_DB: leadscope_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v4
 
@@ -146,8 +160,30 @@ jobs:
         if: steps.playwright-cache.outputs.cache-hit == 'true'
         run: npx playwright install-deps chromium
 
+      - name: Build Next.js app
+        run: pnpm build
+        env:
+          NODE_ENV: production
+          DASHBOARD_PASSWORD_HASH: "$2b$10$dummyhashfordummytesting000000000000000000000000000"
+          IRON_SESSION_SECRET: "dummy-secret-for-ci-at-least-32-chars-long!!"
+          DATABASE_URL: postgresql://leadscope_test:leadscope_test@localhost:5432/leadscope_test
+
+      - name: Start Next.js server
+        run: pnpm start &
+        env:
+          PORT: 3000
+          DASHBOARD_PASSWORD_HASH: "$2b$10$dummyhashfordummytesting000000000000000000000000000"
+          IRON_SESSION_SECRET: "dummy-secret-for-ci-at-least-32-chars-long!!"
+          DATABASE_URL: postgresql://leadscope_test:leadscope_test@localhost:5432/leadscope_test
+
+      - name: Wait for server
+        run: npx wait-on http://127.0.0.1:3000 --timeout 30000
+
       - name: Run E2E tests
         run: npx playwright test --project=chromium
         env:
           BASE_URL: http://localhost:3000
           NODE_ENV: test
+          DASHBOARD_PASSWORD_HASH: "$2b$10$dummyhashfordummytesting000000000000000000000000000"
+          IRON_SESSION_SECRET: "dummy-secret-for-ci-at-least-32-chars-long!!"
+          DATABASE_URL: postgresql://leadscope_test:leadscope_test@localhost:5432/leadscope_test
