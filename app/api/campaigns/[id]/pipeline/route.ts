@@ -57,14 +57,17 @@ export async function POST(
     let url = ""
     let body: any = undefined
 
+    const STAGES_URL = process.env.STAGES_URL || "http://127.0.0.1:8002"
+    const EVALUATOR_URL = process.env.EVALUATOR_URL || "http://127.0.0.1:8001"
+
     if (stage === "stage1" || stage === "stage2") {
-      url = `http://stages:8002/${stage}/run?background=true`
+      url = `${STAGES_URL}/${stage}/run?background=true`
       body = { campaign_id: campaignId }
     } else if (stage === "stage5") {
-      url = `http://stages:8002/stage5/run?background=true`
+      url = `${STAGES_URL}/stage5/run?background=true`
       body = { campaign_id: campaignId }
     } else if (stage === "stage3") {
-      url = `http://evaluator:8001/score/trigger?background=true`
+      url = `${EVALUATOR_URL}/score/trigger?background=true`
       body = { campaign_id: campaignId }
     }
 

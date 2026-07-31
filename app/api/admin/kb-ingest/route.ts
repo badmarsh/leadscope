@@ -15,7 +15,8 @@ export async function POST() {
   }
 
   try {
-    const res = await fetch("http://stages:8002/kb/ingest?background=true", {
+    const STAGES_URL = process.env.STAGES_URL || "http://127.0.0.1:8002"
+    const res = await fetch(`${STAGES_URL}/kb/ingest?background=true`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

@@ -104,6 +104,8 @@ services:
       DASHBOARD_SESSION_SECRET: ${DASHBOARD_SESSION_SECRET}
       GEMINI_PROXY_API_KEY: ${GEMINI_PROXY_API_KEY}
       GEMINI_PROXY_ENDPOINT: http://host.docker.internal:8045
+      STAGES_URL: http://stages:8002
+      EVALUATOR_URL: http://evaluator:8001
     depends_on:
       postgres:
         condition: service_healthy

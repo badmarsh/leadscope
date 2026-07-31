@@ -63,7 +63,8 @@ export async function POST(request: NextRequest) {
       )
       
       // Trigger evaluation in the background
-      fetch(`http://evaluator:8001/score/trigger?background=true`, {
+      const EVALUATOR_URL = process.env.EVALUATOR_URL || "http://127.0.0.1:8001"
+      fetch(`${EVALUATOR_URL}/score/trigger?background=true`, {
         method: "POST",
         headers: {
           "X-Internal-Token": process.env.INTERNAL_API_TOKEN || ""
@@ -96,7 +97,8 @@ export async function POST(request: NextRequest) {
       )
 
       // Trigger enrichment in the background
-      fetch(`http://stages:8002/stage5/run?background=true`, {
+      const STAGES_URL = process.env.STAGES_URL || "http://127.0.0.1:8002"
+      fetch(`${STAGES_URL}/stage5/run?background=true`, {
         method: "POST",
         headers: {
           "X-Internal-Token": process.env.INTERNAL_API_TOKEN || ""
