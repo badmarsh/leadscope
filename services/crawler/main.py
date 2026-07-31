@@ -2,8 +2,8 @@
 main.py — Jenex Crawl4AI Service.
 
 Architecture:
-  - ONE persistent AsyncWebCrawler (Chromium) initialized at startup via FastAPI lifespan.
-    All requests reuse this single browser — eliminates 2-3s Chromium startup per request.
+  - Per-request AsyncWebCrawler (Chromium via CDP) instance bounded by _CRAWLER_SEMAPHORE.
+    Instantiated per request to eliminate global state hanging issues under high concurrency.
   - Hybrid routing: trafilatura (fast, no browser) for simple HTML pages;
     Crawl4AI (full Playwright) for JS-heavy SPAs.
   - URL validated as http/https only via Pydantic HttpUrl.
@@ -36,15 +36,11 @@ _BROWSERLESS_WS_URL = (
 # Limit concurrent Crawl4AI sessions to 5 to protect Browserless
 _CRAWLER_SEMAPHORE = asyncio.Semaphore(5)
 
-# ── Persistent browser instance (reused across all requests) ──────────────────
-
-# ── Persistent browser instance (reused across all requests) ──────────────────
-
-# Removed global crawler to prevent hanging issues; now instantiated per request.
+# ── Per-request browser lifecycle ─────────────────────────────────────────────
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Empty lifespan since we instantiate per request now."""
+    """Empty lifespan since we instantiate per request to prevent browser hanging issues."""
     yield
 
 app = FastAPI(title="Jenex Crawl4AI Service", lifespan=lifespan)
@@ -60,7 +56,7 @@ class CrawlRequest(BaseModel):
     extract_images: bool = False
 
 class ProductImagesSchema(BaseModel):
-    urls: list[str] = Field(description="Exactly 4 URLs of product images from the product grid. Do not include logos or UI elements.")
+    urls: list[str] = Field(description="Up to 10 URLs of product images from the product grid. Do not include logos or UI elements.")
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────

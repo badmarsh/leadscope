@@ -1,7 +1,7 @@
 fastapi==0.115.6
 uvicorn[standard]==0.32.1
 pydantic==2.10.5
-crawl4ai>=0.4.3,<0.5.0
+crawl4ai>=0.4.3,<0.5.0  # Floating range within 0.4.x releases (0.4.248+); prevents 0.5+ API breaks
 litellm<1.80.0
 trafilatura>=1.12.0,<2.0.0
 extruct>=0.16.0

@@ -1,3 +1,4 @@
+import crypto from "crypto"
 import dns from "dns"
 import fs from "fs/promises"
 import path from "path"
@@ -90,7 +91,8 @@ export async function GET(request: NextRequest) {
   }
 
   const safeHostname = validation.originalHostname.toLowerCase().replace(/[^a-z0-9.-]/g, "_")
-  const cacheFilePath = path.join(CACHE_DIR, `${safeHostname}.jpg`)
+  const urlHash = crypto.createHash("sha256").update(targetUrl).digest("hex").substring(0, 10)
+  const cacheFilePath = path.join(CACHE_DIR, `${safeHostname}_${urlHash}.jpg`)
 
   // Check fresh cache if not refreshing
   if (!refresh) {

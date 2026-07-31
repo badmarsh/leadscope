@@ -39,18 +39,27 @@ def test_is_spa_likely():
     normal_html = "<html><body>" + "This is a normal paragraph with enough text so density is high." * 500 + "</body></html>"
     assert _is_spa_likely(normal_html) is False
 
+@patch("requests.get")
 @patch("main.trafilatura")
-def test_trafilatura_scrape_success(mock_trafilatura):
-    mock_trafilatura.fetch_url.return_value = "<html>Some text</html>"
+def test_trafilatura_scrape_success(mock_trafilatura, mock_requests_get):
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.text = "<html>Some text</html>"
+    mock_requests_get.return_value = mock_resp
     mock_trafilatura.extract.return_value = "Some text"
     
     with patch("main._is_spa_likely", return_value=False):
         res = main._trafilatura_scrape("https://example.com")
         assert res == "Some text"
+        mock_requests_get.assert_called_once_with("https://example.com", timeout=15, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"})
 
+@patch("requests.get")
 @patch("main.trafilatura")
-def test_trafilatura_scrape_spa_detection(mock_trafilatura):
-    mock_trafilatura.fetch_url.return_value = "<script></script>" * 10
+def test_trafilatura_scrape_spa_detection(mock_trafilatura, mock_requests_get):
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.text = "<script></script>" * 10
+    mock_requests_get.return_value = mock_resp
     
     with patch("main._is_spa_likely", return_value=True):
         res = main._trafilatura_scrape("https://example.com")
@@ -142,4 +151,5 @@ def test_crawl_endpoint_image_extraction(mock_httpx_class, mock_trafilatura):
 
     assert response.status_code == 200
     assert response.json()["renderer"] == "playwright"
+    assert response.json()["extracted_data"] == {"urls": ["1.jpg"]}
     mock_httpx.post.assert_called_once()
