@@ -111,9 +111,8 @@ describe("GET /api/screenshot", () => {
     await GET(req)
     const body = JSON.parse(mockFetch.mock.calls[0][1].body)
     expect(body.gotoOptions.waitUntil).toBe("domcontentloaded")
-    expect(body.addScriptTag[0].content).toContain("cookie")
-    expect(body.addScriptTag[0].content).toContain("gdpr")
-    expect(body.addScriptTag[0].content).toContain("fixed")
+    expect(body.evaluate).toContain("cookie")
+    expect(body.evaluate).toContain("gdpr")
   })
 
   it("returns 502 when browserless returns 5xx", async () => {

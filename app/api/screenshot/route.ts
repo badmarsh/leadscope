@@ -115,7 +115,23 @@ export async function GET(request: NextRequest) {
         options: { type: "jpeg", quality: 75, fullPage: false },
         viewport: { width: 1280, height: 800 },
         rejectResourceTypes: ["media", "font"],
-        addScriptTag: [{ content: gdprDismissScript }],
+        evaluate: `
+          () => {
+            if (typeof document !== 'undefined' && (document.head || document.body)) {
+              var selectors = [
+                '[id*="cookie"]','[class*="cookie"]','[id*="gdpr"]','[class*="gdpr"]',
+                '[id*="consent"]','[class*="consent"]','[id*="banner"]','[class*="banner"]',
+              ];
+              selectors.forEach(function(sel) {
+                document.querySelectorAll(sel).forEach(function(el) {
+                  el.style.display = 'none';
+                  el.style.visibility = 'hidden';
+                  el.style.opacity = '0';
+                });
+              });
+            }
+          }
+        `,
       })
     })
 
