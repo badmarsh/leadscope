@@ -18,7 +18,7 @@ interface RawCandidate {
   source: string
   status: string
   created_at: string
-  updated_at?: string
+  last_seen_at?: string
   enrichment_attempt_count: number
 }
 
@@ -520,7 +520,7 @@ export function LeadsTable({ leads, selectedId, onSelect, onFilteredChange, onBu
                         </span>
                       </td>
                       <td className="whitespace-nowrap px-4 py-2 font-mono text-xs text-muted-foreground">
-                        {formatDate(new Date(cand.updated_at || cand.created_at).toLocaleDateString("en-CA"))}
+                        {formatDate(new Date(cand.last_seen_at || cand.created_at).toLocaleDateString("en-CA"))}
                       </td>
                     </tr>
                   )

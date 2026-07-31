@@ -115,7 +115,7 @@ export function Dashboard() {
   const [isN8nOpen, setIsN8nOpen] = useState(false)
   const [page, setPage] = useState(1)
   const [totalLeads, setTotalLeads] = useState(0)
-  const [rawCandidates, setRawCandidates] = useState<Array<{id:number;domain:string;company_name:string|null;source:string;status:string;created_at:string;updated_at?:string;enrichment_attempt_count:number}>>([]) 
+  const [rawCandidates, setRawCandidates] = useState<Array<{id:number;domain:string;company_name:string|null;source:string;status:string;created_at:string;last_seen_at?:string;enrichment_attempt_count:number}>>([]) 
   const limit = 1000
   const [usage, setUsage] = useState<{
     openRouterSpend: string
