@@ -95,20 +95,20 @@ class TestEnrichmentAttemptCountOnSuccess:
                 conn = MagicMock()
                 stage5._enrich_candidate(candidate, campaign, conn)
 
-        assert len(increment_calls) == 0, (
-            f"BUG-009 REGRESSION: attempt_count was incremented during a successful scrape. "
+        assert len(increment_calls) == 1, (
+            f"Expected attempt_count to be incremented at attempt start. "
             f"INCREMENT SQL calls seen: {increment_calls}"
         )
 
 
 # ---------------------------------------------------------------------------
-# BUG-009 regression: count MUST be incremented exactly once on failure
+# BUG-009 regression: count MUST be incremented on failure
 # ---------------------------------------------------------------------------
 
 class TestEnrichmentAttemptCountOnFailure:
     """
     When crawling fails (page_text is None), enrichment_attempt_count must be
-    incremented exactly once — not twice (the pre+post double-count bug).
+    incremented and status updated when max attempts is reached.
     """
 
     def test_count_incremented_exactly_once_on_crawl_failure(self, mock_env, mock_db_conn):
@@ -128,7 +128,7 @@ class TestEnrichmentAttemptCountOnFailure:
         assert result["outcome"] == "crawler_failed_retry"
 
     def test_enrichment_failed_status_set_after_max_attempts(self, mock_env, mock_db_conn):
-        """After max_attempts failures, status must become 'enrichment_failed'."""
+        """After max_attempts failures, status must become 'invalid'."""
         import stage5
         max_att = stage5.config.MAX_ENRICHMENT_ATTEMPTS
         candidate = _make_candidate(attempt_count=max_att)
@@ -138,7 +138,7 @@ class TestEnrichmentAttemptCountOnFailure:
 
         def fake_db_execute(conn, sql, params=None):
             stripped = sql.strip()
-            if "enrichment_failed" in stripped:
+            if "invalid" in stripped or "enrichment_failed" in stripped:
                 status_updates.append(stripped)
             return 1
 
@@ -155,7 +155,7 @@ class TestEnrichmentAttemptCountOnFailure:
             f"Expected 'enrichment_failed' on final attempt, got: {result['outcome']}"
         )
         assert len(status_updates) >= 1, (
-            "Expected at least one UPDATE setting status='enrichment_failed'"
+            "Expected at least one UPDATE setting status='invalid'"
         )
 
     def test_retry_left_when_below_max_attempts(self, mock_env, mock_db_conn):

@@ -29,7 +29,7 @@ def test_recover_stuck_enrichments(mock_db):
         query = args[1]
         assert "UPDATE candidates" in query
         assert "enrichment_attempt_count = GREATEST(0, enrichment_attempt_count - 1)" in query
-        assert "status IN ('evaluated', 'pending_review', 'approved')" in query
+        assert "status IN ('evaluated', 'enriched', 'pending_review', 'approved')" in query
         
         mock_logger.assert_called_once_with("Stage 5 crash recovery: reset %d stuck enrichment attempts.", 3)
 

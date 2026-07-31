@@ -168,8 +168,7 @@ export function Dashboard() {
     if (!silent) setLoading(true)
     try {
       const dbId = DB_CAMPAIGN_IDS[campaignId]
-      // Only fetch fully-enriched leads (with enrichment_report) for the main dashboard view
-      const r = await fetch(`/api/leads?campaign_id=${dbId}&page=${currentPage}&limit=${limit}&require_enrichment=true`)
+      const r = await fetch(`/api/leads?campaign_id=${dbId}&page=${currentPage}&limit=${limit}`)
       if (r.status === 401) { setLoggedIn(false); return }
       const data = await r.json()
       setLeads((data.leads as Record<string, unknown>[]).map(rowToLead))

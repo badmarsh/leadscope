@@ -33,7 +33,7 @@ export function StatsRow({ leads, usage, rawCandidates = [] }: StatsRowProps) {
   ] as const
 
   const counts = {
-    for_review: leads.filter((l) => l.status === "enriched" || l.status === "evaluated" || l.status === "pending").length,
+    for_review: leads.filter((l) => l.status === "enriched").length,
     approved: leads.filter((l) => l.status === "approved").length,
     discarded: leads.filter((l) => l.status === "invalid" || l.status === "discarded" || l.status === "enrichment_failed").length,
     pipeline: rawCandidates.length,

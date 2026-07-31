@@ -66,7 +66,7 @@ def test_auto_approve_high_score(mock_db, mock_score):
     
     calls = mock_db.update_candidate_generation.call_args_list
     statuses = [c[0][3].get("status") for c in calls if len(c[0]) >= 4]
-    assert "pending_review" in statuses
+    assert "evaluated" in statuses
 
 
 @patch("harness.db")
