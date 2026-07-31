@@ -167,7 +167,7 @@ jobs:
         run: pnpm build
         env:
           NODE_ENV: production
-          DASHBOARD_PASSWORD_HASH: "$2b$10$dummyhashfordummytesting000000000000000000000000000"
+          DASHBOARD_PASSWORD_HASH: "$2b$10$fbv2eN.3ZRSXii7NOPja8.RpkhEdy2dWjlpUgdE55kQb2kaTtvNnC"
           DASHBOARD_SESSION_SECRET: "dummy-session-secret-for-ci-at-least-32-chars-long"
           DATABASE_URL: postgresql://leadscope_test:leadscope_test@localhost:5432/leadscope_test
 
@@ -175,7 +175,7 @@ jobs:
         run: pnpm start &
         env:
           PORT: 3000
-          DASHBOARD_PASSWORD_HASH: "$2b$10$dummyhashfordummytesting000000000000000000000000000"
+          DASHBOARD_PASSWORD_HASH: "$2b$10$fbv2eN.3ZRSXii7NOPja8.RpkhEdy2dWjlpUgdE55kQb2kaTtvNnC"
           DASHBOARD_SESSION_SECRET: "dummy-session-secret-for-ci-at-least-32-chars-long"
           DATABASE_URL: postgresql://leadscope_test:leadscope_test@localhost:5432/leadscope_test
 
@@ -187,6 +187,6 @@ jobs:
         env:
           BASE_URL: http://localhost:3000
           NODE_ENV: test
-          DASHBOARD_PASSWORD_HASH: "$2b$10$dummyhashfordummytesting000000000000000000000000000"
+          DASHBOARD_PASSWORD_HASH: "$2b$10$fbv2eN.3ZRSXii7NOPja8.RpkhEdy2dWjlpUgdE55kQb2kaTtvNnC"
           DASHBOARD_SESSION_SECRET: "dummy-session-secret-for-ci-at-least-32-chars-long"
           DATABASE_URL: postgresql://leadscope_test:leadscope_test@localhost:5432/leadscope_test
