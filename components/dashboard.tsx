@@ -437,6 +437,7 @@ export function Dashboard() {
         hasNext={hasNext}
         hasPrev={hasPrev}
         onDraftGenerated={handleDraftGenerated}
+        onBulkAction={(action) => handleBulkAction([selectedLead!.id], action)}
       />
 
       <SettingsModal

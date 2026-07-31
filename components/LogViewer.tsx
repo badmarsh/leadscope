@@ -8,6 +8,9 @@ export function LogViewer() {
   const [logs, setLogs] = useState<string>('Initializing logs...')
   const endRef = useRef<HTMLDivElement>(null)
 
+  const scrollContainerRef = useRef<HTMLDivElement>(null)
+  const [autoScroll, setAutoScroll] = useState(true)
+
   useEffect(() => {
     let interval: NodeJS.Timeout
 
@@ -33,11 +36,18 @@ export function LogViewer() {
     }
   }, [isOpen])
 
+  const handleScroll = () => {
+    if (!scrollContainerRef.current) return
+    const { scrollTop, scrollHeight, clientHeight } = scrollContainerRef.current
+    const isAtBottom = Math.abs(scrollHeight - scrollTop - clientHeight) < 50
+    setAutoScroll(isAtBottom)
+  }
+
   useEffect(() => {
-    if (isOpen && endRef.current) {
+    if (isOpen && autoScroll && endRef.current) {
       endRef.current.scrollIntoView({ behavior: 'smooth' })
     }
-  }, [logs, isOpen])
+  }, [logs, isOpen, autoScroll])
 
   // Generic Syntax Highlighting parser
   const parseLogLine = (line: string, i: number) => {
@@ -61,7 +71,7 @@ export function LogViewer() {
       if (part.match(/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/)) return <span key={j} className="text-[#c084fc]">{part}</span>;
       if (part === "successfully" || part === "200 OK") return <span key={j} className="text-[#4ade80]">{part}</span>;
       if (part === "404 Not Found" || part.includes("500 Internal")) return <span key={j} className="text-[#f87171]">{part}</span>;
-      if (part.startsWith("http")) return <span key={j} className="text-[#60a5fa] hover:underline cursor-pointer">{part}</span>;
+      if (part.startsWith("http")) return <a key={j} href={part} target="_blank" rel="noopener noreferrer" className="text-[#60a5fa] hover:underline cursor-pointer">{part}</a>;
       if (part.match(/^\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}:\d{2}/)) return <span key={j} className="text-slate-500">{part}</span>;
       return <span key={j} className="text-slate-300">{part}</span>;
     });
@@ -116,7 +126,11 @@ export function LogViewer() {
               </button>
             </div>
             
-            <div className="flex-1 overflow-y-auto p-4 bg-[#1e1e1e]">
+            <div 
+              ref={scrollContainerRef}
+              onScroll={handleScroll}
+              className="flex-1 overflow-y-auto p-4 bg-[#1e1e1e]"
+            >
               {logs.split('\n').map((line, i) => parseLogLine(line, i))}
               <div ref={endRef} />
             </div>

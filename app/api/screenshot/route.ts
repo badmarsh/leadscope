@@ -85,6 +85,25 @@ export async function GET(request: NextRequest) {
 
   try {
     const browserlessUrl = process.env.BROWSERLESS_URL || "http://browserless:3000/screenshot"
+    const gdprDismissScript = `
+      // GDPR / cookie banner dismissal
+      (function() {
+        var selectors = [
+          '[id*="cookie"]','[class*="cookie"]','[id*="gdpr"]','[class*="gdpr"]',
+          '[id*="consent"]','[class*="consent"]','[id*="banner"]','[class*="banner"]',
+        ];
+        selectors.forEach(function(sel) {
+          document.querySelectorAll(sel).forEach(function(el) {
+            var s = el;
+            s.style.display = 'none';
+            s.style.visibility = 'hidden';
+            s.style.opacity = '0';
+            s.style.position = 'fixed';
+            s.style.zIndex = '-9999';
+          });
+        });
+      })();
+    `
     const response = await fetch(browserlessUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -92,32 +111,11 @@ export async function GET(request: NextRequest) {
         url: validation.resolvedUrl,
         setExtraHTTPHeaders: { "Host": validation.originalHostname },
         bestAttempt: true,
-        javascript: `
-          if (document.body) {
-            const selectors = [
-              '[id*="cookie"]','[class*="cookie"]',
-              '[id*="gdpr"]','[class*="gdpr"]',
-              '[id*="consent"]','[class*="consent"]',
-              '[id*="banner"]','[class*="banner"]',
-              '[id*="popup"]','[class*="popup"]',
-              '.cc-window','.CookieDeclaration',
-              '#onetrust-banner-sdk','#CookieConsent',
-              '#cookie-law-info-bar','#cookieChoiceInfo'
-            ]
-            selectors.forEach(sel => {
-              document.querySelectorAll(sel).forEach(el => {
-                const style = window.getComputedStyle(el)
-                if (style.position === 'fixed' || style.position === 'sticky') {
-                  el.remove()
-                }
-              })
-            })
-            document.body.style.overflow = 'auto'
-          }
-        `,
+        gotoOptions: { waitUntil: "networkidle" },
         options: { type: "jpeg", quality: 75, fullPage: false },
         viewport: { width: 1280, height: 800 },
         rejectResourceTypes: ["media", "font"],
+        addScriptTag: [{ content: gdprDismissScript }],
       })
     })
 

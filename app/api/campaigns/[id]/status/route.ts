@@ -35,5 +35,31 @@ export async function GET(
 
   if (!row) return NextResponse.json({ error: "Campaign not found" }, { status: 404 })
 
-  return NextResponse.json({ status: row })
+  // Fetch currently processing information
+  // Stage 3 (AI Evaluator)
+  const evalRow = await queryOne<{ domain: string }>(
+    `SELECT domain FROM candidates WHERE campaign_id = $1 AND status = 'evaluating' LIMIT 1`,
+    [id]
+  )
+  
+  // Stage 5 (Enrichment)
+  const enrichRow = await queryOne<{ domain: string }>(
+    `SELECT domain FROM candidates WHERE campaign_id = $1 AND lease_id IS NOT NULL AND status IN ('evaluated', 'pending_review', 'approved') LIMIT 1`,
+    [id]
+  )
+
+  // Stage 2 (Candidate Finder) - show the most recently discovered candidate
+  const finderRow = await queryOne<{ domain: string }>(
+    `SELECT domain FROM candidates WHERE campaign_id = $1 ORDER BY created_at DESC LIMIT 1`,
+    [id]
+  )
+
+  return NextResponse.json({ 
+    status: {
+      ...row,
+      stage2_processing: finderRow ? `Found: ${finderRow.domain}` : undefined,
+      stage3_processing: evalRow ? `Evaluating ${evalRow.domain}...` : undefined,
+      stage5_processing: enrichRow ? `Enriching ${enrichRow.domain}...` : undefined,
+    } 
+  })
 }

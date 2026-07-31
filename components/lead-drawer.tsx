@@ -18,9 +18,10 @@ interface LeadDrawerProps {
   hasNext?: boolean
   hasPrev?: boolean
   onDraftGenerated?: (id: string, draft: string) => void
+  onBulkAction?: (action: "approved" | "rejected" | "junk" | "rerun_evaluation" | "rerun_enrichment") => void
 }
 
-export function LeadDrawer({ lead, onClose, onDecision, onReopen, onNavigate, hasNext, hasPrev, onDraftGenerated }: LeadDrawerProps) {
+export function LeadDrawer({ lead, onClose, onDecision, onReopen, onNavigate, hasNext, hasPrev, onDraftGenerated, onBulkAction }: LeadDrawerProps) {
   const [note, setNote] = useState("")
   const [copied, setCopied] = useState(false)
   const [copiedEmail, setCopiedEmail] = useState(false)
@@ -665,10 +666,18 @@ export function LeadDrawer({ lead, onClose, onDecision, onReopen, onNavigate, ha
         <div className="border-t border-border px-5 py-4">
           <div className="flex items-center gap-2">
             {isDecided ? (
-              <Button variant="outline" className="flex-1 bg-transparent" onClick={() => onReopen(lead.id)}>
-                <RotateCcw className="size-4" aria-hidden="true" />
-                Reopen
-              </Button>
+              <>
+                <Button variant="outline" className="flex-1 bg-transparent" onClick={() => onReopen(lead.id)}>
+                  <RotateCcw className="size-4" aria-hidden="true" />
+                  Reopen
+                </Button>
+                {onBulkAction && (
+                  <Button variant="outline" className="flex-1 bg-transparent" onClick={() => onBulkAction("rerun_evaluation")}>
+                    <RotateCcw className="size-4" aria-hidden="true" />
+                    Reset to New
+                  </Button>
+                )}
+              </>
             ) : (
               <>
                 <Button

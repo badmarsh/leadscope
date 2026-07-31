@@ -53,15 +53,12 @@ export async function GET(request: NextRequest) {
   const limit = Math.min(Math.max(1, isNaN(rawLimit) ? 50 : rawLimit), 200)
   const offset = (page - 1) * limit
 
-  const cursorParam = searchParams.get("cursor")
-  const parsedCursor = cursorParam ? parseInt(cursorParam, 10) : null
-  const cursorId = parsedCursor !== null && !isNaN(parsedCursor) ? parsedCursor : null
-
   const queryValues = [...values]
+  const cursor = searchParams.get("cursor")
   let cursorCondition = ""
-  if (cursorId !== null) {
-    queryValues.push(cursorId)
-    cursorCondition = `AND c.id < $${queryValues.length}`
+  if (cursor) {
+    cursorCondition = `AND c.id < $${queryValues.length + 1}`
+    queryValues.push(parseInt(cursor, 10))
   }
 
   const limitParamIdx = queryValues.length + 1

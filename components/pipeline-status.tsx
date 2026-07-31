@@ -14,6 +14,9 @@ type PipelineState = {
   stage3_last_run: string | null
   stage5_status: StageStatus
   stage5_last_run: string | null
+  stage2_processing?: string
+  stage3_processing?: string
+  stage5_processing?: string
 }
 
 export function PipelineStatus({ campaignId }: { campaignId: number }) {
@@ -44,15 +47,15 @@ export function PipelineStatus({ campaignId }: { campaignId: number }) {
       <h3 className="text-sm font-medium leading-none">Pipeline Status</h3>
       <div className="mt-2 grid grid-cols-2 gap-4 sm:grid-cols-4">
         <StatusItem campaignId={campaignId} stageKey="stage1" name="Brief Analysis" status={state.stage1_status} lastRun={state.stage1_last_run} onStatusChange={fetchStatus} />
-        <StatusItem campaignId={campaignId} stageKey="stage2" name="Candidate Finder" status={state.stage2_status} lastRun={state.stage2_last_run} onStatusChange={fetchStatus} />
-        <StatusItem campaignId={campaignId} stageKey="stage3" name="AI Evaluator" status={state.stage3_status} lastRun={state.stage3_last_run} onStatusChange={fetchStatus} />
-        <StatusItem campaignId={campaignId} stageKey="stage5" name="Enrichment" status={state.stage5_status} lastRun={state.stage5_last_run} onStatusChange={fetchStatus} />
+        <StatusItem campaignId={campaignId} stageKey="stage2" name="Candidate Finder" status={state.stage2_status} lastRun={state.stage2_last_run} processingInfo={state.stage2_processing} onStatusChange={fetchStatus} />
+        <StatusItem campaignId={campaignId} stageKey="stage3" name="AI Evaluator" status={state.stage3_status} lastRun={state.stage3_last_run} processingInfo={state.stage3_processing} onStatusChange={fetchStatus} />
+        <StatusItem campaignId={campaignId} stageKey="stage5" name="Enrichment" status={state.stage5_status} lastRun={state.stage5_last_run} processingInfo={state.stage5_processing} onStatusChange={fetchStatus} />
       </div>
     </div>
   )
 }
 
-function StatusItem({ campaignId, stageKey, name, status, lastRun, onStatusChange }: { campaignId: number; stageKey: string; name: string; status: StageStatus | "stopping"; lastRun: string | null, onStatusChange: () => void }) {
+function StatusItem({ campaignId, stageKey, name, status, lastRun, processingInfo, onStatusChange }: { campaignId: number; stageKey: string; name: string; status: StageStatus | "stopping"; lastRun: string | null; processingInfo?: string; onStatusChange: () => void }) {
   const [loading, setLoading] = useState(false)
 
   const handleAction = async (action: "start" | "stop") => {
@@ -81,7 +84,7 @@ function StatusItem({ campaignId, stageKey, name, status, lastRun, onStatusChang
         <div className="flex flex-col">
           <span className="text-xs font-medium">{name}</span>
           <span className="text-[10px] text-muted-foreground">
-            {status === "stopping" ? "Stopping..." : status === "running" ? "Running now..." : lastRun ? new Date(lastRun).toLocaleString(undefined, {
+            {status === "stopping" ? "Stopping..." : status === "running" ? (processingInfo || "Running now...") : lastRun ? new Date(lastRun).toLocaleString(undefined, {
               month: "short", day: "numeric", hour: "numeric", minute: "2-digit"
             }) : "Not run yet"}
           </span>
