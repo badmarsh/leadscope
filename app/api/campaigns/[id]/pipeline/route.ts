@@ -55,7 +55,6 @@ export async function POST(
 
     // Make request to the appropriate Python container endpoint
     let url = ""
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let body: any = undefined
 
     if (stage === "stage1" || stage === "stage2") {

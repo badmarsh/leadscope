@@ -76,13 +76,13 @@ export function HelpModal({ isOpen, onClose }: HelpModalProps) {
                   This pipeline discovers and qualifies Hungarian HVAC installers and distributors.
                 </p>
                 <ul className="list-disc list-inside text-sm text-muted-foreground space-y-1.5 ml-2">
-                  <li><strong>Target Finding:</strong> Uses Python-based keyword search waterfall (Exa, Tavily, Serper, SerpAPI, Brave) with terms like <em>"légtechnika szerelés"</em>.</li>
+                  <li><strong>Target Finding:</strong> Uses Python-based keyword search waterfall (Exa, Tavily, Serper, SerpAPI, Brave) with terms like <em>&quot;légtechnika szerelés&quot;</em>.</li>
                   <li><strong>Data Ingestion:</strong> Extracts domain from search results. If no domain exists, the lead is immediately <strong>dropped</strong>.</li>
                   <li><strong>Evaluation (Backend):</strong> 
                     <ul className="list-[circle] list-inside ml-6 mt-1 space-y-1">
                       <li>Scrapes up to 6 pages of the website using Crawl4AI.</li>
                       <li>Uses Vision AI to analyze product images (looking for spiral ducts, SWAH corner brackets).</li>
-                      <li><strong>Disqualifiers:</strong> If the domain/company name contains "jenex", or if the company is not in Hungary, it scores 0.</li>
+                      <li><strong>Disqualifiers:</strong> If the domain/company name contains &quot;jenex&quot;, or if the company is not in Hungary, it scores 0.</li>
                       <li><strong>Auto-Discard:</strong> If the LLM score is below the configured threshold (e.g., 20) or if JENEX is detected, the lead is silently marked as <code>discarded</code> and hidden from the dashboard.</li>
                     </ul>
                   </li>

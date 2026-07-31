@@ -152,7 +152,7 @@ export function ReportViewer({
         </div>
       ) : (
         <div className="rounded-xl border border-dashed border-border p-8 text-center text-xs text-muted-foreground">
-          No report selected or report content is empty. Run "Stage C: Generate Report Only" to generate a new report.
+          No report selected or report content is empty. Run &quot;Stage C: Generate Report Only&quot; to generate a new report.
         </div>
       )}
     </div>
