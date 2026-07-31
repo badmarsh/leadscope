@@ -83,8 +83,11 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Invalid or disallowed URL" }, { status: 400 })
   }
 
-  try {
-    const browserlessUrl = process.env.BROWSERLESS_URL || "http://browserless:3000/screenshot"
+    const token = process.env.BROWSERLESS_TOKEN || ""
+    const defaultUrl = token
+      ? `http://browserless:3000/screenshot?token=${token}`
+      : "http://browserless:3000/screenshot"
+    const browserlessUrl = process.env.BROWSERLESS_URL || defaultUrl
     const gdprDismissScript = `
       // GDPR / cookie banner dismissal
       (function() {

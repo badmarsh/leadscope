@@ -25,6 +25,14 @@ logger = logging.getLogger(__name__)
 
 GEMINI_PROXY_ENDPOINT = os.environ.get("GEMINI_PROXY_ENDPOINT", "http://host.docker.internal:8045").rstrip("/")
 
+# Browserless auth token — must match TOKEN env var set in docker-compose.yml
+_BROWSERLESS_TOKEN = os.environ.get("BROWSERLESS_TOKEN", "")
+_BROWSERLESS_WS_URL = (
+    f"ws://browserless:3000/?token={_BROWSERLESS_TOKEN}"
+    if _BROWSERLESS_TOKEN
+    else "ws://browserless:3000"
+)
+
 # Limit concurrent Crawl4AI sessions to 5 to protect Browserless
 _CRAWLER_SEMAPHORE = asyncio.Semaphore(5)
 
@@ -133,7 +141,7 @@ async def crawl(req: CrawlRequest):
         if req.css_selector:
             kwargs["css_selector"] = req.css_selector
 
-        config = BrowserConfig(cdp_url="ws://browserless:3000")
+        config = BrowserConfig(cdp_url=_BROWSERLESS_WS_URL)
         try:
             async with _CRAWLER_SEMAPHORE:
                 async with AsyncWebCrawler(config=config, verbose=False) as crawler:

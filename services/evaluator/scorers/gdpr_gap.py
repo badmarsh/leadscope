@@ -55,7 +55,9 @@ def score(candidate: dict, campaign: dict, icp: dict, few_shot: list) -> dict:
     try:
         with _BROWSER_SEMAPHORE:
             with sync_playwright() as p:
-                browser = p.chromium.connect_over_cdp("ws://browserless:3000")
+                token = os.environ.get("BROWSERLESS_TOKEN", "")
+                ws_url = f"ws://browserless:3000/?token={token}" if token else "ws://browserless:3000"
+                browser = p.chromium.connect_over_cdp(ws_url)
                 context = browser.new_context(
                     viewport={"width": 1280, "height": 800},
                     # Simulate EU visitor from Germany

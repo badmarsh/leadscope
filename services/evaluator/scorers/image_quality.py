@@ -77,7 +77,8 @@ def take_screenshots(domain: str, product_paths: list[str]) -> list[str]:
     Screenshots are clipped to the top 2000px to reduce Vision AI token costs.
     Returns a list of base64 encoded strings.
     """
-    ws_url = "ws://browserless:3000"
+    token = os.environ.get("BROWSERLESS_TOKEN", "")
+    ws_url = f"ws://browserless:3000/?token={token}" if token else "ws://browserless:3000"
     base64_images = []
     
     urls_to_capture = [f"https://{domain}"]
