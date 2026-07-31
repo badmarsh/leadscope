@@ -63,7 +63,7 @@ export async function POST(request: NextRequest) {
       )
       
       // Trigger evaluation in the background
-      fetch(`http://evaluator:8000/score/trigger?background=true`, {
+      fetch(`http://evaluator:8001/score/trigger?background=true`, {
         method: "POST",
         headers: {
           "X-Internal-Token": process.env.INTERNAL_API_TOKEN || ""
@@ -96,7 +96,7 @@ export async function POST(request: NextRequest) {
       )
 
       // Trigger enrichment in the background
-      fetch(`http://stages:8000/stage5/run?background=true`, {
+      fetch(`http://stages:8002/stage5/run?background=true`, {
         method: "POST",
         headers: {
           "X-Internal-Token": process.env.INTERNAL_API_TOKEN || ""
