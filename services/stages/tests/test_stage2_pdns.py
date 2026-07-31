@@ -16,6 +16,7 @@ def test_vt_get_domain_resolutions_no_key():
 
 
 @patch("services.stages.stage2_pdns.requests.get")
+@patch("services.stages.stage2_pdns.config.VIRUSTOTAL_API_KEY", "test-vt-key")
 def test_vt_get_domain_resolutions_success(mock_get):
     mock_resp = MagicMock()
     mock_resp.raise_for_status.return_value = None
@@ -27,12 +28,12 @@ def test_vt_get_domain_resolutions_success(mock_get):
     }
     mock_get.return_value = mock_resp
 
-    with patch("services.common.config.VIRUSTOTAL_API_KEY", "test-vt-key"):
-        ips = _vt_get_domain_resolutions("hacked.com")
-        assert ips == ["1.2.3.4", "5.6.7.8"]
+    ips = _vt_get_domain_resolutions("hacked.com")
+    assert ips == ["1.2.3.4", "5.6.7.8"]
 
 
 @patch("services.stages.stage2_pdns.requests.get")
+@patch("services.stages.stage2_pdns.config.VIRUSTOTAL_API_KEY", "test-vt-key")
 def test_vt_get_ip_resolutions_success(mock_get):
     mock_resp = MagicMock()
     mock_resp.raise_for_status.return_value = None
@@ -44,9 +45,8 @@ def test_vt_get_ip_resolutions_success(mock_get):
     }
     mock_get.return_value = mock_resp
 
-    with patch("services.common.config.VIRUSTOTAL_API_KEY", "test-vt-key"):
-        hosts = _vt_get_ip_resolutions("1.2.3.4")
-        assert hosts == ["victim1.com", "victim2.org"]
+    hosts = _vt_get_ip_resolutions("1.2.3.4")
+    assert hosts == ["victim1.com", "victim2.org"]
 
 
 @patch("services.stages.stage2_pdns.time.sleep")

@@ -28,6 +28,7 @@ def test_role_priority_ordering():
 
 
 @patch("services.stages.stage4.requests.post")
+@patch("services.stages.stage4.config.APOLLO_API_KEY", "test-key")
 def test_apollo_search_success(mock_post):
     mock_resp = MagicMock()
     mock_resp.raise_for_status.return_value = None
@@ -44,15 +45,15 @@ def test_apollo_search_success(mock_post):
     }
     mock_post.return_value = mock_resp
 
-    with patch("services.common.config.APOLLO_API_KEY", "test-key"):
-        res = _apollo_search("example.com")
-        assert len(res) == 1
-        assert res[0]["email"] == "ceo@example.com"
-        assert res[0]["name"] == "Jane Doe"
-        assert res[0]["source"] == "apollo"
+    res = _apollo_search("example.com")
+    assert len(res) == 1
+    assert res[0]["email"] == "ceo@example.com"
+    assert res[0]["name"] == "Jane Doe"
+    assert res[0]["source"] == "apollo"
 
 
 @patch("services.stages.stage4.requests.get")
+@patch("services.stages.stage4.config.HUNTER_API_KEY", "test-key")
 def test_hunter_search_success(mock_get):
     mock_resp = MagicMock()
     mock_resp.raise_for_status.return_value = None
@@ -71,36 +72,36 @@ def test_hunter_search_success(mock_get):
     }
     mock_get.return_value = mock_resp
 
-    with patch("services.common.config.HUNTER_API_KEY", "test-key"):
-        res = _hunter_search("example.com")
-        assert len(res) == 1
-        assert res[0]["email"] == "cto@example.com"
-        assert res[0]["source"] == "hunter"
+    res = _hunter_search("example.com")
+    assert len(res) == 1
+    assert res[0]["email"] == "cto@example.com"
+    assert res[0]["source"] == "hunter"
 
 
 @patch("services.stages.stage4.requests.get")
+@patch("services.stages.stage4.config.HUNTER_API_KEY", "test-key")
+@patch("services.stages.stage4.config.HUNTER_VERIFY_CONTACTS", True)
 def test_hunter_verify_statuses(mock_get):
-    with patch("services.common.config.HUNTER_API_KEY", "test-key"), patch("services.common.config.HUNTER_VERIFY_CONTACTS", True):
-        # Deliverable
-        resp1 = MagicMock()
-        resp1.raise_for_status.return_value = None
-        resp1.json.return_value = {"data": {"status": "deliverable"}}
-        mock_get.return_value = resp1
-        assert _hunter_verify("valid@test.com") is True
+    # Deliverable
+    resp1 = MagicMock()
+    resp1.raise_for_status.return_value = None
+    resp1.json.return_value = {"data": {"status": "deliverable"}}
+    mock_get.return_value = resp1
+    assert _hunter_verify("valid@test.com") is True
 
-        # Undeliverable
-        resp2 = MagicMock()
-        resp2.raise_for_status.return_value = None
-        resp2.json.return_value = {"data": {"status": "undeliverable"}}
-        mock_get.return_value = resp2
-        assert _hunter_verify("invalid@test.com") is False
+    # Undeliverable
+    resp2 = MagicMock()
+    resp2.raise_for_status.return_value = None
+    resp2.json.return_value = {"data": {"status": "undeliverable"}}
+    mock_get.return_value = resp2
+    assert _hunter_verify("invalid@test.com") is False
 
-        # Risky / Unknown
-        resp3 = MagicMock()
-        resp3.raise_for_status.return_value = None
-        resp3.json.return_value = {"data": {"status": "risky"}}
-        mock_get.return_value = resp3
-        assert _hunter_verify("risky@test.com") is None
+    # Risky / Unknown
+    resp3 = MagicMock()
+    resp3.raise_for_status.return_value = None
+    resp3.json.return_value = {"data": {"status": "risky"}}
+    mock_get.return_value = resp3
+    assert _hunter_verify("risky@test.com") is None
 
 
 @patch("services.stages.stage4.whois.whois")

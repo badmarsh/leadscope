@@ -1,10 +1,11 @@
 import { NextResponse } from 'next/server'
-import { exec, spawn } from 'child_process'
+import { exec, spawn, execFile } from 'child_process'
 import { promisify } from 'util'
 import path from 'path'
 import fs from 'fs/promises'
 
 const execAsync = promisify(exec)
+const execFileAsync = promisify(execFile)
 
 function getPythonBin() {
   return process.platform === 'win32' ? 'python' : 'python3'
@@ -77,6 +78,9 @@ export async function GET(request: Request) {
   if (!stage || !campaignId) {
     return NextResponse.json({ error: 'Missing required parameters: stage, campaignId' }, { status: 400 })
   }
+  if (!/^[a-zA-Z0-9_-]+$/.test(stage) || !/^[a-zA-Z0-9_-]+$/.test(campaignId)) {
+    return NextResponse.json({ error: 'Invalid parameters: stage and campaignId must be alphanumeric strings' }, { status: 400 })
+  }
 
   const cwd = path.join(process.cwd(), 'seo-spam-hunter')
   let tempFilePath: string | null = null
@@ -134,7 +138,7 @@ export async function GET(request: Request) {
         if (stage === 'ingest' || stage === 'ingest-feeds') {
            try {
              controller.enqueue(encoder.encode('data: [INFO] Running database ingest...\n\n'))
-             await execAsync(`${getPythonBin()} services/jobs/ingest_hunters.py`, { cwd: process.cwd() })
+             await execFileAsync(getPythonBin(), ['services/jobs/ingest_hunters.py'], { cwd: process.cwd() })
              controller.enqueue(encoder.encode('data: [INFO] Database ingest complete\n\n'))
            } catch (e: any) {
              controller.enqueue(encoder.encode(`data: [ERROR] Ingest failed: ${e.message}\n\n`))
@@ -164,6 +168,9 @@ export async function POST(request: Request) {
     if (!stage || !campaignId) {
       return NextResponse.json({ error: 'Missing required parameters: stage, campaignId' }, { status: 400 })
     }
+    if (!/^[a-zA-Z0-9_-]+$/.test(stage) || !/^[a-zA-Z0-9_-]+$/.test(campaignId)) {
+      return NextResponse.json({ error: 'Invalid parameters: stage and campaignId must be alphanumeric strings' }, { status: 400 })
+    }
 
     const cwd = path.join(process.cwd(), 'seo-spam-hunter')
     let tempFilePath: string | null = null
@@ -181,12 +188,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: err.message }, { status: 400 })
     }
 
-    const command = `${getPythonBin()} ${args.join(' ')}`
-    const { stdout, stderr } = await execAsync(command, { 
+    const { stdout, stderr } = await execFileAsync(getPythonBin(), args, { 
       cwd, 
       timeout: 120000,
       env: { ...process.env, PYTHONPATH: path.join(cwd, 'src') }
-    }).catch((err) => {
+    }).catch((err: any) => {
       return { stdout: err.stdout || '', stderr: err.stderr || err.message }
     })
 
@@ -199,7 +205,7 @@ export async function POST(request: Request) {
     let ingestLogs = ''
     if (stage === 'ingest' || stage === 'ingest-feeds') {
       try {
-        const { stdout: ingestOut, stderr: ingestErr } = await execAsync(`${getPythonBin()} services/jobs/ingest_hunters.py`, { cwd: process.cwd() })
+        const { stdout: ingestOut, stderr: ingestErr } = await execFileAsync(getPythonBin(), ['services/jobs/ingest_hunters.py'], { cwd: process.cwd() })
         ingestLogs = '\n\n[DATABASE INGEST]\n' + ingestOut + '\n' + ingestErr
       } catch (e: any) {
         ingestLogs = `\n\n[DATABASE INGEST ERROR] ${e.message}`

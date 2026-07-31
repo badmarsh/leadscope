@@ -71,6 +71,7 @@ export default function AdminHealthDashboard() {
                 <th className="p-4 font-semibold">Stage 1</th>
                 <th className="p-4 font-semibold">Stage 2</th>
                 <th className="p-4 font-semibold">Stage 3</th>
+                <th className="p-4 font-semibold">Stage 4</th>
                 <th className="p-4 font-semibold">Stage 5</th>
               </tr>
             </thead>
@@ -81,6 +82,7 @@ export default function AdminHealthDashboard() {
                   <td className="p-4">{camp.stage1_status}</td>
                   <td className="p-4">{camp.stage2_status}</td>
                   <td className="p-4">{camp.stage3_status}</td>
+                  <td className="p-4">{camp.stage4_status}</td>
                   <td className="p-4">{camp.stage5_status}</td>
                 </tr>
               ))}

@@ -101,6 +101,7 @@ def test_keyword_search(mock_upsert, mock_dedup, mock_brave, mock_serper, mock_t
     mock_upsert.assert_called_once()
     assert mock_upsert.call_args[1]["domain"] == "a.com"
 
+@patch("stage2.config.PUBLICWWW_API_KEY", "test-key")
 @patch("stage2._publicwww_search")
 @patch("stage2._upsert_candidate")
 @patch("stage2._is_do_not_contact")

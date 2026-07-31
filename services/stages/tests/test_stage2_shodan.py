@@ -12,6 +12,7 @@ def test_search_shodan_cve_no_key():
 
 
 @patch("services.stages.stage2_shodan.requests.get")
+@patch("services.stages.stage2_shodan.config.SHODAN_API_KEY", "test-shodan-key")
 def test_search_shodan_cve_success(mock_get):
     mock_resp = MagicMock()
     mock_resp.raise_for_status.return_value = None
@@ -22,9 +23,8 @@ def test_search_shodan_cve_success(mock_get):
     }
     mock_get.return_value = mock_resp
 
-    with patch("services.common.config.SHODAN_API_KEY", "test-shodan-key"):
-        domains = _search_shodan_cve("CVE-2024-4439")
-        assert domains == ["vulnerable-site.com"]
+    domains = _search_shodan_cve("CVE-2024-4439")
+    assert domains == ["vulnerable-site.com"]
 
 
 @patch("services.stages.stage2_shodan.time.sleep")
