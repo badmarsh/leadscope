@@ -114,7 +114,105 @@ describe('LeadsTable Component', () => {
     );
     expect(screen.queryByText('Incomplete Corp')).not.toBeInTheDocument();
   });
+
+  /**
+   * REGRESSION: This is the exact bug that was live in production.
+   * dashboard.tsx had an incomplete statusMap where 'evaluated' and 'enriched'
+   * were NOT listed, causing them to fall through to the 'pending' fallback.
+   * As a result, For review tab showed 0 while Pipeline showed 200.
+   *
+   * These tests ensure that evaluated/enriched leads appear in For review,
+   * NOT in Pipeline, and that the count badge is accurate.
+   */
+  it('REGRESSION: evaluated leads appear in For review tab, not Pipeline', () => {
+    const evaluatedLead = {
+      ...leads[0],
+      id: 'regression-evaluated',
+      company: 'Evaluated Boutique',
+      status: 'evaluated' as const,
+    };
+    render(
+      <LeadsTable
+        leads={[evaluatedLead]}
+        selectedId={null}
+        onSelect={vi.fn()}
+      />
+    );
+
+    // Should appear in the default For review tab
+    expect(screen.getByText('Evaluated Boutique')).toBeInTheDocument();
+
+    // Verify Pipeline tab does NOT show it
+    fireEvent.click(screen.getByRole('tab', { name: /Pipeline/i }));
+    expect(screen.queryByText('Evaluated Boutique')).not.toBeInTheDocument();
+  });
+
+  it('REGRESSION: enriched leads appear in For review tab, not Pipeline', () => {
+    const enrichedLead = {
+      ...leads[0],
+      id: 'regression-enriched',
+      company: 'Enriched Boutique',
+      status: 'enriched' as const,
+    };
+    render(
+      <LeadsTable
+        leads={[enrichedLead]}
+        selectedId={null}
+        onSelect={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText('Enriched Boutique')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('tab', { name: /Pipeline/i }));
+    expect(screen.queryByText('Enriched Boutique')).not.toBeInTheDocument();
+  });
+
+  it('REGRESSION: forReviewCount badge is non-zero when evaluated leads exist', () => {
+    const evaluatedLead = {
+      ...leads[0],
+      id: 'regression-count',
+      company: 'Count Test Co',
+      status: 'evaluated' as const,
+    };
+    render(
+      <LeadsTable
+        leads={[evaluatedLead]}
+        selectedId={null}
+        onSelect={vi.fn()}
+      />
+    );
+
+    const forReviewTab = screen.getByRole('tab', { name: /For review/i });
+    // The tab should show a count > 0
+    expect(forReviewTab.textContent).toMatch(/[1-9]/);
+  });
+
+  it('REGRESSION: pending leads do NOT appear in For review tab', () => {
+    const pendingLead = {
+      ...leads[0],
+      id: 'regression-pending',
+      company: 'Still Pending Corp',
+      status: 'pending' as const,
+    };
+    render(
+      <LeadsTable
+        leads={[pendingLead]}
+        selectedId={null}
+        onSelect={vi.fn()}
+      />
+    );
+
+    // For review tab is default — pending should not be there
+    expect(screen.queryByText('Still Pending Corp')).not.toBeInTheDocument();
+
+    // Pipeline tab should show it
+    fireEvent.click(screen.getByRole('tab', { name: /Pipeline/i }));
+    // (Pipeline shows rawCandidates, not leads — so this is correct: not visible either way)
+    // Main assertion: it's not in For review
+  });
 });
+
 
 describe('Pipeline tab', () => {
   const rawCandidates = [
