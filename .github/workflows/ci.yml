@@ -77,6 +77,8 @@ jobs:
         run: |
           pip install -r services/stages/requirements.txt
           pip install pytest pytest-asyncio pytest-mock playwright
+          pip install -e seo-spam-hunter
+          pip install -e wp-hunter
 
       - name: Install Playwright browsers (Python)
         if: steps.playwright-python-cache.outputs.cache-hit != 'true'
