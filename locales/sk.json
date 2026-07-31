@@ -104,8 +104,10 @@
   "pipeline.status.new": "Nový",
   "pipeline.status.evaluating": "Hodnotí sa",
   "pipeline.status.evaluated": "Ohodnotený",
+  "pipeline.status.pending_review": "Čaká na kontrolu",
   "pipeline.status.discarded": "Zahodený",
   "pipeline.status.duplicate": "Duplikát",
   "pipeline.status.enrichment_failed": "Chyba obohatenia",
-  "pipeline.source": "Zdroj"
+  "pipeline.source": "Zdroj",
+  "leads_table.columns.date_modified": "Dátum úpravy"
 }

@@ -104,8 +104,10 @@
   "pipeline.status.new": "New",
   "pipeline.status.evaluating": "Evaluating",
   "pipeline.status.evaluated": "Evaluated",
+  "pipeline.status.pending_review": "Pending Review",
   "pipeline.status.discarded": "Discarded",
   "pipeline.status.duplicate": "Duplicate",
   "pipeline.status.enrichment_failed": "Enrich Failed",
-  "pipeline.source": "Source"
+  "pipeline.source": "Source",
+  "leads_table.columns.date_modified": "Date Modified"
 }

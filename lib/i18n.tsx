@@ -40,10 +40,13 @@ export const I18nProvider: React.FC<{
   }
 
   const t = (key: string, variables?: Record<string, string | number>) => {
-    let str = translations[locale][key] || translations["en"][key] || key
+    const defaultValue = typeof variables?.defaultValue === "string" ? variables.defaultValue : undefined
+    let str = translations[locale][key] || translations["en"][key] || defaultValue || key
     if (variables) {
       Object.keys(variables).forEach((k) => {
-        str = str.replace(new RegExp(`{{${k}}}`, "g"), String(variables[k]))
+        if (k !== "defaultValue") {
+          str = str.replace(new RegExp(`{{${k}}}`, "g"), String(variables[k]))
+        }
       })
     }
     return str
