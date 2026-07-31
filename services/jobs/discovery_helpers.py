@@ -89,10 +89,12 @@ def upsert_candidate(conn, *, campaign_id: int, domain: str, source: str, query_
             "VALUES (%s, %s, %s, %s, %s, now(), %s) "
             "ON CONFLICT (campaign_id, domain) DO UPDATE SET "
             "last_seen_at = now(), reopen_count = candidates.reopen_count + 1, "
-            "evidence_data = EXCLUDED.evidence_data",
+            "evidence_data = EXCLUDED.evidence_data, "
+            "status = CASE WHEN candidates.status = 'discarded' THEN 'new' ELSE candidates.status END",
             (campaign_id, domain, source, query_used, json.dumps(evidence), status),
         )
         return cur.rowcount > 0
+
 
 def log_api_call(conn, *, campaign_id: int, stage: str, provider: str, query_count: int):
     with conn.cursor() as cur:

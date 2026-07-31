@@ -184,9 +184,14 @@ def _upsert_candidate(
         ON CONFLICT (campaign_id, domain) DO UPDATE SET
             last_seen_at  = now(),
             reopen_count  = candidates.reopen_count + 1,
-            evidence_data = EXCLUDED.evidence_data
-        WHERE candidates.status = 'stale'
-          AND candidates.last_seen_at < now() - make_interval(days => %s)
+            evidence_data = EXCLUDED.evidence_data,
+            status        = CASE
+                WHEN candidates.status = 'discarded' THEN 'new'
+                WHEN candidates.status = 'stale'
+                  AND candidates.last_seen_at < now() - make_interval(days => %s)
+                THEN 'new'
+                ELSE candidates.status
+            END
         """,
         (
             campaign_id,
@@ -199,6 +204,7 @@ def _upsert_candidate(
         ),
     )
     return rows_affected > 0
+
 
 
 # ── Search provider helpers ────────────────────────────────────────────────────
