@@ -73,6 +73,9 @@ CREATE TABLE candidates (
   audit_token_created TIMESTAMPTZ DEFAULT NULL,
   audit_viewed_at TIMESTAMPTZ DEFAULT NULL,
   audit_view_count INT DEFAULT 0,
+  processing_generation BIGINT NOT NULL DEFAULT 0,
+  lease_id UUID,
+  lease_expires_at TIMESTAMPTZ,
   UNIQUE(campaign_id, domain)
 );
 
@@ -208,6 +211,9 @@ CREATE INDEX IF NOT EXISTS idx_api_call_log_campaign_created ON api_call_log(cam
 
 -- =============================================================================
 -- Campaign settings column (documented above in CREATE TABLE)
+-- Added in migration 0008
+CREATE INDEX IF NOT EXISTS candidates_claim_idx ON candidates (status, lease_expires_at, id);
+CREATE UNIQUE INDEX IF NOT EXISTS leads_candidate_id_uniq ON leads(candidate_id);
 -- =============================================================================
 
 -- The settings column stores dashboard slider values as JSONB:
