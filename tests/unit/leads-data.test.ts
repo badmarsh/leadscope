@@ -187,4 +187,29 @@ describe("rowToLead — evidence detection", () => {
     expect(lead.evidence.kind).toBe("malware")
     expect((lead.evidence as { kind: "malware"; malwareFamily: string }).malwareFamily).toBe("Emotet")
   })
+
+  it("uses homepage_fallback_images with 'Homepage Image' label when images_analyzed is empty", () => {
+    const lead = rowToLead(makeRow({
+      evidence_data: {
+        images_analyzed: [],
+        homepage_fallback_images: ["https://example.com/hero.jpg"],
+      },
+    }))
+    expect(lead.evidence.kind).toBe("photos")
+    const photos = (lead.evidence as { kind: "photos"; photos: { src: string; label: string }[] }).photos
+    expect(photos[0].label).toBe("Homepage Image 1")
+    expect(photos[0].src).toBe("https://example.com/hero.jpg")
+  })
+
+  it("falls back to urls when both images_analyzed and homepage_fallback_images are empty", () => {
+    const lead = rowToLead(makeRow({
+      evidence_urls: ["https://example.com"],
+      evidence_data: {
+        images_analyzed: [],
+        homepage_fallback_images: [],
+      },
+    }))
+    expect(lead.evidence.kind).toBe("urls")
+  })
 })
+

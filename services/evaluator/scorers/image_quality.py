@@ -197,16 +197,9 @@ def extract_direct_product_images(domain: str, product_paths: list[str]) -> list
             except Exception as e:
                 logger.warning("HTML/extruct extraction failed for %s: %s", target_url, e)
 
-    ignore_terms = [
-        "logo", "icon", "banner", "gls", "packeta", "visa", "mastercard", "paypal", "stripe", ".svg",
-        "avatar", "badge", "trust", "hero", "vasar", "kedvezmeny", "akcio", "sale", "promo", "slider",
-        "discount", "szallitas", "off-", "discount", "poster", "advert", "reklaam"
-    ]
-    filtered_images = [
-        url for url in product_images
-        if not any(b in url.lower() for b in ignore_terms)
-    ]
-    return list(dict.fromkeys(filtered_images))[:10]
+    import services.common.image_filters as image_filters
+    return image_filters.filter_and_dedupe_images([{"src": u} for u in product_images], max_results=10)
+
 
 def score(candidate: dict, campaign: dict, icp: dict, few_shot: list[dict]) -> dict:
     domain = candidate["domain"]

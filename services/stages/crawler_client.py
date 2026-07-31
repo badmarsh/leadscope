@@ -22,13 +22,21 @@ CONTACT_PATHS = ["/kapcsolat", "/kontakt", "/contact", "/o-nas", "/impressum", "
     retry_error_callback=lambda retry_state: (None, None),
     reraise=False
 )
-def crawler_scrape(url: str, force_playwright: bool = False, bypass_cache: bool = False) -> tuple[Optional[str], Optional[list]]:
+def crawler_scrape(
+    url: str,
+    force_playwright: bool = False,
+    bypass_cache: bool = False,
+    extract_images: bool = False,
+) -> tuple[Optional[str], Optional[list]]:
     """
     Call self-hosted Crawl4AI service to scrape a URL.
     Returns (markdown_text, images_list) or (None, None) on failure.
-    Images is a list of strings (image URLs).
+    `images_list` is always filtered through image_filters — callers must
+    NOT treat it as a raw/complete image dump of the page.
     Uses tenacity retry on network failure and returns (None, None) gracefully if all retries fail.
     """
+    import services.common.image_filters as image_filters
+
     endpoint = f"{config.CRAWLER_ENDPOINT.rstrip('/')}/crawl"
     try:
         resp = requests.post(
@@ -37,6 +45,7 @@ def crawler_scrape(url: str, force_playwright: bool = False, bypass_cache: bool 
                 "url": url,
                 "bypass_cache": bypass_cache,
                 "force_playwright": force_playwright,
+                "extract_images": extract_images,
                 "timeout_ms": 60000,
             },
             timeout=90,
@@ -49,11 +58,19 @@ def crawler_scrape(url: str, force_playwright: bool = False, bypass_cache: bool 
 
         md = data.get("markdown") or ""
         media = data.get("media") or {}
-        images = [
-            img.get("src") for img in (media.get("images") or [])
-            if img.get("src") and img.get("src", "").startswith("http")
-        ]
-        return md or None, images or None
+        raw_candidates = media.get("images") or []
+
+        filtered = image_filters.filter_and_dedupe_images(raw_candidates, max_results=20)
+
+        if extract_images:
+            extracted = (data.get("extracted_data") or {}).get("urls") or []
+            llm_filtered = image_filters.filter_and_dedupe_images(
+                [{"src": u} for u in extracted], max_results=10
+            )
+            if llm_filtered:
+                return md or None, llm_filtered
+
+        return md or None, filtered or None
     except Exception as exc:
         logger.warning("Crawler service attempt failed for %s: %s", url, exc)
         raise exc

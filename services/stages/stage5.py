@@ -416,14 +416,9 @@ def _enrich_candidate(candidate: dict, campaign: dict, conn, settings: dict | No
     combined_tech_stack = list(set(eval_tech_stack + llm_tech_stack))
     cold_email_hook = eval_evidence.get("cold_email_hook")
 
-    # Merge crawled product images into evidence for dashboard display
+    # Check existing evaluator product images
     existing_evidence_images = eval_evidence.get("images_analyzed") or []
-    valid_http_images = [img for img in existing_evidence_images if isinstance(img, str) and img.startswith("http")]
-    if crawl_images:
-        for img in crawl_images:
-            if isinstance(img, str) and img.startswith("http") and img not in valid_http_images:
-                valid_http_images.append(img)
-    merged_images = valid_http_images[:20]
+    valid_eval_images = [img for img in existing_evidence_images if isinstance(img, str) and img.startswith("http")]
 
     email_quality = email_validator.classify_email(email) if email else None
     email_domain = email.split("@")[-1] if email and "@" in email else None
@@ -471,15 +466,15 @@ def _enrich_candidate(candidate: dict, campaign: dict, conn, settings: dict | No
          est_size, est_rev, est_traffic, json.dumps(firmographics), buying_power_signals, combined_tech_stack, cold_email_hook, email_quality, mx_valid),
     )
 
-    # Update evaluations evidence with merged product images for dashboard display
-    if merged_images:
+    # Update evaluations evidence status / fallback images (never overwrite images_analyzed)
+    if valid_eval_images:
         db.execute(
             conn,
             """
             UPDATE evaluations SET evidence_data = jsonb_set(
                 COALESCE(evidence_data, '{}'),
-                '{images_analyzed}',
-                %s::jsonb,
+                '{product_discovery_status}',
+                '"has_product_images"'::jsonb,
                 true
             )
             WHERE id = (
@@ -489,8 +484,35 @@ def _enrich_candidate(candidate: dict, campaign: dict, conn, settings: dict | No
                 LIMIT 1
             )
             """,
-            (json.dumps(merged_images), candidate_id),
+            (candidate_id,),
         )
+    elif crawl_images:
+        fallback_http_images = [img for img in crawl_images if isinstance(img, str) and img.startswith("http")][:20]
+        if fallback_http_images:
+            db.execute(
+                conn,
+                """
+                UPDATE evaluations SET evidence_data = jsonb_set(
+                    jsonb_set(
+                        COALESCE(evidence_data, '{}'),
+                        '{homepage_fallback_images}',
+                        %s::jsonb,
+                        true
+                    ),
+                    '{product_discovery_status}',
+                    '"fallback_used"'::jsonb,
+                    true
+                )
+                WHERE id = (
+                    SELECT id FROM evaluations
+                    WHERE candidate_id = %s
+                    ORDER BY created_at DESC
+                    LIMIT 1
+                )
+                """,
+                (json.dumps(fallback_http_images), candidate_id),
+            )
+
 
 
     # Generate Phase X audit_token

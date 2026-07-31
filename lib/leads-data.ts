@@ -417,14 +417,20 @@ export function rowToLead(row: Record<string, unknown>): Lead {
 
   let evidence: Lead["evidence"]
 
-  if (evaluatorType === "image_quality" || evidenceData.images_analyzed) {
-    const rawImages = (evidenceData.images_analyzed as string[] | undefined) ?? []
-    const httpImages = rawImages.filter((img) => typeof img === "string" && img.startsWith("http"))
+  const productImages = ((evidenceData.images_analyzed as string[] | undefined) ?? [])
+    .filter((img) => typeof img === "string" && img.startsWith("http"))
+  const fallbackImages = ((evidenceData.homepage_fallback_images as string[] | undefined) ?? [])
+    .filter((img) => typeof img === "string" && img.startsWith("http"))
+
+  const usingFallback = productImages.length === 0 && fallbackImages.length > 0
+  const sourceImages = usingFallback ? fallbackImages : productImages
+
+  if (evaluatorType === "image_quality" || sourceImages.length > 0) {
     evidence = {
       kind: "photos",
-      photos: httpImages.slice(0, 8).map((src, idx) => ({ 
-        src, 
-        label: `Product Image ${idx + 1}`
+      photos: sourceImages.slice(0, 8).map((src, idx) => ({
+        src,
+        label: usingFallback ? `Homepage Image ${idx + 1}` : `Product Image ${idx + 1}`,
       })),
     }
   } else if (

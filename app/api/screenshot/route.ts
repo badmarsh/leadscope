@@ -1,4 +1,6 @@
 import dns from "dns"
+import fs from "fs/promises"
+import path from "path"
 import { NextRequest, NextResponse } from "next/server"
 import { cookies } from "next/headers"
 import { getIronSession } from "iron-session"
@@ -65,6 +67,9 @@ async function resolveSafeUrl(raw: string): Promise<{ safe: boolean, resolvedUrl
   }
 }
 
+const CACHE_DIR = process.env.SCREENSHOT_CACHE_DIR || "/data/screenshots"
+const CACHE_TTL_MS = 14 * 24 * 60 * 60 * 1000 // 14 days
+
 export async function GET(request: NextRequest) {
   const session = await getIronSession<SessionData>(await cookies(), sessionOptions)
   if (!session.loggedIn) {
@@ -73,67 +78,124 @@ export async function GET(request: NextRequest) {
 
   const { searchParams } = new URL(request.url)
   const targetUrl = searchParams.get("url")
+  const refresh = searchParams.get("refresh") === "1"
 
   if (!targetUrl) {
     return NextResponse.json({ error: "Missing url parameter" }, { status: 400 })
   }
 
   const validation = await resolveSafeUrl(targetUrl)
-  if (!validation.safe || !validation.resolvedUrl) {
+  if (!validation.safe || !validation.resolvedUrl || !validation.originalHostname) {
     return NextResponse.json({ error: "Invalid or disallowed URL" }, { status: 400 })
   }
 
-  try {
-    const token = process.env.BROWSERLESS_TOKEN || "dev_browserless_token_change_in_prod"
-    const defaultUrl = `http://browserless:3000/screenshot?token=${token}`
-    const browserlessUrl = process.env.BROWSERLESS_URL || defaultUrl
-    const gdprDismissScript = `
-      // GDPR / cookie banner dismissal
-      (function() {
-        var selectors = [
-          '[id*="cookie"]','[class*="cookie"]','[id*="gdpr"]','[class*="gdpr"]',
-          '[id*="consent"]','[class*="consent"]','[id*="banner"]','[class*="banner"]',
-        ];
-        selectors.forEach(function(sel) {
-          document.querySelectorAll(sel).forEach(function(el) {
-            var s = el;
-            s.style.display = 'none';
-            s.style.visibility = 'hidden';
-            s.style.opacity = '0';
-            s.style.position = 'fixed';
-            s.style.zIndex = '-9999';
-          });
-        });
-      })();
-    `
-    const response = await fetch(browserlessUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        url: targetUrl,
-        gotoOptions: { waitUntil: "domcontentloaded", timeout: 15000 },
-        options: { type: "jpeg", quality: 75, fullPage: false },
-        viewport: { width: 1280, height: 800 },
-        rejectResourceTypes: ["media", "font"],
-      })
-    })
+  const safeHostname = validation.originalHostname.toLowerCase().replace(/[^a-z0-9.-]/g, "_")
+  const cacheFilePath = path.join(CACHE_DIR, `${safeHostname}.jpg`)
 
-    if (!response.ok) {
-      console.warn(`Browserless warning for ${targetUrl}: ${response.status} ${response.statusText}`)
-      return NextResponse.json({ error: "Failed to generate screenshot" }, { status: response.status >= 500 ? 502 : response.status })
+  // Check fresh cache if not refreshing
+  if (!refresh) {
+    try {
+      const stats = await fs.stat(cacheFilePath)
+      if (Date.now() - stats.mtimeMs < CACHE_TTL_MS) {
+        const cachedBuffer = await fs.readFile(cacheFilePath)
+        return new NextResponse(cachedBuffer, {
+          headers: {
+            "Content-Type": "image/jpeg",
+            "Cache-Control": "public, max-age=86400, stale-while-revalidate=43200",
+          },
+        })
+      }
+    } catch {
+      // Cache file doesn't exist or stat failed, fall through to fetch
     }
+  }
 
-    const arrayBuffer = await response.arrayBuffer()
-    const buffer = Buffer.from(arrayBuffer)
+  const token = process.env.BROWSERLESS_TOKEN || "dev_browserless_token_change_in_prod"
+  const defaultUrl = `http://browserless:3000/screenshot?token=${token}`
+  const browserlessUrl = process.env.BROWSERLESS_URL || defaultUrl
 
-    return new NextResponse(buffer, {
+  const payload = JSON.stringify({
+    url: validation.resolvedUrl,
+    setExtraHTTPHeaders: { Host: validation.originalHostname },
+    extraHTTPHeaders: { Host: validation.originalHostname },
+    gotoOptions: { waitUntil: "domcontentloaded", timeout: 15000 },
+    waitForTimeout: 1200,
+    blockConsentModals: true,
+    addStyleTag: [
+      {
+        content: `#onetrust-consent-sdk,#onetrust-banner-sdk,#usercentrics-root,#CybotCookiebotDialog,#CybotCookiebotDialogBodyUnderlay,.qc-cmp2-container,[id^="sp_message_container"],#cookiescript_injected,.cc-window.cc-banner{display:none!important}html,body{overflow:auto!important}`,
+      },
+    ],
+    bestAttempt: true,
+    options: { type: "jpeg", quality: 75, fullPage: false },
+    viewport: { width: 1280, height: 800 },
+    rejectResourceTypes: ["media", "font"],
+  })
+
+  let lastResponse: Response | null = null
+  let lastErrorText = ""
+
+  // Attempt Browserless capture up to 2 times
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      if (attempt > 0) {
+        await new Promise((res) => setTimeout(res, 500))
+      }
+      const response = await fetch(browserlessUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: payload,
+      })
+
+      if (response.ok) {
+        const arrayBuffer = await response.arrayBuffer()
+        const buffer = Buffer.from(arrayBuffer)
+
+        // Asynchronously/atomically write to cache
+        try {
+          await fs.mkdir(CACHE_DIR, { recursive: true })
+          const tempPath = `${cacheFilePath}.${Date.now()}.${Math.random().toString(36).substring(2)}.tmp`
+          await fs.writeFile(tempPath, buffer)
+          await fs.rename(tempPath, cacheFilePath)
+        } catch (cacheErr) {
+          console.warn("Screenshot cache write error:", cacheErr)
+        }
+
+        return new NextResponse(buffer, {
+          headers: {
+            "Content-Type": "image/jpeg",
+            "Cache-Control": "public, max-age=86400, stale-while-revalidate=43200",
+          },
+        })
+      } else {
+        lastResponse = response
+        try {
+          lastErrorText = await response.text()
+        } catch {
+          lastErrorText = response.statusText
+        }
+        console.warn(`Browserless warning for ${targetUrl} (attempt ${attempt + 1}): ${response.status} ${response.statusText} - ${lastErrorText}`)
+      }
+    } catch (err) {
+      console.warn(`Browserless fetch error for ${targetUrl} (attempt ${attempt + 1}):`, err)
+      lastErrorText = String(err)
+    }
+  }
+
+  // On failure of all attempts: return stale cache if available
+  try {
+    const staleBuffer = await fs.readFile(cacheFilePath)
+    return new NextResponse(staleBuffer, {
       headers: {
         "Content-Type": "image/jpeg",
-        "Cache-Control": "public, max-age=86400, stale-while-revalidate=43200"
-      }
+        "Cache-Control": "public, max-age=86400, stale-while-revalidate=43200",
+        "X-Screenshot-Stale": "true",
+      },
     })
-  } catch (error) {
-    console.error("Screenshot error:", error)
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+  } catch {
+    // No stale cache available
   }
+
+  const status = lastResponse ? (lastResponse.status >= 500 ? 502 : lastResponse.status) : 502
+  return NextResponse.json({ error: "Failed to generate screenshot", details: lastErrorText }, { status })
 }

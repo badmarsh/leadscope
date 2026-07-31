@@ -88,7 +88,8 @@ def _trafilatura_scrape(url: str) -> Optional[str]:
             
         html = resp.text
         if _is_spa_likely(html):
-            logger.info("Trafilatura detected SPA for %s — routing to Playwright", url)
+            script_count = html.lower().count("<script")
+            logger.info("Trafilatura detected SPA for %s (script_count=%d, html_len=%d) — routing to Playwright", url, script_count, len(html))
             return None
             
         text = trafilatura.extract(html, include_links=True, include_images=True, output_format="markdown")
@@ -160,6 +161,11 @@ async def crawl(req: CrawlRequest):
                 api_key = os.environ.get("GEMINI_PROXY_API_KEY") or os.environ.get("OPENROUTER_API_KEY") or ""
                 if api_key:
                     headers["Authorization"] = f"Bearer {api_key}"
+
+                markdown_content = result.markdown
+                if len(markdown_content) > 30000:
+                    markdown_content = markdown_content[:5000] + "\n...\n" + markdown_content[-25000:]
+
                 async with httpx.AsyncClient() as client:
                     resp = await client.post(
                         f"{GEMINI_PROXY_ENDPOINT}/v1/chat/completions",
@@ -169,7 +175,7 @@ async def crawl(req: CrawlRequest):
                             "response_format": {"type": "json_object"},
                             "messages": [
                                 {"role": "system", "content": system_prompt},
-                                {"role": "user", "content": "Extract images from the following markdown content:\n\n" + result.markdown[:30000]}
+                                {"role": "user", "content": "Extract images from the following markdown content:\n\n" + markdown_content}
                             ]
                         },
                         timeout=30.0
@@ -179,9 +185,12 @@ async def crawl(req: CrawlRequest):
                     # Sometimes the model wraps it in ```json ... ```
                     if llm_content.startswith("```json"):
                         llm_content = llm_content[7:-3].strip()
-                    extracted_data = json.loads(llm_content)
+                    parsed_json = json.loads(llm_content)
+                    validated = ProductImagesSchema.model_validate(parsed_json)
+                    extracted_data = validated.model_dump()
             except Exception as e:
                 logger.error("Manual LLM extraction failed: %s", e)
+
 
         if not result.success:
             logger.error("Crawl4AI failed for %s: %s", url_str, result.error_message)

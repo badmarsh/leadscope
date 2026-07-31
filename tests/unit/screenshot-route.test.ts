@@ -1,11 +1,29 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import dns from "dns"
 import { NextRequest } from "next/server"
-import { GET } from "../../app/api/screenshot/route"
 
 const mockGetIronSession = vi.fn()
 vi.mock("iron-session", () => ({ getIronSession: (...args: any[]) => mockGetIronSession(...args) }))
 vi.mock("next/headers", () => ({ cookies: () => Promise.resolve({}) }))
+
+const mockFsStat = vi.fn()
+const mockFsReadFile = vi.fn()
+const mockFsWriteFile = vi.fn()
+const mockFsRename = vi.fn()
+const mockFsMkdir = vi.fn()
+
+vi.mock("fs/promises", () => ({
+  default: {
+    stat: (...args: any[]) => mockFsStat(...args),
+    readFile: (...args: any[]) => mockFsReadFile(...args),
+    writeFile: (...args: any[]) => mockFsWriteFile(...args),
+    rename: (...args: any[]) => mockFsRename(...args),
+    mkdir: (...args: any[]) => mockFsMkdir(...args),
+  },
+}))
+
+// Import GET after mocks are defined
+import { GET } from "../../app/api/screenshot/route"
 
 // Mock global fetch
 const mockFetch = vi.fn()
@@ -16,9 +34,14 @@ describe("GET /api/screenshot", () => {
     vi.clearAllMocks()
     mockGetIronSession.mockResolvedValue({ loggedIn: true })
     
+    mockFsStat.mockRejectedValue(new Error("ENOENT"))
+    mockFsReadFile.mockRejectedValue(new Error("ENOENT"))
+    mockFsWriteFile.mockResolvedValue(undefined)
+    mockFsRename.mockResolvedValue(undefined)
+    mockFsMkdir.mockResolvedValue(undefined)
+
     // Default DNS mock behavior to return safe IPs
     vi.spyOn(dns.promises, 'lookup').mockImplementation(async (hostname) => {
-      // Mock some safe responses
       if (hostname === 'safe-site.com' || hostname === 'safe.com') {
         return [{ address: '8.8.8.8', family: 4 }] as any
       }
@@ -104,7 +127,7 @@ describe("GET /api/screenshot", () => {
     expect(res.headers.get("Content-Type")).toBe("image/jpeg")
   })
 
-  it("sends domcontentloaded in request body", async () => {
+  it("sends domcontentloaded, blockConsentModals, and styleTag in request body", async () => {
     const fakeJpeg = Buffer.from([0xFF, 0xD8])
     mockFetch.mockResolvedValue({ ok: true, arrayBuffer: async () => fakeJpeg.buffer })
     const req = new NextRequest("http://localhost/api/screenshot?url=https://safe.com")
@@ -112,11 +135,28 @@ describe("GET /api/screenshot", () => {
     const body = JSON.parse(mockFetch.mock.calls[0][1].body)
     expect(body.gotoOptions.waitUntil).toBe("domcontentloaded")
     expect(body.options.type).toBe("jpeg")
+    expect(body.blockConsentModals).toBe(true)
+    expect(typeof body.addStyleTag[0].content).toBe("string")
+    expect(body.addStyleTag[0].content.length).toBeGreaterThan(0)
+  })
+
+  it("asserts bestAttempt is true in request body", async () => {
+    const fakeJpeg = Buffer.from([0xFF, 0xD8])
+    mockFetch.mockResolvedValue({ ok: true, arrayBuffer: async () => fakeJpeg.buffer })
+    const req = new NextRequest("http://localhost/api/screenshot?url=https://safe.com")
+    await GET(req)
+    const body = JSON.parse(mockFetch.mock.calls[0][1].body)
+    expect(body.bestAttempt).toBe(true)
   })
 
   it("returns 502 when browserless returns 5xx", async () => {
     const consoleSpy = vi.spyOn(console, "warn").mockImplementation(() => {})
-    mockFetch.mockResolvedValue({ ok: false, status: 503, statusText: "Service Unavailable" })
+    mockFetch.mockResolvedValue({
+      ok: false,
+      status: 503,
+      statusText: "Service Unavailable",
+      text: async () => "Service Unavailable",
+    })
     const req = new NextRequest("http://localhost/api/screenshot?url=https://safe.com")
     const res = await GET(req)
     expect(res.status).toBe(502)
@@ -128,5 +168,82 @@ describe("GET /api/screenshot", () => {
     const req = new NextRequest("http://localhost/api/screenshot?url=https://safe.com")
     const res = await GET(req)
     expect(res.headers.get("Cache-Control")).toContain("max-age=86400")
+  })
+
+  // Cache tests for Fix 5
+  it("uses fresh cache file and skips fetch when non-expired cache exists", async () => {
+    mockFsStat.mockResolvedValue({ mtimeMs: Date.now() - 1000 })
+    mockFsReadFile.mockResolvedValue(Buffer.from("CACHED_BYTES"))
+
+    const req = new NextRequest("http://localhost/api/screenshot?url=https://safe.com")
+    const res = await GET(req)
+
+    expect(res.status).toBe(200)
+    expect(mockFetch).not.toHaveBeenCalled()
+  })
+
+  it("writes fresh bytes to cache on stale cache miss + fetch success", async () => {
+    mockFsStat.mockResolvedValue({ mtimeMs: Date.now() - 15 * 24 * 60 * 60 * 1000 }) // 15 days old
+    const freshBytes = Buffer.from([0xFF, 0xD8, 0xFE])
+    mockFetch.mockResolvedValue({
+      ok: true,
+      arrayBuffer: async () => freshBytes.buffer,
+    })
+
+    const req = new NextRequest("http://localhost/api/screenshot?url=https://safe.com")
+    const res = await GET(req)
+
+    expect(res.status).toBe(200)
+    expect(mockFetch).toHaveBeenCalled()
+    expect(mockFsWriteFile).toHaveBeenCalled()
+    expect(mockFsRename).toHaveBeenCalled()
+  })
+
+  it("returns stale cache with X-Screenshot-Stale header when fetch fails and stale file exists", async () => {
+    mockFsStat.mockResolvedValue({ mtimeMs: Date.now() - 15 * 24 * 60 * 60 * 1000 })
+    mockFsReadFile.mockResolvedValue(Buffer.from("STALE_BYTES"))
+    mockFetch.mockResolvedValue({
+      ok: false,
+      status: 500,
+      statusText: "Error",
+      text: async () => "Internal Server Error",
+    })
+
+    const req = new NextRequest("http://localhost/api/screenshot?url=https://safe.com")
+    const res = await GET(req)
+
+    expect(res.status).toBe(200)
+    expect(res.headers.get("X-Screenshot-Stale")).toBe("true")
+  })
+
+  it("returns 502 when no cache exists and fetch fails all attempts", async () => {
+    mockFsStat.mockRejectedValue(new Error("ENOENT"))
+    mockFsReadFile.mockRejectedValue(new Error("ENOENT"))
+    mockFetch.mockResolvedValue({
+      ok: false,
+      status: 502,
+      statusText: "Bad Gateway",
+      text: async () => "Bad Gateway",
+    })
+
+    const req = new NextRequest("http://localhost/api/screenshot?url=https://safe.com")
+    const res = await GET(req)
+
+    expect(res.status).toBe(502)
+  })
+
+  it("bypasses fresh cache when refresh=1 parameter is present", async () => {
+    mockFsStat.mockResolvedValue({ mtimeMs: Date.now() - 1000 })
+    const freshBytes = Buffer.from([0xFF, 0xD8, 0xFF])
+    mockFetch.mockResolvedValue({
+      ok: true,
+      arrayBuffer: async () => freshBytes.buffer,
+    })
+
+    const req = new NextRequest("http://localhost/api/screenshot?url=https://safe.com&refresh=1")
+    const res = await GET(req)
+
+    expect(res.status).toBe(200)
+    expect(mockFetch).toHaveBeenCalled()
   })
 })

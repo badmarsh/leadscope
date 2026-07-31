@@ -266,6 +266,8 @@ def extract_product_grid_images(html: str, domain: str = "") -> list[str]:
     Extract product grid images by parsing HTML with BeautifulSoup.
     Looks for repeated images in common grid structures and filters aggressively.
     """
+    import services.common.image_filters as image_filters
+
     try:
         from bs4 import BeautifulSoup
         from urllib.parse import urlparse
@@ -276,20 +278,7 @@ def extract_product_grid_images(html: str, domain: str = "") -> list[str]:
     soup = BeautifulSoup(html, "html.parser")
     images = soup.find_all("img")
     
-    ignore_patterns = [
-        "bat.bing.com", "google-analytics.com", "facebook.com", "twitter.com", "instagram.com", 
-        "x.com", "linkedin.com", "youtube.com", "tiktok.com", "pinterest.com",
-        "pixel", "tracker", ".svg", ".gif", "logo", "icon", "spinner", "loader", "social",
-        "badge", "trust", "support", "shipping", "payment", "secure", "guarantee", "return",
-        "header", "footer", "banner", "hero", "avatar", "profile", "menu",
-        "partner", "layout", "element", "blog", "gls", "packeta", "szepkartya",
-        "dpd", "mpl-", "foxpost", "cetelem", "mastercard", "visa", "barion", "simplepay",
-        "mastercard", "maestro", "paypal", "apple-pay", "google-pay", "alipay",
-        "slider", "brand", "carousel", "sponsor", "client", "thumb_brand", "swiper"
-    ]
-    
-    valid_urls = []
-    seen = set()
+    candidates = []
     
     for img in images:
         src = img.get("src") or img.get("data-src") or img.get("data-lazy-src")
@@ -303,37 +292,33 @@ def extract_product_grid_images(html: str, domain: str = "") -> list[str]:
             
         if not src.startswith("http"):
             continue
-            
-        src_lower = src.lower()
-        if any(pattern in src_lower for pattern in ignore_patterns):
+
+        if image_filters.is_probably_decorative(src):
             continue
-            
-        # Needs to have a valid image extension (avoid raw HTML pages mapped as images)
-        if not any(ext in src_lower for ext in [".jpg", ".jpeg", ".webp", ".avif", ".png"]):
-            # Some CDNs like Shopify don't always have extensions if they use query params
-            # But let's check if it looks like a CDN
-            if "cdn" not in src_lower and "image" not in src_lower and "media" not in src_lower and "upload" not in src_lower:
-                continue
+
+        width_val = img.get("width")
+        height_val = img.get("height")
+        try:
+            width = int(width_val) if width_val else None
+        except (ValueError, TypeError):
+            width = None
+        try:
+            height = int(height_val) if height_val else None
+        except (ValueError, TypeError):
+            height = None
 
         # Look at the parent tag
         parent = img.parent
         is_linked = parent.name == "a" if parent else False
-        
-        # Product grid images are usually wrapped in links
         if not is_linked:
-            # Maybe the parent's parent is a link
             parent2 = parent.parent if parent else None
             is_linked = parent2.name == "a" if parent2 else False
             
-        if src not in seen:
-            seen.add(src)
-            # Add weight for being in a link (likely a product card linking to details)
-            if is_linked:
-                valid_urls.insert(0, src)
-            else:
-                valid_urls.append(src)
+        score = 10.0 if is_linked else 0.0
+        candidates.append({"src": src, "width": width, "height": height, "score": score})
                 
-    return valid_urls
+    return image_filters.filter_and_dedupe_images(candidates, max_results=20)
+
 
 def extract_product_grid_images_via_crawler(url: str) -> list[str]:
     """

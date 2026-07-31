@@ -458,3 +458,54 @@ class TestGetOfferSummary:
     def test_empty_brief_returns_placeholder(self):
         result = stage5._get_offer_summary("")
         assert "not yet defined" in result
+
+
+# ── Evidence images & product discovery status ─────────────────────────────────
+
+class TestStage5EvidenceImages:
+    def test_images_analyzed_never_overwritten_by_stage5(self, mock_db):
+        conn = mock_db.get_conn.return_value.__enter__.return_value
+        mock_db.fetchone.return_value = None
+
+        candidate = _base_candidate({
+            "eval_evidence": {"images_analyzed": ["https://example.com/product1.jpg"]}
+        })
+        enriched_data = {
+            "email": "a@b.com", "report": "Test report", "products_sold": ["P1"]
+        }
+
+        with patch.object(stage5, "_extract_structured_data", return_value={}), \
+             patch.object(stage5, "_scrape_domain", return_value=("content", "https://example.com", ["https://example.com/crawl_icon.png"])), \
+             patch.object(stage5, "_enrich_info", return_value=(enriched_data, 50, 20)), \
+             patch.object(stage5, "cost_log"):
+            stage5._enrich_candidate(candidate, _base_campaign(), conn)
+
+        # Check DB update calls on evaluations
+        eval_updates = [str(call) for call in mock_db.execute.call_args_list if "UPDATE evaluations" in str(call)]
+        assert len(eval_updates) == 1
+        assert "images_analyzed" not in eval_updates[0]
+        assert "has_product_images" in eval_updates[0]
+
+    def test_fallback_images_set_when_images_analyzed_empty(self, mock_db):
+        conn = mock_db.get_conn.return_value.__enter__.return_value
+        mock_db.fetchone.return_value = None
+
+        candidate = _base_candidate({
+            "eval_evidence": {"images_analyzed": []}
+        })
+        enriched_data = {
+            "email": "a@b.com", "report": "Test report", "products_sold": ["P1"]
+        }
+
+        with patch.object(stage5, "_extract_structured_data", return_value={}), \
+             patch.object(stage5, "_scrape_domain", return_value=("content", "https://example.com", ["https://example.com/homepage_hero.jpg"])), \
+             patch.object(stage5, "_enrich_info", return_value=(enriched_data, 50, 20)), \
+             patch.object(stage5, "cost_log"):
+            stage5._enrich_candidate(candidate, _base_campaign(), conn)
+
+        eval_updates = [str(call) for call in mock_db.execute.call_args_list if "UPDATE evaluations" in str(call)]
+        assert len(eval_updates) == 1
+        assert "homepage_fallback_images" in eval_updates[0]
+        assert "fallback_used" in eval_updates[0]
+        assert "images_analyzed" not in eval_updates[0]
+
