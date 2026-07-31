@@ -127,6 +127,7 @@ export function LeadsTable({ leads, selectedId, onSelect, onFilteredChange, onBu
 
   const filteredCandidates = useMemo(() => {
     const subset = rawCandidates.filter((cand) => {
+      if (cand.status === "enriched" || cand.status === "approved" || cand.status === "rejected" || cand.status === "junk" || cand.status === "discarded" || cand.status === "invalid") return false
       if (search) {
         const q = search.toLowerCase()
         const domainMatch = cand.domain.toLowerCase().includes(q)
@@ -185,7 +186,7 @@ export function LeadsTable({ leads, selectedId, onSelect, onFilteredChange, onBu
   const approvedCount = leads.filter((l) => l.status === "approved").length
   const discardedCount = leads.filter((l) => l.status === "invalid" || l.status === "discarded" || l.status === "enrichment_failed").length
   const rejectedCount = leads.filter((l) => l.status === "rejected" || l.status === "junk").length
-  const pipelineCount = rawCandidates.length
+  const pipelineCount = rawCandidates.filter((cand) => cand.status !== "enriched" && cand.status !== "approved" && cand.status !== "rejected" && cand.status !== "junk" && cand.status !== "discarded" && cand.status !== "invalid").length
 
   const allSelected = filtered.length > 0 && selectedIds.size === filtered.length
   const someSelected = selectedIds.size > 0 && selectedIds.size < filtered.length

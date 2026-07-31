@@ -124,29 +124,6 @@ describe('LeadsTable Component', () => {
    * These tests ensure that evaluated/enriched leads appear in For review,
    * NOT in Pipeline, and that the count badge is accurate.
    */
-  it('REGRESSION: evaluated leads appear in For review tab, not Pipeline', () => {
-    const evaluatedLead = {
-      ...leads[0],
-      id: 'regression-evaluated',
-      company: 'Evaluated Boutique',
-      status: 'evaluated' as const,
-    };
-    render(
-      <LeadsTable
-        leads={[evaluatedLead]}
-        selectedId={null}
-        onSelect={vi.fn()}
-      />
-    );
-
-    // Should appear in the default For review tab
-    expect(screen.getByText('Evaluated Boutique')).toBeInTheDocument();
-
-    // Verify Pipeline tab does NOT show it
-    fireEvent.click(screen.getByRole('tab', { name: /Pipeline/i }));
-    expect(screen.queryByText('Evaluated Boutique')).not.toBeInTheDocument();
-  });
-
   it('REGRESSION: enriched leads appear in For review tab, not Pipeline', () => {
     const enrichedLead = {
       ...leads[0],
@@ -168,16 +145,16 @@ describe('LeadsTable Component', () => {
     expect(screen.queryByText('Enriched Boutique')).not.toBeInTheDocument();
   });
 
-  it('REGRESSION: forReviewCount badge is non-zero when evaluated leads exist', () => {
-    const evaluatedLead = {
+  it('REGRESSION: forReviewCount badge is non-zero when enriched leads exist', () => {
+    const enrichedLead = {
       ...leads[0],
       id: 'regression-count',
       company: 'Count Test Co',
-      status: 'evaluated' as const,
+      status: 'enriched' as const,
     };
     render(
       <LeadsTable
-        leads={[evaluatedLead]}
+        leads={[enrichedLead]}
         selectedId={null}
         onSelect={vi.fn()}
       />

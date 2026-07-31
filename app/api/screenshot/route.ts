@@ -84,10 +84,8 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const token = process.env.BROWSERLESS_TOKEN || ""
-    const defaultUrl = token
-      ? `http://browserless:3000/screenshot?token=${token}`
-      : "http://browserless:3000/screenshot"
+    const token = process.env.BROWSERLESS_TOKEN || "dev_browserless_token_change_in_prod"
+    const defaultUrl = `http://browserless:3000/screenshot?token=${token}`
     const browserlessUrl = process.env.BROWSERLESS_URL || defaultUrl
     const gdprDismissScript = `
       // GDPR / cookie banner dismissal

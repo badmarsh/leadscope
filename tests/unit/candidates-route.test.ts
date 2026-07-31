@@ -56,14 +56,13 @@ describe("GET /api/candidates", () => {
     expect(mockQuery.mock.calls[1][1]).toContain(200)
   })
 
-  it("queries pipeline statuses including pending_review and approved", async () => {
+  it("queries active pre-review pipeline statuses", async () => {
     const req = new NextRequest("http://localhost/api/candidates?campaign_id=1")
     await GET(req)
     const sql = mockQuery.mock.calls[0][0]
     expect(sql).toContain("'new'")
     expect(sql).toContain("'evaluating'")
     expect(sql).toContain("'evaluated'")
-    expect(sql).toContain("'enriched'")
-    expect(sql).toContain("'invalid'")
+    expect(sql).not.toContain("'enriched'")
   })
 })
