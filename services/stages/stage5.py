@@ -316,7 +316,7 @@ def _enrich_candidate(candidate: dict, campaign: dict, conn, settings: dict | No
         logger.warning("Stage 5: %s is unreachable (network error), skipping crawler entirely.", domain)
         new_attempt_count = candidate.get("enrichment_attempt_count", 1)
         if new_attempt_count >= max_attempts:
-            db.execute(conn, "UPDATE candidates SET status = 'enrichment_failed' WHERE id = %s AND processing_generation = %s", (candidate_id, candidate.get("processing_generation", 0)))
+            db.execute(conn, "UPDATE candidates SET status = 'invalid' WHERE id = %s AND processing_generation = %s", (candidate_id, candidate.get("processing_generation", 0)))
             return {"candidate_id": candidate_id, "outcome": "enrichment_failed", "attempts": new_attempt_count}
         return {"candidate_id": candidate_id, "outcome": "network_error_retry", "attempts": new_attempt_count}
 
@@ -355,10 +355,10 @@ def _enrich_candidate(candidate: dict, campaign: dict, conn, settings: dict | No
         if new_attempt_count >= max_attempts:
             db.execute(
                 conn,
-                "UPDATE candidates SET status = 'enrichment_failed' WHERE id = %s AND processing_generation = %s",
+                "UPDATE candidates SET status = 'invalid' WHERE id = %s AND processing_generation = %s",
                 (candidate_id, candidate.get("processing_generation", 0)),
             )
-            logger.warning("Stage 5: %s → enrichment_failed after %d attempts", domain, new_attempt_count)
+            logger.warning("Stage 5: %s → invalid (enrichment failed) after %d attempts", domain, new_attempt_count)
             return {"candidate_id": candidate_id, "outcome": "enrichment_failed", "attempts": new_attempt_count}
         else:
             logger.warning(
@@ -496,11 +496,12 @@ def _enrich_candidate(candidate: dict, campaign: dict, conn, settings: dict | No
     # Generate Phase X audit_token
     audit_token = secrets.token_hex(32)
 
-    # STABILIZATION FIX (BUG-009): Update enrichment_attempted_at timestamp on candidate post-success
+    # STABILIZATION FIX (BUG-009): Update enrichment_attempted_at timestamp and status on candidate post-success
     db.execute(
         conn,
         """
         UPDATE candidates SET 
+            status = 'enriched',
             enrichment_attempted_at = now(),
             audit_token = COALESCE(audit_token, %s),
             audit_token_created = COALESCE(audit_token_created, now())
@@ -542,7 +543,7 @@ def _recover_stuck_enrichments(conn):
             enrichment_attempted_at  = NULL
         WHERE enrichment_attempted_at IS NOT NULL
           AND id NOT IN (SELECT candidate_id FROM leads WHERE enrichment_report IS NOT NULL)
-          AND status IN ('evaluated', 'pending_review', 'approved')
+          AND status IN ('evaluated', 'enriched', 'pending_review', 'approved')
           AND campaign_id IN (
               SELECT id FROM campaigns WHERE stage5_status != 'running'
           )
@@ -586,7 +587,7 @@ def run(campaign_id: Optional[int] = None) -> dict:
                 f"""
                 WITH picked AS (
                     SELECT id FROM candidates
-                    WHERE status IN ('evaluated', 'pending_review', 'approved')
+                    WHERE status IN ('evaluated', 'enriched', 'pending_review', 'approved')
                       AND campaign_id IN ({camp_placeholders})
                       AND (lease_expires_at IS NULL OR lease_expires_at < now())
                       AND (enrichment_attempted_at IS NULL OR enrichment_attempted_at < now() - interval '12 hours')

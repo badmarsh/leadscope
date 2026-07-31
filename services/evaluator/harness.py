@@ -455,8 +455,8 @@ def trigger_scoring(campaign_id: int | None = None) -> dict:
                         db.update_candidate_generation(conn, cand["id"], cand.get("processing_generation", 0), {"status": "discarded"})
                         logger.info("Auto-rejected candidate %s: %s", cand["id"], reject_note)
                     else:
-                        db.update_candidate_generation(conn, cand["id"], cand.get("processing_generation", 0), {"status": "pending_review"})
-                        logger.info("Candidate %s passed evaluation (score %s >= %s) and is pending review", cand["id"], score, min_score)
+                        db.update_candidate_generation(conn, cand["id"], cand.get("processing_generation", 0), {"status": "evaluated"})
+                        logger.info("Candidate %s passed evaluation (score %s >= %s) and is evaluated", cand["id"], score, min_score)
                 return {"candidate_id": cand["id"], "status": "scored", "score": score}
             except Exception as exc:
                 logger.error("Harness failed for candidate %s: %s", cand["id"], exc)

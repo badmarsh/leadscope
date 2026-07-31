@@ -81,7 +81,7 @@ export async function POST(request: NextRequest) {
 
       await query(
         `UPDATE candidates 
-         SET status = CASE WHEN status = 'enrichment_failed' THEN 'evaluated' ELSE status END,
+         SET status = CASE WHEN status IN ('enrichment_failed', 'invalid') THEN 'evaluated' ELSE status END,
              enrichment_attempted_at = NULL, 
              enrichment_attempt_count = 0,
              processing_generation = processing_generation + 1,

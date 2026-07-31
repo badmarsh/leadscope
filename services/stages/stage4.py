@@ -291,7 +291,7 @@ def run() -> dict:
             """
             SELECT c.id, c.campaign_id, c.domain
             FROM candidates c
-            WHERE c.status IN ('evaluated', 'pending_review', 'approved')
+            WHERE c.status IN ('evaluated', 'enriched', 'pending_review', 'approved')
             """,
         )
 

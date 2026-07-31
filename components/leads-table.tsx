@@ -10,7 +10,7 @@ import { useTranslation } from "@/lib/i18n"
 type SortKey = "company" | "domain" | "score" | "status" | "dateFound"
 type PipelineSortKey = "domain" | "source" | "status" | "date"
 type SortDir = "asc" | "desc"
-type ViewFilter = "pending" | "reviewed" | "enrichment_failed" | "pipeline"
+type ViewFilter = "for_review" | "approved" | "discarded" | "rejected" | "pipeline"
 
 interface RawCandidate {
   id: number
@@ -44,22 +44,26 @@ export function LeadsTable({ leads, selectedId, onSelect, onFilteredChange, onBu
     { key: "dateFound", label: t("leads_table.columns.date_found", { defaultValue: "Date found" }), className: "w-32" },
   ]
 
-  const emptyStates: Record<"pending"|"reviewed"|"enrichment_failed", { heading: string; sub: string }> = {
-    pending: {
-      heading: t("leads_table.empty.pending.heading", { defaultValue: "Queue is empty — great work!" }),
-      sub: t("leads_table.empty.pending.sub", { defaultValue: "All leads have been reviewed or are awaiting enrichment." }),
+  const emptyStates: Record<"for_review"|"approved"|"discarded"|"rejected", { heading: string; sub: string }> = {
+    for_review: {
+      heading: t("leads_table.empty.for_review.heading", { defaultValue: "Queue is empty — great work!" }),
+      sub: t("leads_table.empty.for_review.sub", { defaultValue: "All evaluated leads have been reviewed or decided." }),
     },
-    reviewed: {
-      heading: t("leads_table.empty.reviewed.heading", { defaultValue: "No reviewed leads yet" }),
-      sub: t("leads_table.empty.reviewed.sub", { defaultValue: "Approve or reject leads from the review queue to see them here." }),
+    approved: {
+      heading: t("leads_table.empty.approved.heading", { defaultValue: "No approved leads yet" }),
+      sub: t("leads_table.empty.approved.sub", { defaultValue: "Approve leads from the review queue to see them here." }),
     },
-    enrichment_failed: {
-      heading: t("leads_table.empty.failed.heading", { defaultValue: "No enrichment failures" }),
-      sub: t("leads_table.empty.failed.sub", { defaultValue: "No enrichment failures for this campaign." }),
+    discarded: {
+      heading: t("leads_table.empty.discarded.heading", { defaultValue: "No discarded leads" }),
+      sub: t("leads_table.empty.discarded.sub", { defaultValue: "No invalid or discarded candidates found." }),
+    },
+    rejected: {
+      heading: t("leads_table.empty.rejected.heading", { defaultValue: "No rejected leads" }),
+      sub: t("leads_table.empty.rejected.sub", { defaultValue: "No rejected or junk leads found." }),
     },
   }
 
-  const [view, setView] = useState<ViewFilter>("pending")
+  const [view, setView] = useState<ViewFilter>("for_review")
   const [sortKey, setSortKey] = useState<SortKey>("score")
   const [sortDir, setSortDir] = useState<SortDir>("desc")
   const [search, setSearch] = useState("")
@@ -87,12 +91,19 @@ export function LeadsTable({ leads, selectedId, onSelect, onFilteredChange, onBu
 
   const filtered = useMemo(() => {
     const subset = leads.filter((l) => {
-      if (view === "pending") {
-        if (l.status !== "pending") return false
+      if (view === "for_review") {
+        if (l.status !== "evaluated" && l.status !== "enriched" && l.status !== "pending") return false
         if (!isLeadComplete(l)) return false
       }
-      else if (view === "reviewed") { if (l.status !== "approved" && l.status !== "rejected") return false }
-      else if (view === "enrichment_failed") { if (l.status !== "enrichment_failed") return false }
+      else if (view === "approved") {
+        if (l.status !== "approved") return false
+      }
+      else if (view === "discarded") {
+        if (l.status !== "invalid" && l.status !== "discarded" && l.status !== "enrichment_failed") return false
+      }
+      else if (view === "rejected") {
+        if (l.status !== "rejected" && l.status !== "junk") return false
+      }
       else if (view === "pipeline") { return false }
       if (search) {
         const q = search.toLowerCase()
@@ -171,9 +182,10 @@ export function LeadsTable({ leads, selectedId, onSelect, onFilteredChange, onBu
     }
   }
 
-  const pendingCount = leads.filter((l) => l.status === "pending" && isLeadComplete(l)).length
-  const reviewedCount = leads.filter((l) => l.status === "approved" || l.status === "rejected").length
-  const failedCount = leads.filter((l) => l.status === "enrichment_failed").length
+  const forReviewCount = leads.filter((l) => (l.status === "evaluated" || l.status === "enriched" || l.status === "pending") && isLeadComplete(l)).length
+  const approvedCount = leads.filter((l) => l.status === "approved").length
+  const discardedCount = leads.filter((l) => l.status === "invalid" || l.status === "discarded" || l.status === "enrichment_failed").length
+  const rejectedCount = leads.filter((l) => l.status === "rejected" || l.status === "junk").length
   const pipelineCount = rawCandidates.length
 
   const allSelected = filtered.length > 0 && selectedIds.size === filtered.length
@@ -212,42 +224,55 @@ export function LeadsTable({ leads, selectedId, onSelect, onFilteredChange, onBu
         <div className="flex items-center gap-1 rounded-md bg-muted p-0.5" role="tablist" aria-label="Lead view filter">
           <button
             role="tab"
-            aria-selected={view === "pending"}
-            onClick={() => { setView("pending"); setSelectedIds(new Set()) }}
+            aria-selected={view === "for_review"}
+            onClick={() => { setView("for_review"); setSelectedIds(new Set()) }}
             className={cn(
               "rounded px-2.5 py-1 text-xs transition-colors",
-              view === "pending"
+              view === "for_review"
                 ? "bg-card font-medium text-card-foreground shadow-sm"
                 : "text-muted-foreground hover:text-foreground",
             )}
           >
-            {t("leads_table.tabs.pending", { defaultValue: "Evaluated" })} <span className="font-mono">({pendingCount})</span>
+            {t("leads_table.tabs.for_review", { defaultValue: "For review" })} <span className="font-mono">({forReviewCount})</span>
           </button>
           <button
             role="tab"
-            aria-selected={view === "reviewed"}
-            onClick={() => { setView("reviewed"); setSelectedIds(new Set()) }}
+            aria-selected={view === "approved"}
+            onClick={() => { setView("approved"); setSelectedIds(new Set()) }}
             className={cn(
               "rounded px-2.5 py-1 text-xs transition-colors",
-              view === "reviewed"
+              view === "approved"
                 ? "bg-card font-medium text-card-foreground shadow-sm"
                 : "text-muted-foreground hover:text-foreground",
             )}
           >
-            {t("leads_table.tabs.reviewed", { defaultValue: "Reviewed" })} <span className="font-mono">({reviewedCount})</span>
+            {t("leads_table.tabs.approved", { defaultValue: "Approved" })} <span className="font-mono">({approvedCount})</span>
           </button>
           <button
             role="tab"
-            aria-selected={view === "enrichment_failed"}
-            onClick={() => { setView("enrichment_failed"); setSelectedIds(new Set()) }}
+            aria-selected={view === "discarded"}
+            onClick={() => { setView("discarded"); setSelectedIds(new Set()) }}
             className={cn(
               "rounded px-2.5 py-1 text-xs transition-colors",
-              view === "enrichment_failed"
+              view === "discarded"
                 ? "bg-card font-medium text-card-foreground shadow-sm"
                 : "text-muted-foreground hover:text-foreground",
             )}
           >
-            {t("leads_table.tabs.enrich_failed", { defaultValue: "Enrichment failed" })} <span className="font-mono">({failedCount})</span>
+            {t("leads_table.tabs.discarded", { defaultValue: "Discarded" })} <span className="font-mono">({discardedCount})</span>
+          </button>
+          <button
+            role="tab"
+            aria-selected={view === "rejected"}
+            onClick={() => { setView("rejected"); setSelectedIds(new Set()) }}
+            className={cn(
+              "rounded px-2.5 py-1 text-xs transition-colors",
+              view === "rejected"
+                ? "bg-card font-medium text-card-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            {t("leads_table.tabs.rejected", { defaultValue: "Rejected (junk)" })} <span className="font-mono">({rejectedCount})</span>
           </button>
           <button
             role="tab"
@@ -320,20 +345,16 @@ export function LeadsTable({ leads, selectedId, onSelect, onFilteredChange, onBu
           >
             <option value="all">All Candidate Statuses ({rawCandidates.length})</option>
             <option value="new">New</option>
-            <option value="evaluating">Evaluating</option>
-            <option value="pending_review">Evaluated</option>
-            <option value="approved">Approved</option>
-            <option value="rejected">Rejected</option>
-            <option value="discarded">Discarded</option>
-            <option value="duplicate">Duplicate</option>
-            <option value="enrichment_failed">Enrichment Failed</option>
+            <option value="evaluated">Evaluated</option>
+            <option value="enriched">Enriched</option>
+            <option value="invalid">Invalid</option>
           </select>
         )}
         
         {selectedIds.size > 0 && (
           <div className="flex items-center gap-2 border-l border-border pl-2 ml-1">
             <span className="text-xs font-medium text-muted-foreground">{selectedIds.size} {t("leads_table.selected", { defaultValue: "selected" })}</span>
-            {view === "pending" && (
+            {view === "for_review" && (
               <>
                 <button
                   onClick={() => handleBulkAction("approved")}
@@ -426,8 +447,8 @@ export function LeadsTable({ leads, selectedId, onSelect, onFilteredChange, onBu
                       <div className="flex size-10 items-center justify-center rounded-full bg-muted">
                         <Inbox className="size-5 text-muted-foreground" aria-hidden="true" />
                       </div>
-                      <p className="text-sm font-medium text-card-foreground">{emptyStates[view as "pending"|"reviewed"|"enrichment_failed"].heading}</p>
-                      <p className="text-sm text-muted-foreground">{emptyStates[view as "pending"|"reviewed"|"enrichment_failed"].sub}</p>
+                      <p className="text-sm font-medium text-card-foreground">{emptyStates[view as "for_review"|"approved"|"discarded"|"rejected"].heading}</p>
+                      <p className="text-sm text-muted-foreground">{emptyStates[view as "for_review"|"approved"|"discarded"|"rejected"].sub}</p>
                     </div>
                   </td>
                 </tr>

@@ -201,7 +201,7 @@ export async function PATCH(request: NextRequest) {
     // C3: Reset status AND enrichment retry state so Stage 5 will re-attempt.
     await client.query(
       `UPDATE candidates
-       SET status = 'pending_review',
+       SET status = 'evaluated',
            enrichment_attempted_at = NULL,
            enrichment_attempt_count = 0
        WHERE id = $1`,

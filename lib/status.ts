@@ -1,21 +1,27 @@
 import type { Lead, LeadStatus } from "@/lib/leads-data"
 
 export const statusLabels: Record<LeadStatus, string> = {
-  pending: "Pending",
+  evaluated: "Evaluated",
+  enriched: "Enriched",
+  invalid: "Invalid",
   approved: "Approved",
   rejected: "Rejected",
-  enrichment_failed: "Enrich failed",
   junk: "Junk",
   discarded: "Discarded",
+  pending: "Evaluated",
+  enrichment_failed: "Invalid",
 }
 
 export const statusBadgeClasses: Record<LeadStatus, string> = {
-  pending: "bg-yellow-500/10 text-yellow-500 border-yellow-500/20",
+  evaluated: "bg-purple-500/10 text-purple-500 border-purple-500/20",
+  enriched: "bg-emerald-500/10 text-emerald-600 border-emerald-500/20",
+  invalid: "bg-zinc-500/10 text-zinc-400 border-zinc-500/20",
   approved: "bg-green-500/10 text-green-500 border-green-500/20",
   rejected: "bg-red-500/10 text-red-500 border-red-500/20",
-  enrichment_failed: "bg-orange-500/10 text-orange-500 border-orange-500/20",
-  junk: "bg-zinc-500/10 text-zinc-500 border-zinc-500/20",
+  junk: "bg-red-500/10 text-red-400 border-red-500/20",
   discarded: "bg-zinc-500/10 text-zinc-400 border-zinc-500/20",
+  pending: "bg-purple-500/10 text-purple-500 border-purple-500/20",
+  enrichment_failed: "bg-zinc-500/10 text-zinc-400 border-zinc-500/20",
 }
 
 export function scoreColorClasses(score: number): { text: string; bar: string } {
