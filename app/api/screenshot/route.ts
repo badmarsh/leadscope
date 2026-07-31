@@ -119,7 +119,7 @@ export async function GET(request: NextRequest) {
           }
         ],
         gotoOptions: {
-          waitUntil: ["networkidle"],
+          waitUntil: "networkidle0",
         },
         options: { type: "jpeg", quality: 75, fullPage: false },
         viewport: { width: 1280, height: 800 },
