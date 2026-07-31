@@ -160,16 +160,11 @@ jobs:
         if: steps.playwright-cache.outputs.cache-hit == 'true'
         run: npx playwright install-deps chromium
 
-      - name: Build Next.js app
-        run: pnpm build
-        env:
-          NODE_ENV: production
-          DASHBOARD_PASSWORD_HASH: "$2b$10$dummyhashfordummytesting000000000000000000000000000"
-          IRON_SESSION_SECRET: "dummy-secret-for-ci-at-least-32-chars-long!!"
-          DATABASE_URL: postgresql://leadscope_test:leadscope_test@localhost:5432/leadscope_test
+      - name: Apply DB schema
+        run: psql postgresql://leadscope_test:leadscope_test@localhost:5432/leadscope_test -f db/schema.sql
 
-      - name: Start Next.js server
-        run: pnpm start &
+      - name: Start Next.js dev server
+        run: pnpm dev &
         env:
           PORT: 3000
           DASHBOARD_PASSWORD_HASH: "$2b$10$dummyhashfordummytesting000000000000000000000000000"
@@ -177,7 +172,7 @@ jobs:
           DATABASE_URL: postgresql://leadscope_test:leadscope_test@localhost:5432/leadscope_test
 
       - name: Wait for server
-        run: npx wait-on http://127.0.0.1:3000 --timeout 30000
+        run: npx wait-on http://127.0.0.1:3000 --timeout 60000
 
       - name: Run E2E tests
         run: npx playwright test --project=chromium
