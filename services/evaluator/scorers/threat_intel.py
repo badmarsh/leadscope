@@ -353,8 +353,8 @@ def _check_wayback_recency(domain: str) -> dict:
         last_ts = timestamps[0] if timestamps else None
 
         # Count snapshots within last 30 days
-        from datetime import datetime, timedelta
-        cutoff = (datetime.utcnow() - timedelta(days=30)).strftime("%Y%m%d%H%M%S")
+        from datetime import datetime, timedelta, timezone
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=30)).strftime("%Y%m%d%H%M%S")
         recent = [t for t in timestamps if t >= cutoff]
 
         status = "active_archiving" if len(recent) >= 2 else "rarely_archived"

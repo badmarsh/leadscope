@@ -68,4 +68,25 @@ describe("POST /api/n8n/mainwp-callback", () => {
       ["site_99", 42]
     )
   })
+
+  it("correctly maps plugin_downloaded to plugin_download_at column", async () => {
+    vi.mocked(query)
+      .mockResolvedValueOnce([{ candidate_id: 42 }] as any)
+      .mockResolvedValueOnce([] as any)
+
+    const req = new NextRequest("http://localhost/api/n8n/mainwp-callback", {
+      method: "POST",
+      body: JSON.stringify({
+        token: "valid_token_abc",
+        status: "plugin_downloaded"
+      })
+    })
+
+    const res = await POST(req)
+    expect(res.status).toBe(200)
+    expect(query).toHaveBeenLastCalledWith(
+      expect.stringContaining("plugin_download_at = now()"),
+      [null, 42]
+    )
+  })
 })

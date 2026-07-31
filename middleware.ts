@@ -31,6 +31,8 @@ export async function middleware(request: NextRequest) {
   return response
 }
 
+export const proxy = middleware
+
 export const config = {
   matcher: [
     // Match all paths except Next.js internals and static files

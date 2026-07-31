@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { query } from "@/lib/db"
+import { isRateLimited } from "@/lib/rate-limit"
 import { z } from "zod"
 
 const callbackSchema = z.object({
@@ -9,6 +10,11 @@ const callbackSchema = z.object({
 })
 
 export async function POST(request: NextRequest) {
+  const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "127.0.0.1"
+  if (isRateLimited(`mainwp_${ip}`)) {
+    return NextResponse.json({ error: "Too many requests" }, { status: 429 })
+  }
+
   const body = await request.json().catch(() => ({}))
   const parsed = callbackSchema.safeParse(body)
   
@@ -30,8 +36,18 @@ export async function POST(request: NextRequest) {
   
   const candidateId = leads[0].candidate_id
   
-  // Update the appropriate timestamp
-  const timestampField = `${status}_at`
+  // Map status to exact database timestamp column
+  const columnMap: Record<string, string> = {
+    email_sent: "email_sent_at",
+    plugin_downloaded: "plugin_download_at",
+    plugin_installed: "plugin_installed_at",
+    converted: "converted_at",
+  }
+  
+  const timestampField = columnMap[status]
+  if (!timestampField) {
+    return NextResponse.json({ error: "Invalid status field" }, { status: 400 })
+  }
   
   await query(
     `UPDATE leads SET 
